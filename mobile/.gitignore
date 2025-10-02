@@ -1,0 +1,171 @@
+# ═══════════════════════════════════════
+# General / Miscellaneous
+# ═══════════════════════════════════════
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# ═══════════════════════════════════════
+# Flutter/Dart/Pub Related
+# ═══════════════════════════════════════
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+coverage/
+
+# Flutter specific
+**/doc/api/
+**/ios/Flutter/.last_build_id
+app.*.symbols
+app.*.map.json
+
+# ═══════════════════════════════════════
+# Android
+# ═══════════════════════════════════════
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/**/gradle-wrapper.jar
+
+# Gradle files
+**/android/gradlew
+**/android/gradlew.bat
+.gradle/
+
+# Android Studio build artifacts
+**/android/app/debug/
+**/android/app/profile/
+**/android/app/release/
+
+# Signing files 
+**/android/key.properties
+*.jks
+*.keystore
+
+# ═══════════════════════════════════════
+# iOS
+# ═══════════════════════════════════════
+**/ios/**/*.mode1v3
+**/ios/**/*.mode2v3
+**/ios/**/*.moved-aside
+**/ios/**/*.pbxuser
+**/ios/**/*.perspectivev3
+**/ios/**/*sync/
+**/ios/**/.sconsign.dblite
+**/ios/**/.tags*
+**/ios/**/.vagrant/
+**/ios/**/DerivedData/
+**/ios/**/Icon?
+**/ios/**/Pods/
+**/ios/**/.symlinks/
+**/ios/**/profile
+**/ios/**/xcuserdata
+
+# Flutter iOS specific
+**/ios/.generated/
+**/ios/Flutter/App.framework
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/app.flx
+**/ios/Flutter/app.zip
+**/ios/Flutter/flutter_assets/
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.*
+
+# Xcode
+**/ios/*.xcworkspace
+**/ios/*.xcuserstate
+
+# Exceptions 
+!**/ios/**/default.mode1v3
+!**/ios/**/default.mode2v3
+!**/ios/**/default.pbxuser
+!**/ios/**/default.perspectivev3
+
+# ═══════════════════════════════════════
+# macOS
+# ═══════════════════════════════════════
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/macos/Flutter/ephemeral/
+
+# ═══════════════════════════════════════
+# Web
+# ═══════════════════════════════════════
+**/web/flutter_service_worker.js
+
+# ═══════════════════════════════════════
+# IDE / Editors
+# ═══════════════════════════════════════
+# IntelliJ / Android Studio
+.idea/
+*.iml
+*.ipr
+*.iws
+.build/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# ═══════════════════════════════════════
+# Environment Variables 
+# ═══════════════════════════════════════
+.env
+.env.local
+.env.*.local
+*.env
+
+
+# ═══════════════════════════════════════
+# API Keys & Secrets 
+# ═══════════════════════════════════════
+secrets/
+**/secrets/
+*.key
+*.pem
+api_keys.dart
+
+# ═══════════════════════════════════════
+# Testing
+# ═══════════════════════════════════════
+coverage/
+test/.test_coverage.dart
+*.coverage
+
+# ═══════════════════════════════════════
+# Documentation
+# ═══════════════════════════════════════
+doc/api/
+.doc/
+
+# ═══════════════════════════════════════
+# Operating System
+# ═══════════════════════════════════════
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# Linux
+*~
+.directory

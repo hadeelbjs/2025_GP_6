@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'features/authentication/screens/register_screen.dart';
+import 'core/theme/app_theme.dart';
+import 'features/contact/screens/contacts_list_screen.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -10,8 +12,9 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-       home: RegisterScreen(),
-       
+      debugShowCheckedModeBanner: false,
+      theme: AppTheme.lightTheme,
+      home: const ContactsListScreen(),
     );
   }
 }

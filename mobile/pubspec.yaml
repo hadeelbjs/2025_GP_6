@@ -69,6 +69,8 @@ flutter:
      - assets/images/Rectangle 14.png
      - assets/icons/back_arrow.png
      - assets/images/reg-bg-shapes.svg
+     - assets/images/logo.png
+    
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see

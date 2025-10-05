@@ -33,7 +33,7 @@ class HeaderWidget extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
-                colors: [AppColors.background],
+                colors: [AppColors.background, Colors.grey[100]!],
               ),
             ),
           ),

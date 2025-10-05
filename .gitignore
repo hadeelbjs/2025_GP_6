@@ -1,0 +1,28 @@
+# ═══ Backend ═══
+backend/.env
+backend/node_modules/
+backend/npm-debug.log
+backend/*.log
+
+# ═══ Flutter ═══
+mobile/build/
+mobile/.dart_tool/
+mobile/.flutter-plugins
+mobile/.packages
+
+# ═══ Secrets ═══
+.env
+**/.env
+secrets/
+*.key
+*.pem
+*.jks
+
+# ═══ IDE ═══
+.vscode/
+.idea/
+*.iml
+
+# ═══ OS ═══
+.DS_Store
+Thumbs.db

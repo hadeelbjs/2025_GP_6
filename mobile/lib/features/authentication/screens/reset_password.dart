@@ -2,72 +2,61 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/custom-text-field.dart';
 import '../../../services/api_services.dart';
-import 'verify-email.dart'; 
-import 'home_screen.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'register_screen.dart';
-import 'reset_password.dart';
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+import 'verify_reset_code.dart';
+import 'login_screen.dart';
+class ResetPasswordScreen extends StatefulWidget {
+  const ResetPasswordScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
-  
-  // Controllers للحقول
   final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
   
   bool _isLoading = false;
 
   @override
   void dispose() {
     _emailController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
-  // ============================================
-  // معالجة التسجيل
-  // ============================================
-  Future<void> _handleLogin() async {
-    // التحقق من Form
-    bool isValid = _formKey.currentState!.validate();
-    
-    if (!isValid) {
+  Future<void> _handleSendCode() async {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
-    
+
     setState(() => _isLoading = true);
 
-    final result = await _apiService.login(
+    final result = await _apiService.requestPasswordReset(
       email: _emailController.text.trim(),
-      password: _passwordController.text,
     );
-      setState(() => _isLoading = false);
-    if (!mounted) return; 
-    if (result['success']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إرسال رمز التحقق إلى بريدك الإلكتروني'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VerifyEmailScreen(
-              email: _emailController.text.trim(),
-              is2FA: true, 
-            ),
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'تم إرسال رمز التحقق'),
+          backgroundColor: Colors.green,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+
+      // الانتقال لصفحة التحقق من الرمز
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerifyResetCodeScreen(
+            email: _emailController.text.trim(),
           ),
-        );
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -78,6 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -107,29 +97,37 @@ class _LoginScreenState extends State<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 130),
-                      const Text(
-                        ' مرحـبًا بـعودتك!',
-                        textAlign: TextAlign.right,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontFamily: 'IBMPlexSansArabic',
-                          fontWeight: FontWeight.w300,
-                        ),
+                      
+                      const Icon(
+                        Icons.lock_reset,
+                        size: 80,
+                        color: Color(0xFF2D1B69),
                       ),
+                      const SizedBox(height: 24),
+                      
                       const Text(
-                        'تسجيل الدخول',
-                        textAlign: TextAlign.right,
+                        'نسيت كلمة المرور؟',
+                        textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 31.44,
                           fontFamily: 'IBMPlexSansArabic',
                           fontWeight: FontWeight.w600,
+                          color: Color(0xFF2D1B69),
                         ),
                       ),
-                      const SizedBox(height: 32),
+                      const SizedBox(height: 16),
                       
+                      Text(
+                        'أدخل بريدك الإلكتروني وسنرسل لك رمز التحقق',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontFamily: 'IBMPlexSansArabic',
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                      const SizedBox(height: 40),
                       
-                      
-                      // البريد الإلكتروني
                       CustomTextField(
                         controller: _emailController,
                         label: 'البريد الإلكتروني',
@@ -142,7 +140,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           final email = value.trim();
                           final emailRegex = RegExp(
-                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
                           );
                           if (!emailRegex.hasMatch(email)) {
                             return 'الرجاء إدخال بريد إلكتروني صالح';
@@ -150,54 +148,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
-                      const SizedBox(height: 16),
-                      
-                      
-                      // كلمة المرور
-                      CustomTextField(
-                        controller: _passwordController,
-                        label: 'كلمة المرور',
-                        hint: 'أدخل كلمة المرور',
-                        icon: Icons.lock,
-                        isPassword: true,
-                        enabled: !_isLoading,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'الرجاء إدخال كلمة المرور';
-                          }
-                          if (value.length < 6) {
-                            return 'يجب أن تكون كلمة المرور 6 أحرف على الأقل';
-                          }
-                          return null;
-                        },
-                      ),
-                      const SizedBox(height: 5),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton(
-                          onPressed: _isLoading
-                              ? null
-                              : () {
-                                  Navigator.pushReplacement(
-                                    context, 
-                                    MaterialPageRoute(builder: (_) => const ResetPasswordScreen())
-                                  );
-                                },
-                          child: const Text(
-                            'نسيت كلمة المرور؟',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontFamily: 'IBMPlexSansArabic',
-                              fontWeight: FontWeight.w400,
-                            ),
-                          ),
-                        ),
-                      )
-                      ,
                       const SizedBox(height: 24),
-                      // زر التسجيل
+                      
                       ElevatedButton(
-                        onPressed: _isLoading ? null : _handleLogin,
+                        onPressed: _isLoading ? null : _handleSendCode,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 16.0),
                           shape: RoundedRectangleBorder(
@@ -216,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 ),
                               )
                             : const Text(
-                                'تسجيل الدخول',
+                                'إرسال رمز التحقق',
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontFamily: 'IBMPlexSansArabic',
@@ -227,15 +181,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 16),
                       
-                      // زر إنشاء حساب جديد
                       TextButton(
                         onPressed: _isLoading
                             ? null
                             : () {
-                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RegisterScreen()));
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                );
                               },
                         child: const Text(
-                          'لا يوجد لديك حساب؟ إنشاء حساب',
+                          'العودة لتسجيل الدخول',
                           style: TextStyle(
                             fontSize: 14,
                             fontFamily: 'IBMPlexSansArabic',

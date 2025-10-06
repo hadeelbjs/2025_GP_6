@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import '../widgets/header_widget.dart';
 import '../widgets/contact_search_bar.dart';
 import '../widgets/contact_card.dart';
-import '../widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '/shared/widgets/header_widget.dart';
+import '/shared/widgets/bottom_nav_bar.dart';
 import 'add_contact_screen.dart';
 
 class ContactsListScreen extends StatefulWidget {

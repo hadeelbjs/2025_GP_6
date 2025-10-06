@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../widgets/header_widget.dart';
+import '/shared/widgets/header_widget.dart';
 import '../widgets/add_method_toggle.dart';
 import '../widgets/username_field.dart';
 import '../widgets/saudi_phone_field.dart';

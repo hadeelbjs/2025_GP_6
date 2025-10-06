@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../widgets/header_widget.dart';
-import '../widgets/bottom_nav_bar.dart';
+import '/shared/widgets/header_widget.dart';
+import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 

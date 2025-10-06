@@ -6,7 +6,7 @@ class HeaderWidget extends StatelessWidget {
   final String title;
   final bool showBackButton;
   final VoidCallback? onBackPressed;
-  final bool showBackground; 
+  final bool showBackground;
   final bool alignTitleRight;
 
   const HeaderWidget({
@@ -30,17 +30,11 @@ class HeaderWidget extends StatelessWidget {
         children: [
           Container(
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [AppColors.background],
-              ),
+              color: AppColors.background,
             ),
           ),
 
-          // === مثلثات  ===
           if (showBackground) ...[
-            // المثلث الكبير (Rectangle 13)
             Align(
               alignment: Alignment.topCenter,
               child: Transform.translate(
@@ -52,7 +46,6 @@ class HeaderWidget extends StatelessWidget {
               ),
             ),
 
-            // المثلث الصغير (Rectangle 14)
             Positioned(
               top: -0.40 * h,
               right: 0.50 * w,
@@ -63,7 +56,6 @@ class HeaderWidget extends StatelessWidget {
             ),
           ],
 
-          // العنوان + زر الرجوع
           Positioned(
             right: 0,
             left: 0,

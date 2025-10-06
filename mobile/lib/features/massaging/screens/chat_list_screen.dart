@@ -12,7 +12,6 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
-  int _selectedIndex = 3;
 
   final List<Map<String, dynamic>> _chats = [
     {
@@ -102,15 +101,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
               const SizedBox(height: 20),
 
               // Bottom Navigation Bar
-              BottomNavBar(
-                currentIndex: _selectedIndex,
-                onTap: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                  _handleNavigation(index);
-                },
-              ),
+           BottomNavBar(currentIndex: 3)
+
             ],
           ),
         ),
@@ -178,25 +170,5 @@ class _ChatListScreenState extends State<ChatListScreen> {
     );
   }
 
-  void _handleNavigation(int index) {
-    switch (index) {
-      case 0:
-        // الصفحة الرئيسية
-        // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => MainDashboard()));
-        break;
-      case 1:
-        // الإشعارات
-        break;
-      case 2:
-        // التطبيقات/الأدوات
-        break;
-      case 3:
-        // المحادثات - نحن فيها
-        break;
-      case 4:
-        // جهات الاتصال
-        // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => ContactsListScreen()));
-        break;
-    }
-  }
+
 }

@@ -247,7 +247,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
               const SizedBox(height: 20),
 
               // Bottom Navigation Bar
-              const BottomNavBar(),
+             BottomNavBar(currentIndex: 4)
             ],
           ),
         ),

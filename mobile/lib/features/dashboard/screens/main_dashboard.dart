@@ -12,7 +12,6 @@ class MainDashboard extends StatefulWidget {
 }
 
 class _MainDashboardState extends State<MainDashboard> {
-  int _selectedIndex = 0;
 
   @override
   Widget build(BuildContext context) {
@@ -78,15 +77,8 @@ class _MainDashboardState extends State<MainDashboard> {
               const SizedBox(height: 20),
 
               // Bottom Navigation Bar
-              BottomNavBar(
-                currentIndex: _selectedIndex,
-                onTap: (index) {
-                  setState(() {
-                    _selectedIndex = index;
-                  });
-                  _handleNavigation(index, context);
-                },
-              ),
+             BottomNavBar(currentIndex: 0)
+
             ],
           ),
         ),
@@ -94,20 +86,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-  void _handleNavigation(int index, BuildContext context) {
-    switch (index) {
-      case 0:
-        break;
-      case 1:
-        break;
-      case 2:
-        break;
-      case 3:
-        break;
-      case 4:
-        break;
-    }
-  }
+
 
   Widget _buildTitle(String text, double size, BuildContext context) {
     return Text(

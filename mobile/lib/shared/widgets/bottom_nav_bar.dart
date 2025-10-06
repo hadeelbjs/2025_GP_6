@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
+import '../../../features/dashboard/screens/main_dashboard.dart';
+import '/features/contact/screens/contacts_list_screen.dart';
+import '/features/massaging/screens/chat_list_screen.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
-  final Function(int)? onTap;
 
-  const BottomNavBar({super.key, this.currentIndex = 4, this.onTap});
+  const BottomNavBar({super.key, this.currentIndex = 0});
 
   @override
   Widget build(BuildContext context) {
@@ -24,20 +26,20 @@ class BottomNavBar extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _buildNavItem(Icons.home, 0),              // الرئيسية
-          _buildNavItem(Icons.notifications, 1),     // الإشعارات
-          _buildNavItem(Icons.grid_view, 2),         // الأدوات
-          _buildNavItem(Icons.mail_outline, 3),      // المحادثات
-          _buildNavItem(Icons.person, 4),            // جهات الاتصال
+          _buildNavItem(context, Icons.home, 0),
+          _buildNavItem(context, Icons.notifications, 1),
+          _buildNavItem(context, Icons.grid_view, 2),
+          _buildNavItem(context, Icons.mail_outline, 3),
+          _buildNavItem(context, Icons.person, 4),
         ],
       ),
     );
   }
 
-  Widget _buildNavItem(IconData icon, int index) {
+  Widget _buildNavItem(BuildContext context, IconData icon, int index) {
     final isActive = currentIndex == index;
     return GestureDetector(
-      onTap: () => onTap?.call(index),
+      onTap: () => _handleNavigation(context, index),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -59,5 +61,36 @@ class BottomNavBar extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  void _handleNavigation(BuildContext context, int index) {
+    if (index == currentIndex) return;
+
+    switch (index) {
+      case 0:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainDashboard()),
+        );
+        break;
+      case 1:
+        // الإشعارات - لما تسويها
+        break;
+      case 2:
+        // الأدوات - لما تسويها
+        break;
+      case 3:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const ChatListScreen()),
+        );
+        break;
+      case 4:
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const ContactsListScreen()),
+        );
+        break;
+    }
   }
 }

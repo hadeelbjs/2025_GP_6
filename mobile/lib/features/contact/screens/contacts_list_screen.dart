@@ -15,7 +15,6 @@ class ContactsListScreen extends StatefulWidget {
 }
 
 class _ContactsListScreenState extends State<ContactsListScreen> {
-  // قائمه وهمية
   final List<Map<String, String>> _contacts = [
     {'name': 'عبد الرحمن الجابر'},
     {'name': 'ليلى الحسيني'},
@@ -23,16 +22,14 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     {'name': 'سارة العتيبي'},
   ];
 
-  // نتائج البحث
   late List<Map<String, String>> _results;
-
   final _searchController = TextEditingController();
   String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _results = List.of(_contacts); // مبدئيًا كلهم
+    _results = List.of(_contacts);
   }
 
   @override
@@ -41,7 +38,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     super.dispose();
   }
 
-  // فلترة تدعم العربي (إزالة التشكيل، توحيد الألف، تحويل الأرقام العربية، …)
   void _filter(String q) {
     setState(() {
       _query = q;
@@ -58,7 +54,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     });
   }
 
-  // حذف حسب الاسم
   void _deleteByName(String name) {
     setState(() {
       _contacts.removeWhere((c) => c['name'] == name);
@@ -73,20 +68,22 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
           style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
         ),
         backgroundColor: Colors.red,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: const EdgeInsets.all(16),
       ),
     );
   }
 
-  // دالة تطبيع النص العربي/الإنجليزي للبحث
   String _normalize(String s) {
     var t = s.trim().toLowerCase();
 
-    // إزالة التشكيل
     t = t
-        .replaceAll('\u0640', '') // ـ
-        .replaceAll(RegExp(r'[\u064B-\u0652\u0670]'), ''); // حركات وتنوين
+        .replaceAll('\u0640', '')
+        .replaceAll(RegExp(r'[\u064B-\u0652\u0670]'), '');
 
-    // توحيد بعض الحروف: أإآا / ى→ي / ة→ه / ؤ→و / ئ→ي
     t = t
         .replaceAll(RegExp(r'[أإآ]'), 'ا')
         .replaceAll('ى', 'ي')
@@ -94,31 +91,31 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
         .replaceAll('ؤ', 'و')
         .replaceAll('ئ', 'ي');
 
-    // تحويل الأرقام العربية إلى إنجليزية
     const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
-
     for (int i = 0; i < 10; i++) {
       t = t.replaceAll(arabicDigits[i], i.toString());
     }
+
     return t;
   }
 
   @override
   Widget build(BuildContext context) {
+    final isKeyboardVisible = MediaQuery.of(context).viewInsets.bottom > 0;
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        resizeToAvoidBottomInset: false, // الحل هنا! 🔥
         body: SafeArea(
           child: Column(
             children: [
-              // Header
               const HeaderWidget(
                 title: 'جهات الاتصال',
                 showBackground: true,
                 alignTitleRight: true,
               ),
 
-              // شريط البحث
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -126,12 +123,11 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                 ),
                 child: ContactSearchBar(
                   controller: _searchController,
-                  onChanged: _filter, // تصفية لحظية
-                  onSearch: _filter, // المكبّر/Enter
+                  onChanged: _filter,
+                  onSearch: _filter,
                 ),
               ),
 
-              // زر إضافة صديق
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -154,8 +150,11 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                             _contacts.insert(0, {
                               'name': result['name'] as String,
                             });
-                            _filter(_query); // تحدّث النتائج
+                            _filter(_query);
                           });
+
+                          if (!mounted) return;
+
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text(
@@ -166,6 +165,11 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                                 ),
                               ),
                               backgroundColor: Colors.green,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              margin: const EdgeInsets.all(16),
                             ),
                           );
                         }
@@ -197,7 +201,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
 
               const SizedBox(height: 10),
 
-              // قائمة جهات الاتصال / لا توجد نتائج
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -246,11 +249,13 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
 
               const SizedBox(height: 20),
 
-              // Bottom Navigation Bar
-             BottomNavBar(currentIndex: 4)
+              isKeyboardVisible
+                ? const SizedBox.shrink()
+                : const BottomNavBar(currentIndex: 1)
             ],
           ),
         ),
+        
       ),
     );
   }

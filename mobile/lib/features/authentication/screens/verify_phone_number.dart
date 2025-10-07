@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../../../services/api_services.dart';
-import 'home_screen.dart';
 
+import '../../dashboard/screens/main_dashboard.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 final _apiService = ApiService();
 
 class VerifyPhoneScreen extends StatefulWidget {
@@ -90,7 +91,7 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
   
   Navigator.pushReplacement(
     context,
-    MaterialPageRoute(builder: (_) => const HomeScreen()), // ✅
+    MaterialPageRoute(builder: (_) => const MainDashboard()), 
   );
 } else {
       _showMessage(result['message'] ?? 'الرمز غير صحيح', isError: true);
@@ -138,7 +139,7 @@ void _showMessage(String message, {required bool isError}) {
               ),
               const SizedBox(width: 8),
               Text(
-                isError ? 'خطأ' : 'نجح',
+                isError ? 'خطأ' : 'نجاح',
                 style: const TextStyle(
                   fontFamily: 'IBMPlexSansArabic',
                   fontWeight: FontWeight.bold,
@@ -222,7 +223,7 @@ Future<void> _skipVerification() async {
   if (result['success']) {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const MainDashboard()),
       (route) => false,
     );
   } else {

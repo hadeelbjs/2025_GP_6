@@ -135,7 +135,7 @@ class _VerifyResetCodeScreenState extends State<VerifyResetCodeScreen> {
               ),
               const SizedBox(width: 8),
               Text(
-                isError ? 'خطأ' : 'نجح',
+                isError ? 'خطأ' : 'نجاح',
                 style: const TextStyle(
                   fontFamily: 'IBMPlexSansArabic',
                   fontWeight: FontWeight.bold,

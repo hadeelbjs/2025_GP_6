@@ -4,8 +4,8 @@ import '../widgets/custom-text-field.dart';
 import '../../../services/api_services.dart';
 import 'verify-email.dart';
 import 'verify_phone_number.dart';
-import 'home_screen.dart';
 import 'login_screen.dart';
+import '../../dashboard/screens/main_dashboard.dart';
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -201,7 +201,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const MainDashboard()),
       (route) => false,
     );
   }
@@ -210,7 +210,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   void _skipPhoneVerification() {
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const HomeScreen()),
+      MaterialPageRoute(builder: (_) => const MainDashboard()),
       (route) => false,
     );
   }

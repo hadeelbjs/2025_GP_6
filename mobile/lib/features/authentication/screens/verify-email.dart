@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../../../services/api_services.dart';
-import 'home_screen.dart';
+import '../../dashboard/screens/main_dashboard.dart';
+
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
-  final String? fullName; // اختياري
-  final String? phone;    // اختياري
-  final bool is2FA;       // لتحديد إذا كان 2FA أو تسجيل حساب جديد
+  final String? fullName;
+  final String? phone;
+  final bool is2FA;
 
   const VerifyEmailScreen({
     super.key,
     required this.email,
     this.fullName,
     this.phone,
-    this.is2FA = false, // القيمة الافتراضية false (تسجيل عادي)
+    this.is2FA = false,
   });
 
   @override
@@ -25,6 +26,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   final _apiService = ApiService();
   final _codeControllers = List.generate(6, (_) => TextEditingController());
   final _focusNodes = List.generate(6, (_) => FocusNode());
+  final _previousValues = List.generate(6, (_) => '');
   
   bool _isLoading = false;
   bool _isResending = false;
@@ -35,6 +37,27 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   void initState() {
     super.initState();
     _startResendTimer();
+    _setupControllerListeners();
+  }
+
+  void _setupControllerListeners() {
+    for (int i = 0; i < 6; i++) {
+      _codeControllers[i].addListener(() {
+        final currentValue = _codeControllers[i].text;
+        final previousValue = _previousValues[i];
+        
+        // تحقق إذا تم الحذف
+        if (currentValue.isEmpty && previousValue.isNotEmpty) {
+          if (i > 0) {
+            Future.delayed(const Duration(milliseconds: 50), () {
+              _focusNodes[i - 1].requestFocus();
+            });
+          }
+        }
+        
+        _previousValues[i] = currentValue;
+      });
+    }
   }
 
   @override
@@ -60,121 +83,145 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
   }
 
-  // التحقق من الإيميل وإرجاع النتيجة للصفحة السابقة
   Future<void> _verifyCodeAndReturn() async {
-  final code = _codeControllers.map((c) => c.text).join();
+    final code = _codeControllers.map((c) => c.text).join();
 
-  if (code.length != 6) {
-    _showMessage('الرجاء إدخال الرمز كاملاً', isError: true);
-    return;
+    if (code.length != 6) {
+      _showMessage('الرجاء إدخال الرمز كاملاً', isError: true);
+      return;
+    }
+
+    setState(() => _isLoading = true);
+
+    try {
+      final result = widget.is2FA
+          ? await _apiService.verify2FA(
+              email: widget.email,
+              code: code,
+            )
+          : await _apiService.verifyEmail(
+              email: widget.email,
+              code: code,
+            );
+
+      setState(() => _isLoading = false);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        _showMessage(
+          widget.is2FA 
+            ? 'تم تسجيل الدخول بنجاح!' 
+            : 'تم تأكيد البريد الإلكتروني بنجاح!',
+          isError: false
+        );
+        
+        await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
+        
+        if (widget.is2FA) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const MainDashboard()),
+            (route) => false,
+          );
+        } else {
+          Navigator.pop(context, true);
+        }
+      } else {
+        _showMessage(result['message'] ?? 'الرمز غير صحيح', isError: true);
+        _clearAllFields();
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (!mounted) return;
+      _showMessage('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى', isError: true);
+    }
   }
 
-  setState(() => _isLoading = true);
+  Future<void> _resendCode() async {
+    if (_resendTimer > 0) return;
 
-  // إذا كان 2FA استخدم verify2FA، وإلا استخدم verifyEmail
-  final result = widget.is2FA
-      ? await _apiService.verify2FA(
-          email: widget.email,
-          code: code,
-        )
-      : await _apiService.verifyEmail(
-          email: widget.email,
-          code: code,
-        );
+    setState(() => _isResending = true);
 
-  setState(() => _isLoading = false);
+    try {
+      final result = widget.is2FA
+          ? await _apiService.resend2FACode(widget.email) 
+          : await _apiService.resendVerificationEmail(widget.email);
 
-  if (!mounted) return;
+      setState(() => _isResending = false);
 
-  if (result['success']) {
-    _showMessage(
-      widget.is2FA 
-        ? 'تم تسجيل الدخول بنجاح!' 
-        : 'تم تأكيد البريد الإلكتروني بنجاح!',
-      isError: false
-    );
-    
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
-    
-    if (widget.is2FA) {
-      // إذا كان 2FA، اذهب للصفحة الرئيسية
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-        (route) => false,
-      );
-    } else {
-      // إذا كان تسجيل عادي، ارجع للصفحة السابقة
-      Navigator.pop(context, true);
+      if (!mounted) return;
+
+      if (result['success']) {
+        _showMessage('تم إرسال الرمز مرة أخرى', isError: false);
+        _startResendTimer();
+      } else {
+        _showMessage(result['message'] ?? 'فشل إعادة الإرسال', isError: true);
+      }
+    } catch (e) {
+      setState(() => _isResending = false);
+      if (!mounted) return;
+      _showMessage('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى', isError: true);
     }
-  } else {
-    _showMessage(result['message'] ?? 'الرمز غير صحيح', isError: true);
+  }
+
+  void _clearAllFields() {
     for (var controller in _codeControllers) {
       controller.clear();
     }
     _focusNodes[0].requestFocus();
   }
-}
-
-  Future<void> _resendCode() async {
-  if (_resendTimer > 0) return;
-
-  setState(() => _isResending = true);
-
-  // إذا كان 2FA، أعد إرسال كود 2FA، وإلا أعد إرسال كود تحقق الإيميل
-  final result = widget.is2FA
-      ? await _apiService.resend2FACode(widget.email) 
-      : await _apiService.resendVerificationEmail(widget.email);
-
-  setState(() => _isResending = false);
-
-  if (!mounted) return;
-
-  if (result['success']) {
-    _showMessage('تم إرسال الرمز مرة أخرى', isError: false);
-    _startResendTimer();
-  } else {
-    _showMessage(result['message'] ?? 'فشل إعادة الإرسال', isError: true);
-  }
-}
 
   void _showMessage(String message, {required bool isError}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isError ? Icons.error_outline : Icons.check_circle_outline,
-                color: Colors.white,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.check_circle_outline,
+              color: Colors.white,
+              size: 24,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isError ? 'خطأ' : 'نجاح',
+                    style: const TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    message,
+                    style: const TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(width: 8),
-              Text(
-                isError ? 'خطأ' : 'نجح',
-                style: const TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            message,
-            style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          ),
-        ],
+            ),
+          ],
+        ),
+        backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        margin: const EdgeInsets.all(16),
       ),
-      backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
-      duration: const Duration(seconds: 3),
-    ),
-  );
-}
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -197,17 +244,19 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             children: [
               const SizedBox(height: 20),
               
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D1B69).withOpacity(0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.email_outlined,
-                  size: 50,
-                  color: Color(0xFF2D1B69),
+              Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D1B69).withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.email_outlined,
+                    size: 50,
+                    color: Color(0xFF2D1B69),
+                  ),
                 ),
               ),
               const SizedBox(height: 30),
@@ -252,47 +301,74 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                 children: List.generate(6, (index) {
                   return SizedBox(
                     width: 45,
-                    child: TextField(
-                      controller: _codeControllers[index],
-                      focusNode: _focusNodes[index],
-                      textAlign: TextAlign.center,
-                      keyboardType: TextInputType.number,
-                      maxLength: 1,
-                      enabled: !_isLoading,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'IBMPlexSansArabic',
-                      ),
-                      decoration: InputDecoration(
-                        counterText: '',
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2D1B69),
-                            width: 2,
+                    height: 55,
+                    child: Stack(
+                      children: [
+                        TextField(
+                          controller: _codeControllers[index],
+                          focusNode: _focusNodes[index],
+                          textAlign: TextAlign.center,
+                          keyboardType: TextInputType.number,
+                          maxLength: 1,
+                          enabled: !_isLoading,
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.transparent,
+                          ),
+                          decoration: InputDecoration(
+                            counterText: '',
+                            filled: false,
+                            fillColor: Colors.transparent,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF2D1B69),
+                                width: 2,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF2D1B69),
+                                width: 2,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF2D1B69),
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(1),
+                          ],
+                          onChanged: (value) {
+                            setState(() {});
+                            
+                            if (value.isNotEmpty && index < 5) {
+                              _focusNodes[index + 1].requestFocus();
+                            } else if (value.isNotEmpty && index == 5) {
+                              _verifyCodeAndReturn();
+                            }
+                          },
+                        ),
+                        IgnorePointer(
+                          child: Container(
+                            alignment: Alignment.center,
+                            child: Text(
+                              _codeControllers[index].text,
+                              style: const TextStyle(
+                                fontSize: 24,
+                                color: Color(0xFF2D1B69),
+                              ),
+                            ),
                           ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                            color: Color(0xFF2D1B69),
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      onChanged: (value) {
-                        if (value.isNotEmpty && index < 5) {
-                          _focusNodes[index + 1].requestFocus();
-                        } else if (value.isEmpty && index > 0) {
-                          _focusNodes[index - 1].requestFocus();
-                        }
-                        
-                        if (index == 5 && value.isNotEmpty) {
-                          _verifyCodeAndReturn();
-                        }
-                      },
+                      ],
                     ),
                   );
                 }),
@@ -307,6 +383,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                     borderRadius: BorderRadius.circular(12.0),
                   ),
                   backgroundColor: const Color(0xFF2D1B69),
+                  disabledBackgroundColor: const Color(0xFF2D1B69).withOpacity(0.5),
                 ),
                 child: _isLoading
                     ? const SizedBox(
@@ -340,7 +417,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                         ? const SizedBox(
                             height: 16,
                             width: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Color(0xFF2D1B69),
+                            ),
                           )
                         : Text(
                             _resendTimer > 0
@@ -349,6 +429,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
                             style: TextStyle(
                               fontSize: 14,
                               fontFamily: 'IBMPlexSansArabic',
+                              fontWeight: FontWeight.w500,
                               color: _resendTimer == 0
                                   ? const Color(0xFF2D1B69)
                                   : Colors.grey,

@@ -4,6 +4,7 @@ import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
+  // استبدل هذا بالرابط الفعلي لسيرفرك
   static const String baseUrl = 'http://localhost:3000/api';
   
   final _storage = const FlutterSecureStorage();

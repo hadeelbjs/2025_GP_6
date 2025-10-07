@@ -106,7 +106,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        resizeToAvoidBottomInset: false, // الحل هنا! 🔥
+        resizeToAvoidBottomInset: false, 
         body: SafeArea(
           child: Column(
             children: [

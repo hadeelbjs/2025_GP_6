@@ -1,3 +1,4 @@
+// lib/shared/widgets/bottom_nav_bar.dart
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../features/dashboard/screens/main_dashboard.dart';

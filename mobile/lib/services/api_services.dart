@@ -1,27 +1,22 @@
-// lib/services/api_services.dart
 import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
-
-
- 
   static String get baseUrl {
     if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/api';  // Android Emulator
+      return 'http://10.0.2.2:3000/api';
     } else if (Platform.isIOS) {
-      return 'http://localhost:3000/api';  // iOS Simulator
+      return 'http://localhost:3000/api';
     } else {
-      return 'http://localhost:3000/api';  // الباقي (Desktop/Web)
+      return 'http://localhost:3000/api';
     }
   }
 
-  
   final _storage = const FlutterSecureStorage();
+  bool _isRefreshing = false;
 
-  
   Future<Map<String, String>> _getHeaders() async {
     final token = await _storage.read(key: 'access_token');
     
@@ -33,155 +28,186 @@ class ApiService {
   }
 
   // ============================================
-  //  البحث عن مستخدم (username أو phone)
+  //  دالة معالجة Response مع Auto Token Refresh
+  // ============================================
+  Future<Map<String, dynamic>> _handleAuthenticatedRequest(
+    Future<http.Response> Function() request,
+  ) async {
+    try {
+      final response = await request();
+      final data = jsonDecode(response.body);
+
+      // التحقق من انتهاء صلاحية التوكن
+      if (response.statusCode == 401 && 
+          (data['code'] == 'TOKEN_EXPIRED' || 
+           data['code'] == 'INVALID_TOKEN' || 
+           data['code'] == 'NO_TOKEN')) {
+        
+        // محاولة تحديث التوكن
+        final refreshed = await _refreshAccessToken();
+        
+        if (refreshed) {
+          // إعادة المحاولة بالتوكن الجديد
+          final retryResponse = await request();
+          return jsonDecode(retryResponse.body);
+        } else {
+          // فشل التحديث - إرجاع خطأ انتهاء الصلاحية
+          return {
+            'success': false,
+            'message': 'انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى',
+            'code': 'SESSION_EXPIRED'
+          };
+        }
+      }
+
+      return data;
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e'
+      };
+    }
+  }
+
+  // ============================================
+  // تحديث Access Token
+  // ============================================
+  Future<bool> _refreshAccessToken() async {
+    if (_isRefreshing) return false;
+    
+    _isRefreshing = true;
+
+    try {
+      final refreshToken = await _storage.read(key: 'refresh_token');
+      
+      if (refreshToken == null) {
+        _isRefreshing = false;
+        return false;
+      }
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/refresh-token'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'refreshToken': refreshToken}),
+      ).timeout(const Duration(seconds: 10));
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200 && data['success']) {
+        await _storage.write(key: 'access_token', value: data['accessToken']);
+        if (data['refreshToken'] != null) {
+          await _storage.write(key: 'refresh_token', value: data['refreshToken']);
+        }
+        _isRefreshing = false;
+        return true;
+      }
+
+      _isRefreshing = false;
+      return false;
+    } catch (e) {
+      _isRefreshing = false;
+      return false;
+    }
+  }
+
+  // ============================================
+  // البحث عن مستخدم (username أو phone)
   // ============================================
   Future<Map<String, dynamic>> searchContact(String searchQuery) async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.post(
+      return await http.post(
         Uri.parse('$baseUrl/contacts/search'),
         headers: headers,
         body: jsonEncode({'searchQuery': searchQuery}),
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
 
-  // ====================
+  // ============================================
   // إرسال طلب صداقة
-  // ====================
+  // ============================================
   Future<Map<String, dynamic>> sendContactRequest(String userId) async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.post(
+      return await http.post(
         Uri.parse('$baseUrl/contacts/send-request'),
         headers: headers,
         body: jsonEncode({'userId': userId}),
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
 
-  // ====================================
+  // ============================================
   // جلب الطلبات المعلقة (Notifications)
-  // ===================================
+  // ============================================
   Future<Map<String, dynamic>> getPendingRequests() async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.get(
+      return await http.get(
         Uri.parse('$baseUrl/contacts/pending-requests'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
 
-  // =======================
-  //  قبول طلب صداقة
-  // =======================
+  // ============================================
+  // قبول طلب صداقة
+  // ============================================
   Future<Map<String, dynamic>> acceptContactRequest(String requestId) async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.post(
+      return await http.post(
         Uri.parse('$baseUrl/contacts/accept-request/$requestId'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
-  // =====================
+
+  // ============================================
   // رفض طلب صداقة
-  // ==================
+  // ============================================
   Future<Map<String, dynamic>> rejectContactRequest(String requestId) async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.post(
+      return await http.post(
         Uri.parse('$baseUrl/contacts/reject-request/$requestId'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
 
   // ============================================
   // جلب قائمة الأصدقاء
   // ============================================
   Future<Map<String, dynamic>> getContactsList() async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.get(
+      return await http.get(
         Uri.parse('$baseUrl/contacts/list'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
 
   // ============================================
-  //  حذف صديق
+  // حذف صديق
   // ============================================
   Future<Map<String, dynamic>> deleteContact(String contactId) async {
-    try {
+    return _handleAuthenticatedRequest(() async {
       final headers = await _getHeaders();
-      
-      final response = await http.delete(
+      return await http.delete(
         Uri.parse('$baseUrl/contacts/$contactId'),
         headers: headers,
       ).timeout(const Duration(seconds: 10));
-
-      return jsonDecode(response.body);
-    } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
-    }
+    });
   }
 
   // ============================================
-  // Authentication 
+  // Authentication APIs
   // ============================================
   
   Future<Map<String, dynamic>> register({
@@ -521,7 +547,7 @@ class ApiService {
   }
 
   // ============================================
-  // دوال المساعدة
+  // دوال مساعدة
   // ============================================
   
   Future<String?> getAccessToken() async {

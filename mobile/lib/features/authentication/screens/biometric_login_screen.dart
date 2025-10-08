@@ -129,8 +129,8 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen>
           ),
           content: Text(
             _attemptCount >= 3 
-                ? 'تم تجاوز الحد الأقصى للمحاولات.\nهل تريدين استخدام كلمة المرور؟'
-                : 'فشل في التحقق من البصمة.\nهل تريدين المحاولة مرة أخرى؟',
+                ? 'تم تجاوز الحد الأقصى للمحاولات.\nهل تريد استخدام كلمة المرور؟'
+                : 'فشل في التحقق من البصمة.\nهل تريد المحاولة مرة أخرى؟',
             style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
           ),
           actions: [
@@ -292,7 +292,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen>
                     Text(
                       _isAuthenticating 
                           ? 'جاري التحقق...'
-                          : 'ضعي بصمتك للدخول',
+                          : 'ضع بصمتك للدخول',
                       style: TextStyle(
                         fontSize: 18,
                         color: Colors.white.withOpacity(0.9),

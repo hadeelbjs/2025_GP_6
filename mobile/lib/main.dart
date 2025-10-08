@@ -10,7 +10,6 @@ import 'features/contact/screens/contacts_list_screen.dart';
 import 'features/contact/screens/add_contact_screen.dart';
 import 'features/massaging/screens/chat_list_screen.dart';
 import 'features/account/screens/manage_account_screen.dart';
-import 'features/contact/screens/notifications_screen.dart';
 import 'package:flutter/foundation.dart';
 import 'services/biometric_service.dart';
 import 'features/authentication/screens/biometric_login_screen.dart';
@@ -70,7 +69,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
-  final ApiService _apiService = ApiService(); // ← أضيفي هذا السطر
+  final ApiService _apiService = ApiService(); 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 

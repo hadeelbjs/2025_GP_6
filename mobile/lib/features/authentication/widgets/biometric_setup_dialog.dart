@@ -13,6 +13,9 @@ class _BiometricSetupDialogState extends State<BiometricSetupDialog> {
   final _apiService = ApiService();
   bool _isLoading = false;
 
+
+  
+
   Future<void> _setupBiometric() async {
     setState(() => _isLoading = true);
 

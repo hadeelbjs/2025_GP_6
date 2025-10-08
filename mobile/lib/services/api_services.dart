@@ -8,7 +8,6 @@ import 'biometric_service.dart';
 import 'package:flutter/foundation.dart';
 
 
-
 class ApiService {
   // ============================
   // Base URL بحسب المنصة
@@ -423,7 +422,6 @@ Future<void> logout({bool keepBiometric = true}) async {
 // دوال البصمة الجديدة
 // ============================================
 
-// دالة للتحقق من إمكانية استخدام البصمة
 Future<bool> canUseBiometric() async {
   try {
     final isEnabled = await BiometricService.isBiometricEnabled();
@@ -457,4 +455,31 @@ Future<void> disableBiometric() async {
   await BiometricService.disableBiometric();
 }
 
+Future<Map<String, dynamic>> searchContact(String searchQuery) async {
+  return {'success': false, 'message': 'Not implemented'};
+}
+
+Future<Map<String, dynamic>> sendContactRequest(String userId) async {
+  return {'success': false, 'message': 'Not implemented'};
+}
+
+Future<Map<String, dynamic>> getPendingRequests() async {
+  return {'success': true, 'count': 0, 'requests': []};
+}
+
+Future<Map<String, dynamic>> acceptContactRequest(String requestId) async {
+  return {'success': false, 'message': 'Not implemented'};
+}
+
+Future<Map<String, dynamic>> rejectContactRequest(String requestId) async {
+  return {'success': false, 'message': 'Not implemented'};
+}
+
+Future<Map<String, dynamic>> getContactsList() async {
+  return {'success': false, 'message': 'Not implemented'};
+}
+
+Future<Map<String, dynamic>> deleteContact(String contactId) async {
+  return {'success': false, 'message': 'Not implemented'};
+}
 }

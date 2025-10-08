@@ -1,10 +1,14 @@
 //lib/features/dashboard/screens/main_dashboard.dart
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../../authentication/widgets/biometric_setup_dialog.dart';
+import '../../../services/biometric_service.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -20,7 +24,64 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   void initState() {
     super.initState();
+    _checkBiometricSetup();
     _loadNotificationCount();
+  }
+
+  Future<void> _checkBiometricSetup() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    
+    if (!mounted) return;
+
+    try {
+      final isEnabled = await BiometricService.isBiometricEnabled();
+      if (isEnabled) return;
+
+      final isSupported = await BiometricService.isDeviceSupported();
+      if (!isSupported) return;
+
+      final canCheck = await BiometricService.canCheckBiometrics();
+      if (!canCheck) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final hasShownBiometricDialog = prefs.getBool('biometric_dialog_shown') ?? false;
+      
+      if (hasShownBiometricDialog) return;
+
+      if (mounted) {
+        final result = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const BiometricSetupDialog(),
+        );
+
+        await prefs.setBool('biometric_dialog_shown', true);
+
+        if (result == true) {
+          _showMessage('تم تفعيل البصمة! يمكنك الآن الدخول بسرعة', true);
+        }
+      }
+
+    } catch (e) {
+      debugPrint('خطأ في فحص إعداد البصمة: $e');
+    }
+  }
+
+  void _showMessage(String message, bool isSuccess) {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          textAlign: TextAlign.center,
+        ),
+        backgroundColor: isSuccess ? Colors.green : Colors.red,
+        behavior: SnackBarBehavior.floating,
+        duration: const Duration(seconds: 3),
+      ),
+    );
   }
 
   Future<void> _loadNotificationCount() async {

@@ -2,6 +2,10 @@ import 'dart:io';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'biometric_service.dart';
+import 'package:flutter/foundation.dart';
+
+
 
 class ApiService {
   static String get baseUrl {
@@ -571,9 +575,54 @@ class ApiService {
     return token != null;
   }
 
-  Future<void> logout() async {
-    await _storage.delete(key: 'access_token');
-    await _storage.delete(key: 'refresh_token');
-    await _storage.delete(key: 'user_data');
+Future<void> logout({bool keepBiometric = true}) async {
+  // حذف بيانات الجلسة دائماً
+  await _storage.delete(key: 'access_token');
+  await _storage.delete(key: 'refresh_token');
+  await _storage.delete(key: 'user_data');
+  
+  // حذف البصمة فقط إذا طُلب ذلك
+  if (!keepBiometric) {
+    await BiometricService.disableBiometric();
   }
+}
+
+  // ============================================
+// دوال البصمة الجديدة
+// ============================================
+
+// دالة للتحقق من إمكانية استخدام البصمة
+Future<bool> canUseBiometric() async {
+  try {
+    final isEnabled = await BiometricService.isBiometricEnabled();
+    final biometricUser = await BiometricService.getBiometricUser();
+    final userData = await getUserData();
+    
+    return isEnabled && 
+           biometricUser != null && 
+           userData != null && 
+           biometricUser == userData['email'];
+  } catch (e) {
+    return false;
+  }
+}
+
+// دالة تفعيل البصمة
+Future<bool> enableBiometric() async {
+  try {
+    final userData = await getUserData();
+    if (userData == null) return false;
+    
+    return await BiometricService.enableBiometric(userData['email']);
+  } catch (e) {
+debugPrint('خطأ في تفعيل البصمة: $e');
+    return false;
+  }
+}
+
+// دالة منفصلة لحذف البصمة
+Future<void> disableBiometric() async {
+  await BiometricService.disableBiometric();
+}
+
 }

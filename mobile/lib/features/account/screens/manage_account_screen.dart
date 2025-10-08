@@ -4,7 +4,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
-
+import '../../../services/biometric_service.dart';
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
@@ -83,7 +83,9 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                         padding: const EdgeInsets.all(20),
                         child: Column(
                           children: [
-                            _buildProfileCard(),
+  _buildProfileCard(),
+  const SizedBox(height: 20),
+  _buildSecuritySettings(),
                             const SizedBox(height: 20),
                             _buildLogoutButton(context),
                             const SizedBox(height: 20),
@@ -99,6 +101,103 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     );
   }
 
+Widget _buildSecuritySettings() {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'الأمان',
+          style: TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2D1B69),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        FutureBuilder<bool>(
+          future: BiometricService.isBiometricEnabled(),
+          builder: (context, snapshot) {
+            final isEnabled = snapshot.data ?? false;
+            
+            return FutureBuilder<bool>(
+              future: BiometricService.isDeviceSupported(),
+              builder: (context, deviceSnapshot) {
+                final isSupported = deviceSnapshot.data ?? false;
+                
+                if (!isSupported) {
+                  return ListTile(
+                    leading: const Icon(
+                      Icons.fingerprint,
+                      color: Colors.grey,
+                    ),
+                    title: const Text(
+                      'المصادقة الحيوية',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    subtitle: const Text(
+                      'غير مدعومة في هذا الجهاز',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        color: Colors.grey,
+                      ),
+                    ),
+                  );
+                }
+                
+                return ListTile(
+                  leading: Icon(
+                    Icons.fingerprint,
+                    color: isEnabled 
+                        ? const Color(0xFF2D1B69)
+                        : Colors.grey,
+                  ),
+                  title: const Text(
+                    'المصادقة الحيوية',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    isEnabled ? 'مفعلة - دخول سريع' : 'غير مفعلة',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      color: isEnabled ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                  trailing: Switch(
+                    value: isEnabled,
+                    onChanged: (value) => _toggleBiometric(value),
+                    activeColor: const Color(0xFF2D1B69),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
   Widget _buildProfileCard() {
     final fullName = _userData?['fullName'] ?? 'المستخدم';
     final email = _userData?['email'] ?? 'example@email.com';
@@ -288,4 +387,76 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
       ),
     );
   }
+
+  Future<void> _toggleBiometric(bool enable) async {
+  if (enable) {
+    final canUse = await BiometricService.canCheckBiometrics();
+    if (!canUse) {
+      _showMessage('البصمة غير متاحة في هذا الجهاز', false);
+      return;
+    }
+
+    final success = await _apiService.enableBiometric();
+    if (success) {
+      _showMessage('تم تفعيل البصمة بنجاح', true);
+      setState(() {});
+    } else {
+      _showMessage('فشل في تفعيل البصمة', false);
+    }
+  } else {
+    _showDisableBiometricDialog();
+  }
+}
+
+void _showDisableBiometricDialog() {
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: const Text(
+            'إلغاء البصمة',
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: const Text(
+            'هل أنت متأكدة من إلغاء تفعيل البصمة؟\nستحتاجين لتسجيل الدخول بكلمة المرور في المرات القادمة.',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _apiService.disableBiometric();
+                _showMessage('تم إلغاء البصمة', true);
+                setState(() {});
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                'إلغاء البصمة',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
 }

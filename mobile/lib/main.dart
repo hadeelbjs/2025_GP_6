@@ -9,7 +9,7 @@ import 'features/contact/screens/contacts_list_screen.dart';
 import 'features/contact/screens/add_contact_screen.dart';
 import 'features/massaging/screens/chat_list_screen.dart';
 import 'features/account/screens/manage_account_screen.dart';
-import 'features/contact/screens/notifications_screen.dart';
+//import 'features/contact/screens/notifications_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -46,9 +46,9 @@ class MyApp extends StatelessWidget {
         '/chats': (context) => const ProtectedRoute(
           child: ChatListScreen(),
         ),
-        '/notifications': (context) => const ProtectedRoute(
-          child: NotificationsScreen(),
-        ),
+       // '/notifications': (context) => const ProtectedRoute(
+         // child: NotificationsScreen(),
+       // ),
         '/account': (context) => const ProtectedRoute(
           child: AccountManagementScreen(),
         ),

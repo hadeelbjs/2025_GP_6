@@ -29,24 +29,43 @@ router.post('/search',
       const { searchQuery } = req.body;
       const currentUserId = req.user.id;
 
-      // معالجة رقم الجوال
+      // معالجة رقم الجوال - إزالة الرموز والمسافات
+      const cleanedQuery = searchQuery.replace(/[+\s-]/g, '');
+      
       let phoneVariations = [];
-      if (/^\d+$/.test(searchQuery)) {
-        const cleanPhone = searchQuery.replace(/^\+?966/, '');
+      
+      // التحقق إذا كان المدخل رقم
+      if (/^\d+$/.test(cleanedQuery)) {
+        let baseNumber = cleanedQuery;
+        
+        // إزالة 966 من البداية إذا موجودة
+        if (baseNumber.startsWith('966')) {
+          baseNumber = baseNumber.substring(3);
+        }
+        
+        // إزالة 0 من البداية إذا موجودة
+        if (baseNumber.startsWith('0')) {
+          baseNumber = baseNumber.substring(1);
+        }
+        
+        // إنشاء جميع احتمالات الرقم
         phoneVariations = [
-          searchQuery,
-          cleanPhone,
-          `+966${cleanPhone}`,
-          `966${cleanPhone}`
+          baseNumber,                    // 5xxxxxxxx
+          `0${baseNumber}`,              // 05xxxxxxxx
+          `966${baseNumber}`,            // 9665xxxxxxxx
+          `+966${baseNumber}`,           // +9665xxxxxxxx
         ];
       }
 
-      const searchConditions = [
-        { username: searchQuery.toLowerCase() }
-      ];
-
+      // بناء شروط البحث
+      const searchConditions = [];
+      
+      // البحث بالـ username
+      searchConditions.push({ username: searchQuery.toLowerCase() });
+      
+      // البحث بجميع صيغ الجوال
       phoneVariations.forEach(phone => {
-        searchConditions.push({ phone });
+        searchConditions.push({ phone: phone });
       });
 
       // البحث (استثني نفسي)
@@ -85,7 +104,7 @@ router.post('/search',
       });
 
     } catch (error) {
-      console.error('خطأ في البحث:', error);
+      console.error('خطأ في البحث');
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء البحث' 
@@ -178,7 +197,7 @@ router.post('/send-request',
       });
 
     } catch (error) {
-      console.error('خطأ في إرسال الطلب:', error);
+      console.error('خطأ في إرسال الطلب');
       
       if (error.code === 11000) {
         return res.status(400).json({ 
@@ -227,7 +246,7 @@ router.get('/pending-requests', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('خطأ في جلب الطلبات:', error);
+    console.error('خطأ في جلب الطلبات');
     res.status(500).json({ 
       success: false, 
       message: 'حدث خطأ أثناء جلب الطلبات' 
@@ -281,7 +300,7 @@ router.post('/accept-request/:requestId',
       });
 
     } catch (error) {
-      console.error('خطأ في قبول الطلب:', error);
+      console.error('خطأ في قبول الطلب');
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء قبول الطلب' 
@@ -333,7 +352,7 @@ router.post('/reject-request/:requestId',
       });
 
     } catch (error) {
-      console.error('خطأ في رفض الطلب:', error);
+      console.error('خطأ في رفض الطلب');
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء رفض الطلب' 
@@ -378,7 +397,7 @@ router.get('/list', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('خطأ في جلب الأصدقاء:', error);
+    console.error('خطأ في جلب الأصدقاء');
     res.status(500).json({ 
       success: false, 
       message: 'حدث خطأ أثناء جلب القائمة' 
@@ -435,7 +454,7 @@ router.delete('/:contactId',
       });
 
     } catch (error) {
-      console.error('خطأ في الحذف:', error);
+      console.error('خطأ في الحذف');
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء الحذف' 

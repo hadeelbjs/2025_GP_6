@@ -35,7 +35,9 @@ class _AddContactScreenState extends State<AddContactScreen> {
   bool get _isValid {
     if (_method == AddMethod.username) {
       final u = _usernameController.text.trim();
-      return RegExp(r'^[\u0621-\u064A\u0660-\u0669\u06F0-\u06F9A-Za-z0-9._-]{3,}$').hasMatch(u);
+      return RegExp(
+        r'^[\u0621-\u064A\u0660-\u0669\u06F0-\u06F9A-Za-z0-9._-]{3,}$',
+      ).hasMatch(u);
     } else {
       final p = _phoneController.text.trim();
       return RegExp(r'^5\d{8}$').hasMatch(p);
@@ -90,7 +92,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
 
       if (result['success']) {
         _showMessage(result['message'] ?? 'تم إرسال الطلب بنجاح', true);
-        
+
         setState(() {
           final index = _searchResults.indexWhere((u) => u['id'] == userId);
           if (index != -1) {
@@ -118,7 +120,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
 
   void _showMessage(String message, bool isSuccess) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -139,7 +141,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F7),
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -199,7 +201,8 @@ class _AddContactScreenState extends State<AddContactScreen> {
                           onPressed: _isValid && !_isLoading ? _search : null,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primary,
-                            disabledBackgroundColor: AppColors.primary.withOpacity(0.4),
+                            disabledBackgroundColor: AppColors.primary
+                                .withOpacity(0.4),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 14),
                             shape: RoundedRectangleBorder(
@@ -261,7 +264,12 @@ class _AddContactScreenState extends State<AddContactScreen> {
     );
   }
 
-  Widget _buildActionButton(String userId, String fullName, String? status, bool isSentByMe) {
+  Widget _buildActionButton(
+    String userId,
+    String fullName,
+    String? status,
+    bool isSentByMe,
+  ) {
     if (status == 'accepted') {
       return const Chip(
         label: Text('صديق بالفعل', style: TextStyle(fontSize: 12)),

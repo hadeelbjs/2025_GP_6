@@ -32,7 +32,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
 
       // التحقق من انتهاء الجلسة
-      if (result['code'] == 'SESSION_EXPIRED' || 
+      if (result['code'] == 'SESSION_EXPIRED' ||
           result['code'] == 'TOKEN_EXPIRED' ||
           result['code'] == 'NO_TOKEN') {
         _handleSessionExpired();
@@ -42,13 +42,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (result['success']) {
         setState(() {
           _requests = List<Map<String, dynamic>>.from(
-            result['requests'].map((req) => {
-              'requestId': req['id']?.toString() ?? '',
-              'userId': req['user']?['id']?.toString() ?? '',
-              'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
-              'username': req['user']?['username']?.toString() ?? 'غير معروف',
-              'createdAt': req['createdAt']?.toString() ?? '',
-            }),
+            result['requests'].map(
+              (req) => {
+                'requestId': req['id']?.toString() ?? '',
+                'userId': req['user']?['id']?.toString() ?? '',
+                'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
+                'username': req['user']?['username']?.toString() ?? 'غير معروف',
+                'createdAt': req['createdAt']?.toString() ?? '',
+              },
+            ),
           );
         });
       } else {
@@ -78,7 +80,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
 
       // التحقق من انتهاء الجلسة
-      if (result['code'] == 'SESSION_EXPIRED' || 
+      if (result['code'] == 'SESSION_EXPIRED' ||
           result['code'] == 'TOKEN_EXPIRED') {
         _handleSessionExpired();
         return;
@@ -89,8 +91,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _requests.removeWhere((r) => r['requestId'] == requestId);
         });
         _showMessage(
-          result['message'] ?? 'تم قبول الطلب من ${fullName ?? "المستخدم"}', 
-          true
+          result['message'] ?? 'تم قبول الطلب من ${fullName ?? "المستخدم"}',
+          true,
         );
       } else {
         _showMessage(result['message'] ?? 'فشل قبول الطلب', false);
@@ -115,7 +117,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       if (!mounted) return;
 
       // التحقق من انتهاء الجلسة
-      if (result['code'] == 'SESSION_EXPIRED' || 
+      if (result['code'] == 'SESSION_EXPIRED' ||
           result['code'] == 'TOKEN_EXPIRED') {
         _handleSessionExpired();
         return;
@@ -126,8 +128,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           _requests.removeWhere((r) => r['requestId'] == requestId);
         });
         _showMessage(
-          result['message'] ?? 'تم رفض الطلب من ${fullName ?? "المستخدم"}', 
-          true
+          result['message'] ?? 'تم رفض الطلب من ${fullName ?? "المستخدم"}',
+          true,
         );
       } else {
         _showMessage(result['message'] ?? 'فشل رفض الطلب', false);
@@ -142,13 +144,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   // معالجة انتهاء الجلسة
   void _handleSessionExpired() {
     _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
-    
+
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/login',
-          (route) => false,
-        );
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
       }
     });
   }
@@ -175,7 +176,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F7),
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -190,47 +191,49 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               Expanded(
                 child: _isLoading
                     ? const Center(
-                        child: CircularProgressIndicator(color: AppColors.primary),
+                        child: CircularProgressIndicator(
+                          color: AppColors.primary,
+                        ),
                       )
                     : _requests.isEmpty
-                        ? Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(
-                                  Icons.notifications_none,
-                                  size: 80,
-                                  color: AppColors.textHint.withOpacity(0.3),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  'لا توجد إشعارات',
-                                  style: AppTextStyles.h3.copyWith(
-                                    color: AppColors.textHint,
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'سيتم عرض طلبات الصداقة هنا',
-                                  style: AppTextStyles.bodySmall.copyWith(
-                                    color: AppColors.textHint,
-                                  ),
-                                ),
-                              ],
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.notifications_none,
+                              size: 80,
+                              color: AppColors.textHint.withOpacity(0.3),
                             ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadRequests,
-                            color: AppColors.primary,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              itemCount: _requests.length,
-                              itemBuilder: (context, index) {
-                                final request = _requests[index];
-                                return _buildRequestCard(request);
-                              },
+                            const SizedBox(height: 16),
+                            Text(
+                              'لا توجد إشعارات',
+                              style: AppTextStyles.h3.copyWith(
+                                color: AppColors.textHint,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'سيتم عرض طلبات الصداقة هنا',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: AppColors.textHint,
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadRequests,
+                        color: AppColors.primary,
+                        child: ListView.builder(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          itemCount: _requests.length,
+                          itemBuilder: (context, index) {
+                            final request = _requests[index];
+                            return _buildRequestCard(request);
+                          },
+                        ),
+                      ),
               ),
             ],
           ),

@@ -9,7 +9,8 @@ class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
   @override
-  State<AccountManagementScreen> createState() => _AccountManagementScreenState();
+  State<AccountManagementScreen> createState() =>
+      _AccountManagementScreenState();
 }
 
 class _AccountManagementScreenState extends State<AccountManagementScreen> {
@@ -26,22 +27,22 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   Future<void> _loadUserData() async {
     try {
       final data = await _apiService.getUserData();
-      
+
       if (!mounted) return;
-      
+
       if (data == null) {
         // لا توجد بيانات - الجلسة منتهية
         _handleSessionExpired();
         return;
       }
-      
+
       setState(() {
         _userData = data;
         _isLoading = false;
       });
     } catch (e) {
       if (!mounted) return;
-      
+
       setState(() => _isLoading = false);
       _showMessage('خطأ في تحميل بيانات الحساب', false);
     }
@@ -50,13 +51,12 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   // ✅ معالجة انتهاء الجلسة
   void _handleSessionExpired() {
     _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
-    
+
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/login',
-          (route) => false,
-        );
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
       }
     });
   }
@@ -66,7 +66,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF8F9FA),
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
             children: [
@@ -75,7 +75,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                 showBackground: true,
                 alignTitleRight: true,
               ),
-              
+
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
@@ -126,11 +126,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
               color: AppColors.primary.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              Icons.person,
-              size: 50,
-              color: AppColors.primary,
-            ),
+            child: Icon(Icons.person, size: 50, color: AppColors.primary),
           ),
           const SizedBox(height: 16),
           Text(
@@ -156,9 +152,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           Text(
             email,
             textDirection: TextDirection.ltr,
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textHint,
-            ),
+            style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
           ),
         ],
       ),
@@ -223,10 +217,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
             ),
             content: const Text(
               'هل أنت متأكد من رغبتك في تسجيل الخروج من حسابك؟',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontSize: 15,
-              ),
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 15),
             ),
             actions: [
               TextButton(
@@ -269,7 +260,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
 
   Future<void> _handleLogout() async {
     await _apiService.logout();
-    
+
     if (!mounted) return;
 
     _showMessage('تم تسجيل الخروج بنجاح', true);
@@ -278,15 +269,12 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
 
     if (!mounted) return;
 
-    Navigator.of(context).pushNamedAndRemoveUntil(
-      '/login',
-      (route) => false,
-    );
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
   void _showMessage(String message, [bool isSuccess = false]) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(

@@ -58,12 +58,14 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       if (result['success']) {
         setState(() {
           _contacts = List<Map<String, dynamic>>.from(
-            result['contacts'].map((contact) => {
-              'id': contact['id'],
-              'name': contact['name'],
-              'username': contact['username'],
-              'addedAt': contact['addedAt'],
-            }),
+            result['contacts'].map(
+              (contact) => {
+                'id': contact['id'],
+                'name': contact['name'],
+                'username': contact['username'],
+                'addedAt': contact['addedAt'],
+              },
+            ),
           );
           _results = List.of(_contacts);
         });
@@ -157,7 +159,10 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          title: const Text('حذف صديق', style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+          title: const Text(
+            'حذف صديق',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          ),
           content: Text(
             'هل أنت متأكد من حذف $name من جهات الاتصال؟',
             style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
@@ -165,12 +170,18 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: const Text('إلغاء', style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
               style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text('حذف', style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+              child: const Text(
+                'حذف',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
             ),
           ],
         ),
@@ -201,8 +212,15 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
 
   String _normalize(String s) {
     var t = s.trim().toLowerCase();
-    t = t.replaceAll('\u0640', '').replaceAll(RegExp(r'[\u064B-\u0652\u0670]'), '');
-    t = t.replaceAll(RegExp(r'[أإآ]'), 'ا').replaceAll('ى', 'ي').replaceAll('ة', 'ه').replaceAll('ؤ', 'و').replaceAll('ئ', 'ي');
+    t = t
+        .replaceAll('\u0640', '')
+        .replaceAll(RegExp(r'[\u064B-\u0652\u0670]'), '');
+    t = t
+        .replaceAll(RegExp(r'[أإآ]'), 'ا')
+        .replaceAll('ى', 'ي')
+        .replaceAll('ة', 'ه')
+        .replaceAll('ؤ', 'و')
+        .replaceAll('ئ', 'ي');
     const arabicDigits = '٠١٢٣٤٥٦٧٨٩';
     for (int i = 0; i < 10; i++) {
       t = t.replaceAll(arabicDigits[i], i.toString());
@@ -234,6 +252,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        backgroundColor: AppColors.background,
         resizeToAvoidBottomInset: false,
         body: SafeArea(
           child: Column(
@@ -245,7 +264,10 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
               ),
 
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: ContactSearchBar(
                   controller: _searchController,
                   onChanged: _filter,
@@ -289,7 +311,10 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                 ),
 
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: [
@@ -297,7 +322,9 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                       onPressed: () async {
                         final result = await Navigator.push(
                           context,
-                          MaterialPageRoute(builder: (_) => const AddContactScreen()),
+                          MaterialPageRoute(
+                            builder: (_) => const AddContactScreen(),
+                          ),
                         );
 
                         if (result == true) {
@@ -307,8 +334,13 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 30,
+                          vertical: 15,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
                         elevation: 2,
                       ),
                       child: Row(
@@ -342,7 +374,11 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                       ],
                     ),
                     child: _isLoading
-                        ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+                        ? const Center(
+                            child: CircularProgressIndicator(
+                              color: AppColors.primary,
+                            ),
+                          )
                         : _results.isEmpty
                             ? Center(
                                 child: Padding(
@@ -385,20 +421,23 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                                     final name = contact['name'] ?? '';
                                     final contactId = contact['id'] ?? '';
 
-                                    return ContactCard(
-                                      name: name,
-                                      onDelete: () => _deleteContact(contactId, name),
-                                    );
-                                  },
-                                ),
-                              ),
+                                return ContactCard(
+                                  name: name,
+                                  onDelete: () =>
+                                      _deleteContact(contactId, name),
+                                );
+                              },
+                            ),
+                          ),
                   ),
                 ),
               ),
 
               const SizedBox(height: 20),
 
-              isKeyboardVisible ? const SizedBox.shrink() : const BottomNavBar(currentIndex: 1),
+              isKeyboardVisible
+                  ? const SizedBox.shrink()
+                  : const BottomNavBar(currentIndex: 1),
             ],
           ),
         ),

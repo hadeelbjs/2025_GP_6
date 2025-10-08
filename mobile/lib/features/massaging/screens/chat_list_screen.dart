@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
-
+import '../../../services/api_services.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -15,6 +13,7 @@ class ChatListScreen extends StatefulWidget {
 }
 
 class _ChatListScreenState extends State<ChatListScreen> {
+  final _apiService = ApiService(); 
   List<Map<String, dynamic>> _chats = [];
   bool _isLoading = false;
 
@@ -24,27 +23,27 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _loadChats();
   }
 
-  // جلب قائمة الأصدقاء من Backend
+  //  جلب قائمة الأصدقاء باستخدام ApiService
   Future<void> _loadChats() async {
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     try {
-      // استبدلي بـ IP السيرفر والتوكن
-      final response = await http.get(
-        Uri.parse('http://YOUR_SERVER_IP:3000/api/contacts/list'),
-        headers: {
-          'Authorization': 'Bearer YOUR_TOKEN', // أو: await AuthService.getToken()
-        },
-      );
+      final result = await _apiService.getContactsList();
 
-      final data = json.decode(response.body);
+      if (!mounted) return;
 
-      if (response.statusCode == 200 && data['success']) {
+      //  التحقق من انتهاء الجلسة
+      if (result['code'] == 'SESSION_EXPIRED' || 
+          result['code'] == 'TOKEN_EXPIRED' ||
+          result['code'] == 'NO_TOKEN') {
+        _handleSessionExpired();
+        return;
+      }
+
+      if (result['success']) {
         setState(() {
           _chats = List<Map<String, dynamic>>.from(
-            data['contacts'].map((contact) => {
+            result['contacts'].map((contact) => {
               'id': contact['id'],
               'name': contact['name'],
               'username': contact['username'],
@@ -52,14 +51,31 @@ class _ChatListScreenState extends State<ChatListScreen> {
             }),
           );
         });
+      } else {
+        _showMessage(result['message'] ?? 'فشل تحميل المحادثات', false);
       }
     } catch (e) {
+      if (!mounted) return;
       _showMessage('خطأ في تحميل المحادثات', false);
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
+  }
+
+  //  معالجة انتهاء الجلسة
+  void _handleSessionExpired() {
+    _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
+    
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
+    });
   }
 
   // توليد لون عشوائي بناءً على الاسم (ثابت لنفس الشخص)
@@ -79,6 +95,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
   }
 
   void _showMessage(String message, bool isSuccess) {
+    if (!mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -105,7 +123,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         body: SafeArea(
           child: Column(
             children: [
-              // Header
               const HeaderWidget(
                 title: 'المحادثات',
                 showBackground: true,
@@ -114,7 +131,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
               const SizedBox(height: 10),
 
-              // قائمة المحادثات
               Expanded(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -131,7 +147,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
                       ],
                     ),
                     child: _isLoading
-                        ? const Center(child: CircularProgressIndicator())
+                        ? const Center(
+                            child: CircularProgressIndicator(color: AppColors.primary),
+                          )
                         : _chats.isEmpty
                             ? Center(
                                 child: Padding(
@@ -165,6 +183,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
                               )
                             : RefreshIndicator(
                                 onRefresh: _loadChats,
+                                color: AppColors.primary,
                                 child: ListView.separated(
                                   padding: const EdgeInsets.symmetric(vertical: 15),
                                   itemCount: _chats.length,
@@ -188,7 +207,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
               const SizedBox(height: 20),
 
-              // Bottom Navigation Bar
               const BottomNavBar(currentIndex: 3),
             ],
           ),
@@ -206,7 +224,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
     return InkWell(
       onTap: () {
-       _showMessage('سيتم فتح المحادثة مع $name', true);
+        _showMessage('سيتم فتح المحادثة مع $name', true);
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

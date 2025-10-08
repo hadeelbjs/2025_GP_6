@@ -1,5 +1,6 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'services/auth_guard.dart';
 import 'features/authentication/screens/login_screen.dart';
 import 'features/authentication/screens/register_screen.dart';
@@ -32,7 +33,7 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         
-        // 🔒 الصفحات المحمية - تحتاج تسجيل دخول
+        // الصفحات المحمية - تحتاج تسجيل دخول
         '/dashboard': (context) => const ProtectedRoute(
           child: MainDashboard(),
         ),
@@ -56,9 +57,7 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// ============================================
-// 🚀 Splash Screen - للتحقق من حالة تسجيل الدخول
-// ============================================
+// Splash Screen للتحقق من حالة تسجيل الدخول
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
 
@@ -66,18 +65,41 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> {
+class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
 
   @override
   void initState() {
     super.initState();
+    
+    // تأثير Animation للوقو
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 1500),
+      vsync: this,
+    );
+    
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeIn,
+      ),
+    );
+    
+    _animationController.forward();
     _checkAuthStatus();
   }
 
+  @override
+  void dispose() {
+    _animationController.dispose();
+    super.dispose();
+  }
+
   Future<void> _checkAuthStatus() async {
-    // انتظار ثانية للتأثير البصري
-    await Future.delayed(const Duration(seconds: 1));
+    // انتظار ثانيتين للتأثير البصري
+    await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
 
@@ -96,39 +118,60 @@ class _SplashScreenState extends State<SplashScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF2D1B69),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // شعار التطبيق
-            Container(
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // شعار التطبيق SVG
+              SvgPicture.asset(
+              'assets/images/logo-white.svg',
               width: 120,
               height: 120,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: const Icon(
-                Icons.chat_bubble,
-                size: 60,
-                color: Color(0xFF2D1B69),
+              fit: BoxFit.contain,
+              colorFilter: const ColorFilter.mode(
+                Colors.white,
+                BlendMode.srcIn,
               ),
             ),
-            const SizedBox(height: 30),
-            const Text(
-              'وصيد',
-              style: TextStyle(
-                fontSize: 36,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                fontFamily: 'IBMPlexSansArabic',
+              
+              const SizedBox(height: 30),
+              
+              const Text(
+                'وصيد',
+                style: TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                  fontFamily: 'IBMPlexSansArabic',
+                  letterSpacing: 2,
+                ),
               ),
-            ),
-            const SizedBox(height: 50),
-            const CircularProgressIndicator(
-              color: Colors.white,
-            ),
-          ],
+              
+              const SizedBox(height: 10),
+              
+              Text(
+                'أمانك بِلُغَتِك',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.white.withOpacity(0.8),
+                  fontFamily: 'IBMPlexSansArabic',
+                ),
+              ),
+              
+              const SizedBox(height: 60),
+              
+              const SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(
+                  color: Colors.white,
+                  strokeWidth: 3,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

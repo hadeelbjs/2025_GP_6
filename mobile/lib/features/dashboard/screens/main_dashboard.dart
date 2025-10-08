@@ -1,11 +1,10 @@
+//lib/features/dashboard/screens/main_dashboard.dart
 import 'package:flutter/material.dart';
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
-import '../../contact/screens/notifications_screen.dart';
-
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -27,6 +26,16 @@ class _MainDashboardState extends State<MainDashboard> {
   Future<void> _loadNotificationCount() async {
     try {
       final result = await _apiService.getPendingRequests();
+      
+      if (!mounted) return;
+
+      if (result['code'] == 'SESSION_EXPIRED' || 
+          result['code'] == 'TOKEN_EXPIRED' ||
+          result['code'] == 'NO_TOKEN') {
+        _handleSessionExpired();
+        return;
+      }
+
       if (result['success'] && mounted) {
         setState(() {
           _notificationCount = result['count'] ?? 0;
@@ -35,6 +44,30 @@ class _MainDashboardState extends State<MainDashboard> {
     } catch (e) {
       // Silent fail
     }
+  }
+
+  void _handleSessionExpired() {
+    if (!mounted) return;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى',
+          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          textAlign: TextAlign.center,
+        ),
+        backgroundColor: Colors.red,
+      ),
+    );
+    
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
+    });
   }
 
   @override
@@ -55,62 +88,43 @@ class _MainDashboardState extends State<MainDashboard> {
                 showBackground: true,
                 alignTitleRight: false,
               ),
-
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: width * 0.06),
-                  child: Transform.translate(
-                    offset: Offset(0, -height * 0.045),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 4),
-
-                        Align(
-                          alignment: Alignment.topLeft,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Align(
+                        alignment: Alignment.topLeft,
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 8, bottom: 16),
                           child: _Bell(
                             count: _notificationCount,
                             onTap: () async {
-                              await Navigator.push(
+                              await Navigator.pushNamed(
                                 context,
-                                MaterialPageRoute(
-                                  builder: (_) => const NotificationsScreen(),
-                                ),
+                                '/notifications',
                               );
                               _loadNotificationCount();
                             },
                           ),
                         ),
-
-                        const SizedBox(height: 6),
-
-                        _buildTitle('مرحبًا بك', width * 0.085, context),
-
-                        const SizedBox(height: 10),
-
-                        _buildTitle('لوحة المعلومات', width * 0.05, context),
-
-                        const SizedBox(height: 8),
-
-                        _buildInfoCard(context),
-
-                        const SizedBox(height: 12),
-
-                        _buildTipHeader(context),
-
-                        const SizedBox(height: 8),
-
-                        _buildTipText(context),
-
-                        const Spacer(),
-                      ],
-                    ),
+                      ),
+                      _buildTitle('مرحبًا بك', width * 0.085, context),
+                      const SizedBox(height: 10),
+                      _buildTitle('لوحة المعلومات', width * 0.05, context),
+                      const SizedBox(height: 8),
+                      _buildInfoCard(context),
+                      const SizedBox(height: 12),
+                      _buildTipHeader(context),
+                      const SizedBox(height: 8),
+                      _buildTipText(context),
+                      const Spacer(),
+                    ],
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               const BottomNavBar(currentIndex: 0),
             ],
           ),
@@ -231,50 +245,59 @@ class _Bell extends StatelessWidget {
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
 
-    return Transform.translate(
-      offset: const Offset(0, -20),
+    return Material(
+      color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(w * 0.03),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            Container(
-              padding: EdgeInsets.all(w * 0.022),
-              decoration: BoxDecoration(
-                color: AppColors.secondary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(w * 0.03),
-                border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+        splashColor: AppColors.primary.withOpacity(0.2),
+        highlightColor: AppColors.primary.withOpacity(0.1),
+        child: Container(
+          padding: EdgeInsets.all(w * 0.03),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                padding: EdgeInsets.all(w * 0.022),
+                decoration: BoxDecoration(
+                  color: AppColors.secondary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(w * 0.03),
+                  border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+                ),
+                child: Icon(
+                  Icons.notifications,
+                  color: AppColors.textPrimary,
+                  size: w * 0.066,
+                ),
               ),
-              child: Icon(Icons.notifications, color: AppColors.textPrimary, size: w * 0.066),
-            ),
-            if (count > 0)
-              Positioned(
-                top: -5,
-                right: -3,
-                child: Container(
-                  padding: const EdgeInsets.all(4),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFE53935),
-                    shape: BoxShape.circle,
-                  ),
-                  constraints: BoxConstraints(
-                    minWidth: w * 0.05,
-                    minHeight: w * 0.05,
-                  ),
-                  child: Center(
-                    child: Text(
-                      count > 9 ? '9+' : count.toString(),
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: w * 0.028,
-                        fontWeight: FontWeight.bold,
+              if (count > 0)
+                Positioned(
+                  top: -5,
+                  right: -3,
+                  child: Container(
+                    padding: const EdgeInsets.all(4),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE53935),
+                      shape: BoxShape.circle,
+                    ),
+                    constraints: BoxConstraints(
+                      minWidth: w * 0.05,
+                      minHeight: w * 0.05,
+                    ),
+                    child: Center(
+                      child: Text(
+                        count > 9 ? '9+' : count.toString(),
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: w * 0.028,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );

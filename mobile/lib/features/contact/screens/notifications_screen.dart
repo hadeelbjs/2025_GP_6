@@ -1,3 +1,4 @@
+//lib/features/contact/screens/notifications_screen.dart
 import 'package:flutter/material.dart';
 import '/shared/widgets/header_widget.dart';
 import '../../../core/constants/colors.dart';
@@ -30,15 +31,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
       if (!mounted) return;
 
+      // التحقق من انتهاء الجلسة
+      if (result['code'] == 'SESSION_EXPIRED' || 
+          result['code'] == 'TOKEN_EXPIRED' ||
+          result['code'] == 'NO_TOKEN') {
+        _handleSessionExpired();
+        return;
+      }
+
       if (result['success']) {
         setState(() {
           _requests = List<Map<String, dynamic>>.from(
             result['requests'].map((req) => {
-              'requestId': req['requestId'],
-              'userId': req['user']['id'],
-              'fullName': req['user']['fullName'],
-              'username': req['user']['username'],
-              'createdAt': req['createdAt'],
+              'requestId': req['id']?.toString() ?? '',
+              'userId': req['user']?['id']?.toString() ?? '',
+              'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
+              'username': req['user']?['username']?.toString() ?? 'غير معروف',
+              'createdAt': req['createdAt']?.toString() ?? '',
             }),
           );
         });
@@ -47,6 +56,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      print('❌ Error loading requests: $e');
       _showMessage('خطأ في تحميل الطلبات', false);
     } finally {
       if (mounted) {
@@ -55,44 +65,92 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  Future<void> _acceptRequest(String requestId, String fullName) async {
+  Future<void> _acceptRequest(String? requestId, String? fullName) async {
+    // التحقق من أن الـ requestId موجود
+    if (requestId == null || requestId.isEmpty) {
+      _showMessage('خطأ: معرف الطلب غير صحيح', false);
+      return;
+    }
+
     try {
       final result = await _apiService.acceptContactRequest(requestId);
 
       if (!mounted) return;
 
+      // التحقق من انتهاء الجلسة
+      if (result['code'] == 'SESSION_EXPIRED' || 
+          result['code'] == 'TOKEN_EXPIRED') {
+        _handleSessionExpired();
+        return;
+      }
+
       if (result['success']) {
         setState(() {
           _requests.removeWhere((r) => r['requestId'] == requestId);
         });
-        _showMessage(result['message'] ?? 'تم قبول الطلب من $fullName', true);
+        _showMessage(
+          result['message'] ?? 'تم قبول الطلب من ${fullName ?? "المستخدم"}', 
+          true
+        );
       } else {
         _showMessage(result['message'] ?? 'فشل قبول الطلب', false);
       }
     } catch (e) {
       if (!mounted) return;
+      print('❌ Error accepting request: $e');
       _showMessage('خطأ في قبول الطلب', false);
     }
   }
 
-  Future<void> _rejectRequest(String requestId, String fullName) async {
+  Future<void> _rejectRequest(String? requestId, String? fullName) async {
+    // التحقق من أن الـ requestId موجود
+    if (requestId == null || requestId.isEmpty) {
+      _showMessage('خطأ: معرف الطلب غير صحيح', false);
+      return;
+    }
+
     try {
       final result = await _apiService.rejectContactRequest(requestId);
 
       if (!mounted) return;
 
+      // التحقق من انتهاء الجلسة
+      if (result['code'] == 'SESSION_EXPIRED' || 
+          result['code'] == 'TOKEN_EXPIRED') {
+        _handleSessionExpired();
+        return;
+      }
+
       if (result['success']) {
         setState(() {
           _requests.removeWhere((r) => r['requestId'] == requestId);
         });
-        _showMessage(result['message'] ?? 'تم رفض الطلب من $fullName', true);
+        _showMessage(
+          result['message'] ?? 'تم رفض الطلب من ${fullName ?? "المستخدم"}', 
+          true
+        );
       } else {
         _showMessage(result['message'] ?? 'فشل رفض الطلب', false);
       }
     } catch (e) {
       if (!mounted) return;
+      print('❌ Error rejecting request: $e');
       _showMessage('خطأ في رفض الطلب', false);
     }
+  }
+
+  // معالجة انتهاء الجلسة
+  void _handleSessionExpired() {
+    _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
+    
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
+    });
   }
 
   void _showMessage(String message, bool isSuccess) {
@@ -182,9 +240,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildRequestCard(Map<String, dynamic> request) {
-    final requestId = request['requestId'];
-    final fullName = request['fullName'];
-    final username = request['username'];
+    final requestId = request['requestId'] as String?;
+    final fullName = request['fullName'] as String? ?? 'مستخدم';
+    final username = request['username'] as String? ?? 'غير معروف';
+
+    // لو الـ requestId فارغ، ما نعرض الكارد
+    if (requestId == null || requestId.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -214,7 +277,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '؟',
                     style: AppTextStyles.h3.copyWith(
                       color: AppColors.primary,
                       fontSize: 22,

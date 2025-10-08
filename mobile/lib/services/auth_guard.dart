@@ -35,7 +35,7 @@ class AuthGuard {
 }
 
 // ============================================
-// 🛡️ Widget للصفحات المحمية
+//  Widget للصفحات المحمية
 // ============================================
 class ProtectedRoute extends StatefulWidget {
   final Widget child;

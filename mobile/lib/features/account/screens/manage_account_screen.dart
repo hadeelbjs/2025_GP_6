@@ -1,11 +1,10 @@
-// lib/features/account/screens/manage_account_screen.dart
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
-import '../../authentication/screens/login_screen.dart';
+
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
@@ -25,10 +24,40 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   }
 
   Future<void> _loadUserData() async {
-    final data = await _apiService.getUserData();
-    setState(() {
-      _userData = data;
-      _isLoading = false;
+    try {
+      final data = await _apiService.getUserData();
+      
+      if (!mounted) return;
+      
+      if (data == null) {
+        // لا توجد بيانات - الجلسة منتهية
+        _handleSessionExpired();
+        return;
+      }
+      
+      setState(() {
+        _userData = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      
+      setState(() => _isLoading = false);
+      _showMessage('خطأ في تحميل بيانات الحساب', false);
+    }
+  }
+
+  // ✅ معالجة انتهاء الجلسة
+  void _handleSessionExpired() {
+    _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
+    
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) {
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
+      }
     });
   }
 
@@ -62,11 +91,10 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                         ),
                       ),
               ),
-               BottomNavBar(currentIndex: 4),
+              const BottomNavBar(currentIndex: 4),
             ],
           ),
         ),
-        
       ),
     );
   }
@@ -132,19 +160,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
               color: AppColors.textHint,
             ),
           ),
-          
-          
         ],
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Divider(
-        height: 1,
-        color: Colors.grey.shade200,
       ),
     );
   }
@@ -256,31 +272,21 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'تم تسجيل الخروج بنجاح',
-          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          textAlign: TextAlign.center,
-        ),
-        backgroundColor: Colors.green,
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
-    );
+    _showMessage('تم تسجيل الخروج بنجاح', true);
 
     await Future.delayed(const Duration(milliseconds: 500));
 
     if (!mounted) return;
 
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (context) => const LoginScreen()),
+    Navigator.of(context).pushNamedAndRemoveUntil(
+      '/login',
       (route) => false,
     );
   }
 
-  void _showDevMessage(String message) {
+  void _showMessage(String message, [bool isSuccess = false]) {
+    if (!mounted) return;
+    
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
@@ -288,7 +294,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
           style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
           textAlign: TextAlign.center,
         ),
-        backgroundColor: const Color(0xFF2D1B69),
+        backgroundColor: isSuccess ? Colors.green : Colors.red,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
       ),

@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-// هذه الدالة تفحص كل طلب قبل تنفيذه
+// ✅ Middleware للتحقق من التوكن
 module.exports = async (req, res, next) => {
   try {
     // 1. استخراج التوكن من Header
@@ -19,9 +19,17 @@ module.exports = async (req, res, next) => {
 
     // 3. التحقق من صحة التوكن
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.user?.id || decoded.userId;
+
+    if (!userId) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'توكن غير صالح' 
+      });
+    }
 
     // 4. التحقق من وجود المستخدم في قاعدة البيانات
-    const user = await User.findById(decoded.userId);
+    const user = await User.findById(userId);
     
     if (!user) {
       return res.status(401).json({ 
@@ -42,6 +50,8 @@ module.exports = async (req, res, next) => {
     next();
 
   } catch (error) {
+    console.error('Auth Middleware Error:', error);
+    
     // معالجة الأخطاء
     if (error.name === 'JsonWebTokenError') {
       return res.status(401).json({ 

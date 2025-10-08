@@ -3,6 +3,9 @@ import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../services/api_services.dart';
+import '../../contact/screens/notifications_screen.dart';
+
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -12,6 +15,27 @@ class MainDashboard extends StatefulWidget {
 }
 
 class _MainDashboardState extends State<MainDashboard> {
+  final _apiService = ApiService();
+  int _notificationCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadNotificationCount();
+  }
+
+  Future<void> _loadNotificationCount() async {
+    try {
+      final result = await _apiService.getPendingRequests();
+      if (result['success'] && mounted) {
+        setState(() {
+          _notificationCount = result['count'] ?? 0;
+        });
+      }
+    } catch (e) {
+      // Silent fail
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +66,20 @@ class _MainDashboardState extends State<MainDashboard> {
                       children: [
                         const SizedBox(height: 4),
 
-                        const Align(
+                        Align(
                           alignment: Alignment.topLeft,
-                          child: _Bell(),
+                          child: _Bell(
+                            count: _notificationCount,
+                            onTap: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const NotificationsScreen(),
+                                ),
+                              );
+                              _loadNotificationCount();
+                            },
+                          ),
                         ),
 
                         const SizedBox(height: 6),
@@ -76,9 +111,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
               const SizedBox(height: 20),
 
-              // Bottom Navigation Bar
-             BottomNavBar(currentIndex: 0)
-
+              const BottomNavBar(currentIndex: 0),
             ],
           ),
         ),
@@ -86,15 +119,11 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
-
-
   Widget _buildTitle(String text, double size, BuildContext context) {
     return Text(
       text,
       textAlign: TextAlign.right,
-      style: AppTextStyles.h1.copyWith(
-        fontSize: size,
-      ),
+      style: AppTextStyles.h1.copyWith(fontSize: size),
     );
   }
 
@@ -104,9 +133,7 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Container(
       padding: EdgeInsets.all(width * 0.055),
-      constraints: BoxConstraints(
-        minHeight: size.height * 0.16,
-      ),
+      constraints: BoxConstraints(minHeight: size.height * 0.16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(width * 0.04),
@@ -121,8 +148,7 @@ class _MainDashboardState extends State<MainDashboard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline,
-              color: const Color(0xFFFFB74D), size: width * 0.06),
+          Icon(Icons.info_outline, color: const Color(0xFFFFB74D), size: width * 0.06),
           SizedBox(width: width * 0.035),
           Expanded(
             child: Text(
@@ -145,15 +171,9 @@ class _MainDashboardState extends State<MainDashboard> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.lightbulb_outline,
-            color: const Color(0xFFFFD54F), size: width * 0.055),
+        Icon(Icons.lightbulb_outline, color: const Color(0xFFFFD54F), size: width * 0.055),
         SizedBox(width: width * 0.02),
-        Text(
-          'نصيحة اليوم',
-          style: AppTextStyles.h3.copyWith(
-            fontSize: width * 0.05,
-          ),
-        ),
+        Text('نصيحة اليوم', style: AppTextStyles.h3.copyWith(fontSize: width * 0.05)),
       ],
     );
   }
@@ -202,50 +222,60 @@ class _MainDashboardState extends State<MainDashboard> {
 }
 
 class _Bell extends StatelessWidget {
-  const _Bell();
+  final int count;
+  final VoidCallback onTap;
+
+  const _Bell({required this.count, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
 
     return Transform.translate(
-      offset: const Offset(0, -20), 
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            padding: EdgeInsets.all(w * 0.022),
-            decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(w * 0.03),
-              border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+      offset: const Offset(0, -20),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(w * 0.03),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Container(
+              padding: EdgeInsets.all(w * 0.022),
+              decoration: BoxDecoration(
+                color: AppColors.secondary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(w * 0.03),
+                border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+              ),
+              child: Icon(Icons.notifications, color: AppColors.textPrimary, size: w * 0.066),
             ),
-            child: Icon(Icons.notifications,
-                color: AppColors.textPrimary, size: w * 0.066),
-          ),
-          const Positioned(
-            top: -5,
-            right: -3,
-            child: _RedDot(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _RedDot extends StatelessWidget {
-  const _RedDot();
-
-  @override
-  Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
-    return Container(
-      width: w * 0.038,
-      height: w * 0.038,
-      decoration: const BoxDecoration(
-        color: Color(0xFFE53935),
-        shape: BoxShape.circle,
+            if (count > 0)
+              Positioned(
+                top: -5,
+                right: -3,
+                child: Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFE53935),
+                    shape: BoxShape.circle,
+                  ),
+                  constraints: BoxConstraints(
+                    minWidth: w * 0.05,
+                    minHeight: w * 0.05,
+                  ),
+                  child: Center(
+                    child: Text(
+                      count > 9 ? '9+' : count.toString(),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: w * 0.028,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }

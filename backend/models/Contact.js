@@ -1,37 +1,99 @@
 const mongoose = require('mongoose');
 
-// تعريف شكل البيانات في MongoDB
 const ContactSchema = new mongoose.Schema({
-  // المستخدم الذي أضاف جهة الاتصال
+  // من أرسل الطلب
   requester: {
-    type: mongoose.Schema.Types.ObjectId, // معرف المستخدم
-    ref: 'User', // ربط مع User Model
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
     required: true
   },
   
-  // المستخدم المُضاف كصديق
+  // من استقبل الطلب
   recipient: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
   
-  // حالة العلاقة
+  // حالة الطلب
   status: {
     type: String,
-    enum: ['pending', 'accepted', 'rejected'], // القيم المسموحة
-    default: 'accepted' // الافتراضية: مقبول مباشرة
+    enum: ['pending', 'accepted', 'rejected'],
+    default: 'pending'
   },
   
-  // تاريخ الإضافة
+  // تاريخ الإرسال
   createdAt: {
     type: Date,
     default: Date.now
+  },
+  
+  // تاريخ الرد (قبول/رفض)
+  respondedAt: {
+    type: Date
   }
 });
 
-// منع إضافة نفس الشخص مرتين (فهرس فريد)
-ContactSchema.index({ requester: 1, recipient: 1 }, { unique: true });
 
-// تصدير الـ Model
+// يسمح بطلب واحد فقط (pending أو accepted) بين نفس الشخصين
+
+ContactSchema.index(
+  { requester: 1, recipient: 1 },
+  { 
+    unique: true,
+    partialFilterExpression: { status: { $in: ['pending', 'accepted'] } }
+  }
+);
+
+// للبحث السريع عن الأصدقاء
+ContactSchema.index({ requester: 1, status: 1 });
+ContactSchema.index({ recipient: 1, status: 1 });
+
+//  دالة مساعدة: هل هم أصدقاء؟
+ContactSchema.statics.areFriends = async function(userId1, userId2) {
+  const contact = await this.findOne({
+    $or: [
+      { requester: userId1, recipient: userId2, status: 'accepted' },
+      { requester: userId2, recipient: userId1, status: 'accepted' }
+    ]
+  });
+  return !!contact;
+};
+
+// ✅ دالة مساعدة: حالة العلاقة
+ContactSchema.statics.getRelationship = async function(userId1, userId2) {
+  const contact = await this.findOne({
+    $or: [
+      { requester: userId1, recipient: userId2 },
+      { requester: userId2, recipient: userId1 }
+    ]
+  });
+  
+  if (!contact) return { exists: false };
+  
+  return {
+    exists: true,
+    status: contact.status,
+    iAmRequester: contact.requester.toString() === userId1.toString()
+  };
+};
+
+// ✅ دالة جديدة: جلب عدد الطلبات المعلقة
+ContactSchema.statics.getPendingCount = async function(userId) {
+  return await this.countDocuments({
+    recipient: userId,
+    status: 'pending'
+  });
+};
+
+// ✅ دالة جديدة: جلب عدد الأصدقاء
+ContactSchema.statics.getFriendsCount = async function(userId) {
+  return await this.countDocuments({
+    $or: [
+      { requester: userId, status: 'accepted' },
+      { recipient: userId, status: 'accepted' }
+    ]
+  });
+};
+
 module.exports = mongoose.model('Contact', ContactSchema);

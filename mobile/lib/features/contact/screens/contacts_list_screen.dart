@@ -393,32 +393,39 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                           )
                         : _results.isEmpty
                             ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(24.0),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.contacts_outlined,
-                                        size: 64,
-                                        color: AppColors.textHint.withOpacity(0.3),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        _contacts.isEmpty && _query.isEmpty
-                                            ? 'لا توجد جهات اتصال'
-                                            : 'لا توجد نتائج',
-                                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                                      ),
-                                      if (_contacts.isEmpty && _query.isEmpty) ...[
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'ابدأ بإضافة أصدقاء جدد',
-                                          textAlign: TextAlign.center,
-                                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                                child: SingleChildScrollView(
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(24.0),
+                                    child: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          Icons.contacts_outlined,
+                                          size: 64,
+                                          color: AppColors.textHint.withOpacity(0.3),
                                         ),
+                                        const SizedBox(height: 16),
+                                        Text(
+                                          _contacts.isEmpty && _query.isEmpty
+                                              ? 'لا توجد جهات اتصال'
+                                              : 'لا توجد نتائج',
+                                          style: AppTextStyles.bodyMedium.copyWith(
+                                            color: AppColors.textHint,
+                                          ),
+                                        ),
+                                        if (_contacts.isEmpty && _query.isEmpty) ...[
+                                          const SizedBox(height: 8),
+                                          Text(
+                                            'ابدأ بإضافة أصدقاء جدد',
+                                            textAlign: TextAlign.center,
+                                            style: AppTextStyles.bodySmall.copyWith(
+                                              color: AppColors.textHint,
+                                            ),
+                                          ),
+                                        ],
                                       ],
-                                    ],
+                                    ),
                                   ),
                                 ),
                               )

@@ -206,14 +206,35 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
-  // تخطي تحقق الجوال والذهاب للصفحة الرئيسية
-  void _skipPhoneVerification() {
+ // تخطي تحقق الجوال والذهاب للصفحة الرئيسية
+Future<void> _skipPhoneVerification() async {
+  setState(() => _isLoading = true);
+
+  // استدعاء API لتخطي التحقق والحصول على التوكن
+  final result = await _apiService.skipPhoneVerification(
+    email: _emailController.text.trim(),
+  );
+
+  setState(() => _isLoading = false);
+
+  if (!mounted) return;
+
+  if (result['success']) {
+    // تم حفظ التوكن تلقائياً في ApiService
     Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const MainDashboard()),
       (route) => false,
     );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] ?? 'حدث خطأ'),
+        backgroundColor: Colors.red,
+      ),
+    );
   }
+}
 
   @override
   Widget build(BuildContext context) {

@@ -162,6 +162,7 @@ void _showMessage(String message, {required bool isError}) {
 }
 
 // تخطي التحقق
+// تخطي التحقق
 Future<void> _skipVerification() async {
   final skip = await showDialog<bool>(
     context: context,
@@ -213,7 +214,7 @@ Future<void> _skipVerification() async {
   setState(() => _isLoading = true);
 
   final result = await _apiService.skipPhoneVerification(
-    email: '', // يجب تمرير الإيميل - سنعدل المُنشئ
+    email: widget.email, // استخدام الإيميل من الـ widget
   );
 
   setState(() => _isLoading = false);
@@ -229,7 +230,10 @@ Future<void> _skipVerification() async {
   } else {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result['message'] ?? 'حدث خطأ'),
+        content: Text(
+          result['message'] ?? 'حدث خطأ',
+          style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+        ),
         backgroundColor: Colors.red,
       ),
     );

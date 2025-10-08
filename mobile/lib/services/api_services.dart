@@ -252,6 +252,7 @@ Future<Map<String, dynamic>> skipPhoneVerification({
 
     final data = jsonDecode(response.body);
 
+    // حفظ التوكن إذا نجحت العملية
     if (response.statusCode == 200 && data['success']) {
       await _storage.write(key: 'access_token', value: data['token']);
       await _storage.write(key: 'user_data', value: jsonEncode(data['user']));

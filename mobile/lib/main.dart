@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'services/auth_guard.dart';
-import 'services/api_services.dart';
 import 'features/authentication/screens/login_screen.dart';
 import 'features/authentication/screens/register_screen.dart';
 import 'features/dashboard/screens/main_dashboard.dart';
@@ -10,9 +9,8 @@ import 'features/contact/screens/contacts_list_screen.dart';
 import 'features/contact/screens/add_contact_screen.dart';
 import 'features/massaging/screens/chat_list_screen.dart';
 import 'features/account/screens/manage_account_screen.dart';
-import 'package:flutter/foundation.dart';
-import 'services/biometric_service.dart';
-import 'features/authentication/screens/biometric_login_screen.dart';
+//import 'features/contact/screens/notifications_screen.dart';
+
 void main() {
   runApp(const MyApp());
 }
@@ -69,7 +67,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
-  final ApiService _apiService = ApiService(); 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -101,52 +98,21 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> _checkAuthStatus() async {
-  // انتظار للتأثير البصري
-  await Future.delayed(const Duration(seconds: 2));
+    // انتظار ثانيتين للتأثير البصري
+    await Future.delayed(const Duration(seconds: 2));
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  try {
-    // فحص وجود tokens
     final isAuth = await _authGuard.isAuthenticated();
-    
-    if (!isAuth) {
-      // لا توجد جلسة - اذهب لتسجيل الدخول
-      Navigator.of(context).pushReplacementNamed('/login');
-      return;
-    }
 
-    // توجد جلسة - فحص البصمة
-    final canUseBiometric = await _apiService.canUseBiometric();
-    
-    if (canUseBiometric) {
-      // البصمة مفعلة - اذهب لشاشة البصمة
-      final biometricUser = await BiometricService.getBiometricUser();
-      
-      if (biometricUser != null && mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => BiometricLoginScreen(userEmail: biometricUser),
-          ),
-        );
-      } else {
-        // خطأ في البيانات - اذهب للـ login
-        Navigator.of(context).pushReplacementNamed('/login');
-      }
-    } else {
-      // البصمة غير مفعلة - اذهب للداشبورد مباشرة
+    if (isAuth) {
+      // مسجل دخول - اذهب للـ Dashboard
       Navigator.of(context).pushReplacementNamed('/dashboard');
-    }
-
-  } catch (e) {
-    // خطأ في الفحص - اذهب للـ login لضمان الأمان
-    debugPrint('خطأ في السبلاش: $e');
-    if (mounted) {
+    } else {
+      // غير مسجل - اذهب لصفحة تسجيل الدخول
       Navigator.of(context).pushReplacementNamed('/login');
     }
   }
-}
 
   @override
   Widget build(BuildContext context) {

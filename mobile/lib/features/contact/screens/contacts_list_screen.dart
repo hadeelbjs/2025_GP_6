@@ -60,10 +60,10 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
           _contacts = List<Map<String, dynamic>>.from(
             result['contacts'].map(
               (contact) => {
-                'id': contact['id'],
-                'name': contact['name'],
-                'username': contact['username'],
-                'addedAt': contact['addedAt'],
+                'id': contact['id']?.toString() ?? '',
+                'name': contact['name']?.toString() ?? 'غير معروف',
+                'username': contact['username']?.toString() ?? '',
+                'addedAt': contact['addedAt']?.toString() ?? '',
               },
             ),
           );
@@ -71,7 +71,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
         });
       }
     } catch (e) {
-      // Silent fail
+      print('Error loading contacts: $e');
     }
   }
 
@@ -85,17 +85,17 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
         setState(() {
           _pendingRequests = List<Map<String, dynamic>>.from(
             result['requests'].map((req) => {
-              'requestId': req['requestId'],
-              'userId': req['user']['id'],
-              'fullName': req['user']['fullName'],
-              'username': req['user']['username'],
-              'createdAt': req['createdAt'],
+              'requestId': req['id']?.toString() ?? '',
+              'userId': req['user']?['id']?.toString() ?? '',
+              'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
+              'username': req['user']?['username']?.toString() ?? 'غير معروف',
+              'createdAt': req['createdAt']?.toString() ?? '',
             }),
           );
         });
       }
     } catch (e) {
-      // Silent fail
+      print('Error loading pending requests: $e');
     }
   }
 
@@ -115,32 +115,43 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     });
   }
 
-  Future<void> _acceptRequest(String requestId, String fullName) async {
+  Future<void> _acceptRequest(String? requestId, String? fullName) async {
+    if (requestId == null || requestId.isEmpty) {
+      _showMessage('خطأ: معرف الطلب غير صحيح', false);
+      return;
+    }
+
     try {
       final result = await _apiService.acceptContactRequest(requestId);
 
       if (!mounted) return;
 
       if (result['success']) {
-        _showMessage('تم قبول طلب الصداقة من $fullName', true);
+        _showMessage('تم قبول طلب الصداقة من ${fullName ?? "المستخدم"}', true);
         await _loadData();
       } else {
         _showMessage(result['message'] ?? 'فشل قبول الطلب', false);
       }
     } catch (e) {
       if (!mounted) return;
+      print('Error accepting request: $e');
       _showMessage('خطأ في قبول الطلب', false);
     }
   }
 
-  Future<void> _rejectRequest(String requestId, String fullName) async {
+  Future<void> _rejectRequest(String? requestId, String? fullName) async {
+    if (requestId == null || requestId.isEmpty) {
+      _showMessage('خطأ: معرف الطلب غير صحيح', false);
+      return;
+    }
+
     try {
       final result = await _apiService.rejectContactRequest(requestId);
 
       if (!mounted) return;
 
       if (result['success']) {
-        _showMessage('تم رفض طلب الصداقة من $fullName', true);
+        _showMessage('تم رفض طلب الصداقة من ${fullName ?? "المستخدم"}', true);
         setState(() {
           _pendingRequests.removeWhere((r) => r['requestId'] == requestId);
         });
@@ -149,6 +160,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      print('Error rejecting request: $e');
       _showMessage('خطأ في رفض الطلب', false);
     }
   }
@@ -206,6 +218,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       }
     } catch (e) {
       if (!mounted) return;
+      print('Error deleting contact: $e');
       _showMessage('خطأ في الحذف', false);
     }
   }
@@ -275,7 +288,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                 ),
               ),
 
-              // عرض الطلبات المعلقة
               if (_pendingRequests.isNotEmpty)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -421,14 +433,13 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                                     final name = contact['name'] ?? '';
                                     final contactId = contact['id'] ?? '';
 
-                                return ContactCard(
-                                  name: name,
-                                  onDelete: () =>
-                                      _deleteContact(contactId, name),
-                                );
-                              },
-                            ),
-                          ),
+                                    return ContactCard(
+                                      name: name,
+                                      onDelete: () => _deleteContact(contactId, name),
+                                    );
+                                  },
+                                ),
+                              ),
                   ),
                 ),
               ),
@@ -446,9 +457,13 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
   }
 
   Widget _buildRequestCard(Map<String, dynamic> req) {
-    final requestId = req['requestId'];
-    final fullName = req['fullName'];
-    final username = req['username'];
+    final requestId = req['requestId'] as String?;
+    final fullName = req['fullName'] as String? ?? 'مستخدم';
+    final username = req['username'] as String? ?? 'غير معروف';
+
+    if (requestId == null || requestId.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -471,7 +486,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                 ),
                 child: Center(
                   child: Text(
-                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '؟',
                     style: AppTextStyles.h3.copyWith(
                       color: AppColors.primary,
                       fontSize: 18,

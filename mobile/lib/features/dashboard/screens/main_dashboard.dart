@@ -7,7 +7,6 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../authentication/widgets/biometric_setup_dialog.dart';
 import '../../../services/biometric_service.dart';
 
 class MainDashboard extends StatefulWidget {
@@ -43,25 +42,7 @@ class _MainDashboardState extends State<MainDashboard> {
       final canCheck = await BiometricService.canCheckBiometrics();
       if (!canCheck) return;
 
-      final prefs = await SharedPreferences.getInstance();
-      final hasShownBiometricDialog = prefs.getBool('biometric_dialog_shown') ?? false;
       
-      if (hasShownBiometricDialog) return;
-
-      if (mounted) {
-        final result = await showDialog<bool>(
-          context: context,
-          barrierDismissible: false,
-          builder: (_) => const BiometricSetupDialog(),
-        );
-
-        await prefs.setBool('biometric_dialog_shown', true);
-
-        if (result == true) {
-          _showMessage('تم تفعيل البصمة! يمكنك الآن الدخول بسرعة', true);
-        }
-      }
-
     } catch (e) {
       debugPrint('خطأ في فحص إعداد البصمة: $e');
     }

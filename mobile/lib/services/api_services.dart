@@ -4,9 +4,6 @@ import 'dart:convert';
 import 'dart:io' show Platform; 
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'biometric_service.dart';
-import 'package:flutter/foundation.dart';
-
 
 class ApiService {
   // ============================
@@ -406,80 +403,152 @@ Future<Map<String, dynamic>> skipPhoneVerification({
     return token != null;
   }
 
-Future<void> logout({bool keepBiometric = true}) async {
-  // حذف بيانات الجلسة دائماً
-  await _storage.delete(key: 'access_token');
-  await _storage.delete(key: 'refresh_token');
-  await _storage.delete(key: 'user_data');
-  
-  // حذف البصمة فقط إذا طُلب ذلك
-  if (!keepBiometric) {
-    await BiometricService.disableBiometric();
+  // تسجيل الخروج
+  Future<void> logout() async {
+    await _storage.delete(key: 'access_token');
+    await _storage.delete(key: 'refresh_token');
+    await _storage.delete(key: 'user_data');
   }
-}
 
-  // ============================================
-// دوال البصمة الجديدة
-// ============================================
+  // ================================
+  // (إضافاتك) دوال الـ Contacts فقط
+ 
+  // ================================
 
-Future<bool> canUseBiometric() async {
-  try {
-    final isEnabled = await BiometricService.isBiometricEnabled();
-    final biometricUser = await BiometricService.getBiometricUser();
-    final userData = await getUserData();
-    
-    return isEnabled && 
-           biometricUser != null && 
-           userData != null && 
-           biometricUser == userData['email'];
-  } catch (e) {
-    return false;
+  Future<Map<String, String>> _authHeaders() async {
+    final token = await _storage.read(key: 'access_token');
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+    };
   }
-}
 
-// دالة تفعيل البصمة
-Future<bool> enableBiometric() async {
-  try {
-    final userData = await getUserData();
-    if (userData == null) return false;
-    
-    return await BiometricService.enableBiometric(userData['email']);
-  } catch (e) {
-debugPrint('خطأ في تفعيل البصمة: $e');
-    return false;
+  // البحث عن مستخدم (username أو phone)
+  Future<Map<String, dynamic>> searchContact(String searchQuery) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/contacts/search'),
+        headers: headers,
+        body: jsonEncode({'searchQuery': searchQuery}),
+      ).timeout(const Duration(seconds: 10));
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
   }
-}
 
-// دالة منفصلة لحذف البصمة
-Future<void> disableBiometric() async {
-  await BiometricService.disableBiometric();
-}
+  // إرسال طلب صداقة
+  Future<Map<String, dynamic>> sendContactRequest(String userId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/contacts/send-request'),
+        headers: headers,
+        body: jsonEncode({'userId': userId}),
+      ).timeout(const Duration(seconds: 10));
 
-Future<Map<String, dynamic>> searchContact(String searchQuery) async {
-  return {'success': false, 'message': 'Not implemented'};
-}
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
+  }
 
-Future<Map<String, dynamic>> sendContactRequest(String userId) async {
-  return {'success': false, 'message': 'Not implemented'};
-}
+  // جلب الطلبات المعلقة (Notifications)
+  Future<Map<String, dynamic>> getPendingRequests() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/contacts/pending-requests'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
 
-Future<Map<String, dynamic>> getPendingRequests() async {
-  return {'success': true, 'count': 0, 'requests': []};
-}
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
+  }
 
-Future<Map<String, dynamic>> acceptContactRequest(String requestId) async {
-  return {'success': false, 'message': 'Not implemented'};
-}
+  // قبول طلب صداقة
+  Future<Map<String, dynamic>> acceptContactRequest(String requestId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/contacts/accept-request/$requestId'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
 
-Future<Map<String, dynamic>> rejectContactRequest(String requestId) async {
-  return {'success': false, 'message': 'Not implemented'};
-}
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
+  }
 
-Future<Map<String, dynamic>> getContactsList() async {
-  return {'success': false, 'message': 'Not implemented'};
-}
+  // رفض طلب صداقة
+  Future<Map<String, dynamic>> rejectContactRequest(String requestId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.post(
+        Uri.parse('$baseUrl/contacts/reject-request/$requestId'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
 
-Future<Map<String, dynamic>> deleteContact(String contactId) async {
-  return {'success': false, 'message': 'Not implemented'};
-}
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
+  }
+
+  // جلب قائمة الأصدقاء
+  Future<Map<String, dynamic>> getContactsList() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.get(
+        Uri.parse('$baseUrl/contacts/list'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
+  }
+
+  // حذف صديق
+  Future<Map<String, dynamic>> deleteContact(String contactId) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http.delete(
+        Uri.parse('$baseUrl/contacts/$contactId'),
+        headers: headers,
+      ).timeout(const Duration(seconds: 10));
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل الاتصال بالسيرفر: $e',
+      };
+    }
+  }
 }

@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSFaceIDUsageDescription</key>
+	<string>نحتاج إلى Face ID للتحقق من هويتك</string>
 </dict>
 </plist>

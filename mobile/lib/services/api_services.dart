@@ -552,4 +552,177 @@ Future<Map<String, dynamic>> skipPhoneVerification({
       };
     }
   }
+// ============================================
+// Account Management API Methods
+// ============================================
+
+// تحديث الصورة الرمزية (Memoji)
+Future<Map<String, dynamic>> updateMemoji(String memoji) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/user/update-memoji'),
+      headers: headers,
+      body: jsonEncode({'memoji': memoji}),
+    ).timeout(const Duration(seconds: 10));
+
+    final data = jsonDecode(response.body);
+    
+    // تحديث بيانات المستخدم المحفوظة
+    if (data['success'] && data['user'] != null) {
+      await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
+    }
+    
+    return data;
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
+
+// تحديث اسم المستخدم
+Future<Map<String, dynamic>> updateUsername(String username) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.put(
+      Uri.parse('$baseUrl/user/update-username'),
+      headers: headers,
+      body: jsonEncode({'username': username}),
+    ).timeout(const Duration(seconds: 10));
+
+    final data = jsonDecode(response.body);
+    
+    // تحديث بيانات المستخدم المحفوظة
+    if (data['success'] && data['user'] != null) {
+      await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
+    }
+    
+    return data;
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
+
+// طلب تغيير البريد الإلكتروني (إرسال رمز تحقق)
+Future<Map<String, dynamic>> requestEmailChange(String newEmail) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/request-email-change'),
+      headers: headers,
+      body: jsonEncode({'newEmail': newEmail}),
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
+
+// التحقق من تغيير البريد الإلكتروني
+Future<Map<String, dynamic>> verifyEmailChange(String newEmail, String code) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/verify-email-change'),
+      headers: headers,
+      body: jsonEncode({
+        'newEmail': newEmail,
+        'code': code,
+      }),
+    ).timeout(const Duration(seconds: 10));
+
+    final data = jsonDecode(response.body);
+    
+    // تحديث بيانات المستخدم المحفوظة
+    if (data['success'] && data['user'] != null) {
+      await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
+    }
+    
+    return data;
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
+
+// طلب تغيير رقم الهاتف (إرسال رمز تحقق)
+Future<Map<String, dynamic>> requestPhoneChange(String newPhone) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/request-phone-change'),
+      headers: headers,
+      body: jsonEncode({'newPhone': newPhone}),
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
+
+// التحقق من تغيير رقم الهاتف
+Future<Map<String, dynamic>> verifyPhoneChange(String newPhone, String code) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/verify-phone-change'),
+      headers: headers,
+      body: jsonEncode({
+        'newPhone': newPhone,
+        'code': code,
+      }),
+    ).timeout(const Duration(seconds: 10));
+
+    final data = jsonDecode(response.body);
+    
+    // تحديث بيانات المستخدم المحفوظة
+    if (data['success'] && data['user'] != null) {
+      await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
+    }
+    
+    return data;
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
+
+// تغيير كلمة المرور
+Future<Map<String, dynamic>> changePassword(String currentPassword, String newPassword) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/change-password'),
+      headers: headers,
+      body: jsonEncode({
+        'currentPassword': currentPassword,
+        'newPassword': newPassword,
+      }),
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل الاتصال بالسيرفر: $e',
+    };
+  }
+}
 }

@@ -69,7 +69,7 @@ mongoose.connect(process.env.MONGODB_URI)
 app.use('/api/auth', require('./routes/auth'));
 // contact 
 app.use('/api/contacts', require('./routes/contacts'));
-
+app.use('/api/user', require('./routes/user')); 
 
 app.get('/', (req, res) => {
   res.json({ message: 'API is working ' });

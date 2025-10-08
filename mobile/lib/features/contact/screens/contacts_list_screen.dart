@@ -19,6 +19,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
   final _apiService = ApiService();
   List<Map<String, dynamic>> _contacts = [];
   List<Map<String, dynamic>> _results = [];
+  List<Map<String, dynamic>> _pendingRequests = [];
   final _searchController = TextEditingController();
   String _query = '';
   bool _isLoading = false;
@@ -26,7 +27,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
   @override
   void initState() {
     super.initState();
-    _loadContacts();
+    _loadData();
   }
 
   @override
@@ -35,9 +36,20 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     super.dispose();
   }
 
-  Future<void> _loadContacts() async {
+  Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
+    await Future.wait([
+      _loadContacts(),
+      _loadPendingRequests(),
+    ]);
+
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _loadContacts() async {
     try {
       final result = await _apiService.getContactsList();
 
@@ -57,16 +69,33 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
           );
           _results = List.of(_contacts);
         });
-      } else {
-        _showMessage(result['message'] ?? 'فشل تحميل جهات الاتصال', false);
       }
     } catch (e) {
+      // Silent fail
+    }
+  }
+
+  Future<void> _loadPendingRequests() async {
+    try {
+      final result = await _apiService.getPendingRequests();
+
       if (!mounted) return;
-      _showMessage('خطأ في تحميل جهات الاتصال', false);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+
+      if (result['success']) {
+        setState(() {
+          _pendingRequests = List<Map<String, dynamic>>.from(
+            result['requests'].map((req) => {
+              'requestId': req['requestId'],
+              'userId': req['user']['id'],
+              'fullName': req['user']['fullName'],
+              'username': req['user']['username'],
+              'createdAt': req['createdAt'],
+            }),
+          );
+        });
       }
+    } catch (e) {
+      // Silent fail
     }
   }
 
@@ -84,6 +113,44 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
         }).toList();
       }
     });
+  }
+
+  Future<void> _acceptRequest(String requestId, String fullName) async {
+    try {
+      final result = await _apiService.acceptContactRequest(requestId);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        _showMessage('تم قبول طلب الصداقة من $fullName', true);
+        await _loadData();
+      } else {
+        _showMessage(result['message'] ?? 'فشل قبول الطلب', false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('خطأ في قبول الطلب', false);
+    }
+  }
+
+  Future<void> _rejectRequest(String requestId, String fullName) async {
+    try {
+      final result = await _apiService.rejectContactRequest(requestId);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        _showMessage('تم رفض طلب الصداقة من $fullName', true);
+        setState(() {
+          _pendingRequests.removeWhere((r) => r['requestId'] == requestId);
+        });
+      } else {
+        _showMessage(result['message'] ?? 'فشل رفض الطلب', false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('خطأ في رفض الطلب', false);
+    }
   }
 
   Future<void> _deleteContact(String contactId, String name) async {
@@ -133,7 +200,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
           _contacts.removeWhere((c) => c['id'] == contactId);
           _results.removeWhere((c) => c['id'] == contactId);
         });
-        _showMessage(result['message'] ?? 'تم حذف $name', true);
+        _showMessage('تم حذف $name من جهات الاتصال', true);
       } else {
         _showMessage(result['message'] ?? 'فشل الحذف', false);
       }
@@ -208,6 +275,41 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                 ),
               ),
 
+              // عرض الطلبات المعلقة
+              if (_pendingRequests.isNotEmpty)
+                Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.orange.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.notifications_active, color: Colors.orange.shade700, size: 20),
+                          const SizedBox(width: 8),
+                          Text(
+                            'طلبات الصداقة (${_pendingRequests.length})',
+                            style: AppTextStyles.bodyLarge.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade900,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      ...List.generate(_pendingRequests.length, (index) {
+                        final req = _pendingRequests[index];
+                        return _buildRequestCard(req);
+                      }),
+                    ],
+                  ),
+                ),
+
               Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 20,
@@ -226,7 +328,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                         );
 
                         if (result == true) {
-                          _loadContacts();
+                          _loadData();
                         }
                       },
                       style: ElevatedButton.styleFrom(
@@ -278,50 +380,46 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                             ),
                           )
                         : _results.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24.0),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.contacts_outlined,
-                                    size: 64,
-                                    color: AppColors.textHint.withOpacity(0.3),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    _contacts.isEmpty && _query.isEmpty
-                                        ? 'لا توجد جهات اتصال'
-                                        : 'لا توجد نتائج',
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: AppColors.textHint,
-                                    ),
-                                  ),
-                                  if (_contacts.isEmpty && _query.isEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'ابدأ بإضافة أصدقاء جدد',
-                                      textAlign: TextAlign.center,
-                                      style: AppTextStyles.bodySmall.copyWith(
-                                        color: AppColors.textHint,
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.contacts_outlined,
+                                        size: 64,
+                                        color: AppColors.textHint.withOpacity(0.3),
                                       ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadContacts,
-                            color: AppColors.primary,
-                            child: ListView.builder(
-                              padding: const EdgeInsets.symmetric(vertical: 20),
-                              itemCount: _results.length,
-                              itemBuilder: (context, index) {
-                                final contact = _results[index];
-                                final name = contact['name'] ?? '';
-                                final contactId = contact['id'] ?? '';
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        _contacts.isEmpty && _query.isEmpty
+                                            ? 'لا توجد جهات اتصال'
+                                            : 'لا توجد نتائج',
+                                        style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                                      ),
+                                      if (_contacts.isEmpty && _query.isEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'ابدأ بإضافة أصدقاء جدد',
+                                          textAlign: TextAlign.center,
+                                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _loadData,
+                                color: AppColors.primary,
+                                child: ListView.builder(
+                                  padding: const EdgeInsets.symmetric(vertical: 20),
+                                  itemCount: _results.length,
+                                  itemBuilder: (context, index) {
+                                    final contact = _results[index];
+                                    final name = contact['name'] ?? '';
+                                    final contactId = contact['id'] ?? '';
 
                                 return ContactCard(
                                   name: name,
@@ -343,6 +441,127 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildRequestCard(Map<String, dynamic> req) {
+    final requestId = req['requestId'];
+    final fullName = req['fullName'];
+    final username = req['username'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.orange.shade100),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    fullName.isNotEmpty ? fullName[0].toUpperCase() : '?',
+                    style: AppTextStyles.h3.copyWith(
+                      color: AppColors.primary,
+                      fontSize: 18,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '@$username',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.textHint,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _acceptRequest(requestId, fullName),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.green,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.check, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'قبول',
+                        style: AppTextStyles.buttonMedium.copyWith(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: () => _rejectRequest(requestId, fullName),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.close, size: 16),
+                      const SizedBox(width: 4),
+                      Text(
+                        'رفض',
+                        style: AppTextStyles.buttonMedium.copyWith(
+                          color: Colors.white,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

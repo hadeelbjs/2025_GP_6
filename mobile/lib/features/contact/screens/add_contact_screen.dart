@@ -52,9 +52,14 @@ class _AddContactScreenState extends State<AddContactScreen> {
       _searchResults = [];
     });
 
-    final searchQuery = _method == AddMethod.username
-        ? _usernameController.text.trim()
-        : '+966${_phoneController.text.trim()}';
+    String searchQuery;
+    if (_method == AddMethod.username) {
+      searchQuery = _usernameController.text.trim();
+    } else {
+      // إرسال رقم الجوال بصيغة +966XXXXXXXXX
+      final phoneNumber = _phoneController.text.trim();
+      searchQuery = '+966$phoneNumber';
+    }
 
     try {
       final result = await _apiService.searchContact(searchQuery);
@@ -91,8 +96,8 @@ class _AddContactScreenState extends State<AddContactScreen> {
       if (!mounted) return;
 
       if (result['success']) {
-        _showMessage(result['message'] ?? 'تم إرسال الطلب بنجاح', true);
-
+        _showMessage('تم إرسال طلب إضافة إلى $fullName', true);
+        
         setState(() {
           final index = _searchResults.indexWhere((u) => u['id'] == userId);
           if (index != -1) {
@@ -101,7 +106,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
           }
         });
 
-        await Future.delayed(const Duration(milliseconds: 800));
+        await Future.delayed(const Duration(milliseconds: 1500));
         if (mounted) {
           Navigator.pop(context, true);
         }
@@ -132,6 +137,7 @@ class _AddContactScreenState extends State<AddContactScreen> {
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: isSuccess ? 2 : 3),
       ),
     );
   }
@@ -233,14 +239,45 @@ class _AddContactScreenState extends State<AddContactScreen> {
 
                             return Card(
                               margin: const EdgeInsets.only(bottom: 10),
+                              elevation: 2,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                               child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 8,
+                                ),
+                                leading: Container(
+                                  width: 50,
+                                  height: 50,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primary.withOpacity(0.1),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      user['fullName'].isNotEmpty 
+                                          ? user['fullName'][0].toUpperCase() 
+                                          : '?',
+                                      style: AppTextStyles.h3.copyWith(
+                                        color: AppColors.primary,
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                  ),
+                                ),
                                 title: Text(
                                   user['fullName'],
-                                  style: AppTextStyles.bodyLarge,
+                                  style: AppTextStyles.bodyLarge.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                  ),
                                 ),
                                 subtitle: Text(
                                   '@${user['username']}',
-                                  style: AppTextStyles.bodySmall,
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textHint,
+                                  ),
                                 ),
                                 trailing: _buildActionButton(
                                   user['id'],
@@ -271,26 +308,32 @@ class _AddContactScreenState extends State<AddContactScreen> {
     bool isSentByMe,
   ) {
     if (status == 'accepted') {
-      return const Chip(
-        label: Text('صديق بالفعل', style: TextStyle(fontSize: 12)),
+      return Chip(
+        label: const Text('صديق بالفعل', style: TextStyle(fontSize: 11)),
         backgroundColor: Colors.green,
-        labelStyle: TextStyle(color: Colors.white),
+        labelStyle: const TextStyle(color: Colors.white),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
       );
     } else if (status == 'pending') {
       return Chip(
         label: Text(
           isSentByMe ? 'طلب معلق' : 'طلب وارد',
-          style: const TextStyle(fontSize: 12),
+          style: const TextStyle(fontSize: 11),
         ),
         backgroundColor: Colors.orange,
         labelStyle: const TextStyle(color: Colors.white),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
       );
     } else {
       return ElevatedButton(
-        onPressed: () => _sendRequest(userId, fullName),
+        onPressed: _isLoading ? null : () => _sendRequest(userId, fullName),
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
         ),
         child: const Text('إضافة', style: TextStyle(fontSize: 12)),
       );

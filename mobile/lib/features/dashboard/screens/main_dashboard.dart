@@ -149,44 +149,54 @@ class _MainDashboardState extends State<MainDashboard> {
                 showBackground: true,
                 alignTitleRight: false,
               ),
+
               Expanded(
                 child: Padding(
                   padding: EdgeInsets.symmetric(horizontal: width * 0.06),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Align(
-                        alignment: Alignment.topLeft,
-                        child: Padding(
-                          padding: const EdgeInsets.only(top: 8, bottom: 16),
-                          child: _Bell(
-                            count: _notificationCount,
-                            onTap: () async {
-                              await Navigator.pushNamed(
-                                context,
-                                '/notifications',
-                              );
-                              _loadNotificationCount();
-                            },
-                          ),
+                  child: Transform.translate(
+                    offset: Offset(0, -height * 0.045),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 4),
+
+                        const Align(
+                          alignment: Alignment.topLeft,
+                          child: _Bell(),
                         ),
-                      ),
-                      _buildTitle('مرحبًا بك', width * 0.085, context),
-                      const SizedBox(height: 10),
-                      _buildTitle('لوحة المعلومات', width * 0.05, context),
-                      const SizedBox(height: 8),
-                      _buildInfoCard(context),
-                      const SizedBox(height: 12),
-                      _buildTipHeader(context),
-                      const SizedBox(height: 8),
-                      _buildTipText(context),
-                      const Spacer(),
-                    ],
+
+                        const SizedBox(height: 6),
+
+                        _buildTitle('مرحبًا بك', width * 0.085, context),
+
+                        const SizedBox(height: 10),
+
+                        _buildTitle('لوحة المعلومات', width * 0.05, context),
+
+                        const SizedBox(height: 8),
+
+                        _buildInfoCard(context),
+
+                        const SizedBox(height: 12),
+
+                        _buildTipHeader(context),
+
+                        const SizedBox(height: 8),
+
+                        _buildTipText(context),
+
+                        const Spacer(),
+                      ],
+                    ),
                   ),
                 ),
               ),
+
               const SizedBox(height: 20),
-              const BottomNavBar(currentIndex: 0),
+
+              // Bottom Navigation Bar
+             BottomNavBar(currentIndex: 0)
+
             ],
           ),
         ),
@@ -194,11 +204,15 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+
+
   Widget _buildTitle(String text, double size, BuildContext context) {
     return Text(
       text,
       textAlign: TextAlign.right,
-      style: AppTextStyles.h1.copyWith(fontSize: size),
+      style: AppTextStyles.h1.copyWith(
+        fontSize: size,
+      ),
     );
   }
 
@@ -208,7 +222,9 @@ class _MainDashboardState extends State<MainDashboard> {
 
     return Container(
       padding: EdgeInsets.all(width * 0.055),
-      constraints: BoxConstraints(minHeight: size.height * 0.16),
+      constraints: BoxConstraints(
+        minHeight: size.height * 0.16,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(width * 0.04),
@@ -223,7 +239,8 @@ class _MainDashboardState extends State<MainDashboard> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.info_outline, color: const Color(0xFFFFB74D), size: width * 0.06),
+          Icon(Icons.info_outline,
+              color: const Color(0xFFFFB74D), size: width * 0.06),
           SizedBox(width: width * 0.035),
           Expanded(
             child: Text(
@@ -246,9 +263,15 @@ class _MainDashboardState extends State<MainDashboard> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.lightbulb_outline, color: const Color(0xFFFFD54F), size: width * 0.055),
+        Icon(Icons.lightbulb_outline,
+            color: const Color(0xFFFFD54F), size: width * 0.055),
         SizedBox(width: width * 0.02),
-        Text('نصيحة اليوم', style: AppTextStyles.h3.copyWith(fontSize: width * 0.05)),
+        Text(
+          'نصيحة اليوم',
+          style: AppTextStyles.h3.copyWith(
+            fontSize: width * 0.05,
+          ),
+        ),
       ],
     );
   }
@@ -297,69 +320,50 @@ class _MainDashboardState extends State<MainDashboard> {
 }
 
 class _Bell extends StatelessWidget {
-  final int count;
-  final VoidCallback onTap;
-
-  const _Bell({required this.count, required this.onTap});
+  const _Bell();
 
   @override
   Widget build(BuildContext context) {
     final w = MediaQuery.of(context).size.width;
 
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(w * 0.03),
-        splashColor: AppColors.primary.withOpacity(0.2),
-        highlightColor: AppColors.primary.withOpacity(0.1),
-        child: Container(
-          padding: EdgeInsets.all(w * 0.03),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                padding: EdgeInsets.all(w * 0.022),
-                decoration: BoxDecoration(
-                  color: AppColors.secondary.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(w * 0.03),
-                  border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
-                ),
-                child: Icon(
-                  Icons.notifications,
-                  color: AppColors.textPrimary,
-                  size: w * 0.066,
-                ),
-              ),
-              if (count > 0)
-                Positioned(
-                  top: -5,
-                  right: -3,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFE53935),
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: BoxConstraints(
-                      minWidth: w * 0.05,
-                      minHeight: w * 0.05,
-                    ),
-                    child: Center(
-                      child: Text(
-                        count > 9 ? '9+' : count.toString(),
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: w * 0.028,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
+    return Transform.translate(
+      offset: const Offset(0, -20), 
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            padding: EdgeInsets.all(w * 0.022),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(w * 0.03),
+              border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
+            ),
+            child: Icon(Icons.notifications,
+                color: AppColors.textPrimary, size: w * 0.066),
           ),
-        ),
+          const Positioned(
+            top: -5,
+            right: -3,
+            child: _RedDot(),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RedDot extends StatelessWidget {
+  const _RedDot();
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
+    return Container(
+      width: w * 0.038,
+      height: w * 0.038,
+      decoration: const BoxDecoration(
+        color: Color(0xFFE53935),
+        shape: BoxShape.circle,
       ),
     );
   }

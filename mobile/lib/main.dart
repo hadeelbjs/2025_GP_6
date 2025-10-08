@@ -49,9 +49,9 @@ class MyApp extends StatelessWidget {
         '/chats': (context) => const ProtectedRoute(
           child: ChatListScreen(),
         ),
-        '/notifications': (context) => const ProtectedRoute(
-          child: NotificationsScreen(),
-        ),
+       // '/notifications': (context) => const ProtectedRoute(
+         // child: NotificationsScreen(),
+       // ),
         '/account': (context) => const ProtectedRoute(
           child: AccountManagementScreen(),
         ),

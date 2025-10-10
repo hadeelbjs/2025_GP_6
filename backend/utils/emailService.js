@@ -55,7 +55,6 @@ const sendVerificationEmail = async (email, fullName, verificationCode) => {
   }
 };
 
-// إيميل خاص بتفعيل البايومتركس
 const sendBiometricVerificationEmail = async (email, fullName, verificationCode) => {
   const mailOptions = {
     from: `"وصـيد" <${process.env.EMAIL_FROM}>`,
@@ -106,8 +105,7 @@ const sendBiometricVerificationEmail = async (email, fullName, verificationCode)
   }
 };
 
-// ✅ لا تنسين تصديرها
 module.exports = { 
   sendVerificationEmail,
-  sendBiometricVerificationEmail  // أضيفيها هنا
+  sendBiometricVerificationEmail  
 };

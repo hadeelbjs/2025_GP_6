@@ -685,7 +685,6 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
-// 1️⃣ طلب تفعيل البايومتركس (يرسل كود للإيميل)
 router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -702,7 +701,6 @@ router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
     user.biometricVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    // ✅ استخدم الـ Function الجديدة
     await sendBiometricVerificationEmail(user.email, user.fullName, verificationCode);
 
     res.json({
@@ -719,7 +717,6 @@ router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
   }
 });
 
-// 2️⃣ تأكيد تفعيل البايومتركس بالكود
 router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
   const { code } = req.body;
 
@@ -737,7 +734,6 @@ router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
       });
     }
 
-    // تفعيل البايومتركس
     user.biometricEnabled = true;
     user.biometricVerificationCode = undefined;
     user.biometricVerificationExpires = undefined;
@@ -757,7 +753,6 @@ router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
   }
 });
 
-// 3️⃣ إلغاء تفعيل البايومتركس
 router.post('/disable-biometric', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -786,14 +781,13 @@ router.post('/disable-biometric', authMiddleware, async (req, res) => {
   }
 });
 
-// 4️⃣ تسجيل دخول بالبايومتركس (بعد التحقق من الجهاز)
 router.post('/biometric-login', async (req, res) => {
   const { email } = req.body;
 
   try {
     const user = await User.findOne({ 
       email: email.toLowerCase(),
-      biometricEnabled: true // تأكد إن البايومتركس مفعل
+      biometricEnabled: true 
     });
 
     if (!user) {
@@ -803,7 +797,6 @@ router.post('/biometric-login', async (req, res) => {
       });
     }
 
-    // إنشاء التوكنات
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -843,7 +836,6 @@ router.post('/biometric-login', async (req, res) => {
   }
 });
 
-// 5️⃣ فحص حالة البايومتركس للمستخدم
 router.get('/biometric-status', authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);

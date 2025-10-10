@@ -6,6 +6,8 @@ import 'verify-email.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'register_screen.dart';
 import 'reset_password.dart';
+import '../../../services/biometric_service.dart';
+import '../../dashboard/screens/main_dashboard.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -78,6 +80,70 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     }
   }
+
+
+// ============================================
+// معالجة الدخول بالبايومتركس
+// ============================================
+Future<void> _handleBiometricLogin() async {
+  // 1️⃣ الحصول على إيميل المستخدم المحفوظ
+  final biometricUser = await BiometricService.getBiometricUser();
+  
+  if (biometricUser == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('لم يتم العثور على بيانات البصمة'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+  }
+
+  // 2️⃣ طلب البصمة
+  final authenticated = await BiometricService.authenticateWithBiometrics(
+    reason: 'تسجيل الدخول إلى حسابك',
+  );
+
+  if (!authenticated) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('فشل التحقق من البصمة'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    return;
+  }
+
+  // 3️⃣ تسجيل الدخول
+  setState(() => _isLoading = true);
+  
+  final result = await _apiService.biometricLogin(biometricUser);
+  
+  setState(() => _isLoading = false);
+
+  if (!mounted) return;
+
+  if (result['success']) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('تم تسجيل الدخول بنجاح'),
+        backgroundColor: Colors.green,
+      ),
+    );
+
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const MainDashboard()),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result['message'] ?? 'حدث خطأ'),
+        backgroundColor: Colors.red,
+      ),
+    );
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -226,6 +292,86 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       ),
                       const SizedBox(height: 16),
+                      const SizedBox(height: 16),
+
+
+FutureBuilder<bool>(
+  future: BiometricService.isBiometricEnabled(),
+  builder: (context, snapshot) {
+    final isEnabled = snapshot.data ?? false;
+    
+    if (!isEnabled) return const SizedBox.shrink();
+    
+    return Column(
+      children: [
+        const SizedBox(height: 20),
+        
+        // خط فاصل
+        Row(
+          children: [
+            Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Text(
+                'أو',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  color: Colors.grey.shade600,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+            ),
+            Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+          ],
+        ),
+        
+        const SizedBox(height: 20),
+        
+        // زر البايومتركس - متناسق مع تصميم اللوقن
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: const Color(0xFF2D1B69),
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: _isLoading ? null : _handleBiometricLogin,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.fingerprint,
+                      size: 26,
+                      color: Color(0xFF2D1B69),
+                    ),
+                    const SizedBox(width: 10),
+                    const Text(
+                      'الدخول بالبصمة',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF2D1B69),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  },
+),
                       
                       // زر إنشاء حساب جديد
                       TextButton(

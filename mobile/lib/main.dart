@@ -1,5 +1,8 @@
 // lib/main.dart
 import 'package:flutter/material.dart';
+import 'services/api_services.dart';
+import 'services/biometric_service.dart';
+import 'features/authentication/screens/biometric_login_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'services/auth_guard.dart';
 import 'features/authentication/screens/login_screen.dart';
@@ -67,6 +70,7 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
+  final ApiService _apiService = ApiService(); // أضيفي هذا السطر
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -97,23 +101,42 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-  Future<void> _checkAuthStatus() async {
-    // انتظار ثانيتين للتأثير البصري
-    await Future.delayed(const Duration(seconds: 2));
+Future<void> _checkAuthStatus() async {
+  await Future.delayed(const Duration(seconds: 2));
+  if (!mounted) return;
 
-    if (!mounted) return;
-
-    final isAuth = await _authGuard.isAuthenticated();
-
-    if (isAuth) {
-      // مسجل دخول - اذهب للـ Dashboard
-      Navigator.of(context).pushReplacementNamed('/dashboard');
-    } else {
-      // غير مسجل - اذهب لصفحة تسجيل الدخول
+  try {
+    print('🔍 فحص حالة التطبيق...');
+    
+    // 1️⃣ فحص إذا للتو تم logout
+    final justLoggedOut = await BiometricService.getJustLoggedOut();
+    print('🚪 هل تم تسجيل خروج للتو؟ $justLoggedOut');
+    
+    if (justLoggedOut) {
+      await BiometricService.setJustLoggedOut(false);
+      // ✅ روح للوقن مباشرة (الزر موجود فيها)
       Navigator.of(context).pushReplacementNamed('/login');
+      return;
     }
-  }
 
+    // 2️⃣ فحص إذا مسجل دخول
+    final isAuth = await _authGuard.isAuthenticated();
+    print('🔐 هل المستخدم مسجل دخول؟ $isAuth');
+    
+    if (isAuth) {
+      Navigator.of(context).pushReplacementNamed('/dashboard');
+      return;
+    }
+
+    // 3️⃣ أول مرة يفتح التطبيق - روح للوقن مباشرة
+    // ✅ الزر موجود في صفحة اللوقن، ما نحتاج شاشة منفصلة
+    Navigator.of(context).pushReplacementNamed('/login');
+
+  } catch (e) {
+    print('❌ خطأ: $e');
+    Navigator.of(context).pushReplacementNamed('/login');
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Scaffold(

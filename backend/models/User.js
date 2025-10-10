@@ -45,6 +45,17 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  memoji: {
+  type: String,
+  default: '😊'
+},
+
+biometricEnabled: {
+  type: Boolean,
+  default: false
+},
+biometricVerificationCode: String,
+biometricVerificationExpires: Date,
   
   // حقول التحقق الثنائي (2FA) لتسجيل الدخول
   twoFACode: String,

@@ -9,6 +9,7 @@ const { sendVerificationEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
+const authMiddleware = require('../middleware/auth');
 
 function normalizePhone(rawPhone) {
   const phoneNumber = parsePhoneNumberFromString(rawPhone);
@@ -684,4 +685,180 @@ router.post('/reset-password', async (req, res) => {
   }
 });
 
+// 1️⃣ طلب تفعيل البايومتركس (يرسل كود للإيميل)
+router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    // توليد كود تحقق
+    const verificationCode = generateCode();
+    user.biometricVerificationCode = verificationCode;
+    user.biometricVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 دقائق
+    await user.save();
+
+    // إرسال الكود للإيميل
+    await sendVerificationEmail(user.email, user.fullName, verificationCode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني'
+    });
+
+  } catch (err) {
+    console.error('Request Biometric Enable Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// 2️⃣ تأكيد تفعيل البايومتركس بالكود
+router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
+  const { code } = req.body;
+
+  try {
+    const user = await User.findOne({
+      _id: req.userId,
+      biometricVerificationCode: code,
+      biometricVerificationExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرمز غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
+    // تفعيل البايومتركس
+    user.biometricEnabled = true;
+    user.biometricVerificationCode = undefined;
+    user.biometricVerificationExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم تفعيل المصادقة الحيوية بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Verify Biometric Enable Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// 3️⃣ إلغاء تفعيل البايومتركس
+router.post('/disable-biometric', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    user.biometricEnabled = false;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم إلغاء المصادقة الحيوية'
+    });
+
+  } catch (err) {
+    console.error('Disable Biometric Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// 4️⃣ تسجيل دخول بالبايومتركس (بعد التحقق من الجهاز)
+router.post('/biometric-login', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ 
+      email: email.toLowerCase(),
+      biometricEnabled: true // تأكد إن البايومتركس مفعل
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المصادقة الحيوية غير مفعلة لهذا الحساب'
+      });
+    }
+
+    // إنشاء التوكنات
+    const accessToken = jwt.sign(
+      { user: { id: user.id, username: user.username } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const refreshToken = jwt.sign(
+      { user: { id: user.id } },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'تم تسجيل الدخول بالبايومتريكس بنجاح',
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        memoji: user.memoji || '😊',
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        biometricEnabled: user.biometricEnabled
+      }
+    });
+
+  } catch (err) {
+    console.error('Biometric Login Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// 5️⃣ فحص حالة البايومتركس للمستخدم
+router.get('/biometric-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    res.json({
+      success: true,
+      biometricEnabled: user?.biometricEnabled || false
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ'
+    });
+  }
+});
 module.exports = router;

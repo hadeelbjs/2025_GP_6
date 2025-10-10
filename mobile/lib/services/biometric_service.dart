@@ -1,9 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
-import 'package:local_auth_android/local_auth_android.dart';
-import 'package:local_auth_ios/local_auth_ios.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 class BiometricService {
   static final LocalAuthentication _localAuth = LocalAuthentication();
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
@@ -110,4 +108,16 @@ class BiometricService {
       return false;
     }
   }
+
+  // حفظ علامة إن المستخدم للتو سوى logout
+static Future<void> setJustLoggedOut(bool value) async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('just_logged_out', value);
+}
+
+// فحص إذا المستخدم للتو سوى logout
+static Future<bool> getJustLoggedOut() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('just_logged_out') ?? false;
+}
 }

@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-const { sendVerificationEmail } = require('../utils/emailService');
+const { sendVerificationEmail, sendBiometricVerificationEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
@@ -697,14 +697,13 @@ router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
       });
     }
 
-    // توليد كود تحقق
     const verificationCode = generateCode();
     user.biometricVerificationCode = verificationCode;
-    user.biometricVerificationExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 دقائق
+    user.biometricVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
-    // إرسال الكود للإيميل
-    await sendVerificationEmail(user.email, user.fullName, verificationCode);
+    // ✅ استخدم الـ Function الجديدة
+    await sendBiometricVerificationEmail(user.email, user.fullName, verificationCode);
 
     res.json({
       success: true,

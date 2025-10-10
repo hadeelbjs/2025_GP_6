@@ -5,7 +5,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
-
+import '../../../services/biometric_service.dart';
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
@@ -93,15 +93,16 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
                     : SingleChildScrollView(
                         padding: const EdgeInsets.all(10),
                         child: Column(
-                          children: [
-                            _buildProfileCard(),
-                            const SizedBox(height: 20),
-                            _buildEditOptions(),
-                            const SizedBox(height: 20),
-                            _buildLogoutButton(context),
-                            const SizedBox(height: 20),
-                          ],
-                        ),
+  children: [
+    _buildProfileCard(),
+    const SizedBox(height: 20),
+    _buildSecuritySettings(),
+    _buildEditOptions(),
+    const SizedBox(height: 20),
+    _buildLogoutButton(context),
+    const SizedBox(height: 20),
+  ],
+),
                       ),
               ),
               const BottomNavBar(currentIndex: 4),
@@ -1070,6 +1071,260 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     }
   }
 
+Widget _buildSecuritySettings() {
+  return Container(
+    margin: const EdgeInsets.only(bottom: 20),
+    padding: const EdgeInsets.all(20),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(20),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 10,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'الأمان',
+          style: TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: Color(0xFF2D1B69),
+          ),
+        ),
+        const SizedBox(height: 16),
+        
+        // ✅ استخدم StatefulBuilder بدل FutureBuilder
+        StatefulBuilder(
+          builder: (context, setStateLocal) {
+            return FutureBuilder<bool>(
+              future: BiometricService.isBiometricEnabled(),
+              builder: (context, snapshot) {
+                // ✅ افتراضياً false (مغلق)
+                final isEnabled = snapshot.data ?? false;
+                
+                return ListTile(
+                  leading: Icon(
+                    Icons.fingerprint,
+                    color: isEnabled 
+                        ? const Color(0xFF2D1B69)
+                        : Colors.grey,
+                  ),
+                  title: const Text(
+                    'المصادقة الحيوية',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  subtitle: Text(
+                    isEnabled ? 'مفعلة - دخول سريع' : 'غير مفعلة',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      color: isEnabled ? Colors.green : Colors.grey,
+                    ),
+                  ),
+                  trailing: Switch(
+                    value: isEnabled,
+                    onChanged: (value) {
+                      _toggleBiometric(value);
+                      // تحديث الواجهة بعد التبديل
+                      Future.delayed(const Duration(milliseconds: 100), () {
+                        setStateLocal(() {});
+                        setState(() {});
+                      });
+                    },
+                    activeColor: const Color(0xFF2D1B69),
+                  ),
+                );
+              },
+            );
+          },
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _toggleBiometric(bool enable) async {
+  if (enable) {
+    // ============================================
+    // تفعيل البايومتركس
+    // ============================================
+    
+    // 1️⃣ فحص دعم الجهاز
+    final isSupported = await BiometricService.isDeviceSupported();
+    final canUse = await BiometricService.canCheckBiometrics();
+    
+    if (!canUse) {
+      _showMessage('البصمة غير متاحة على هذا الجهاز', false);
+      setState(() {}); // لإرجاع السويتش
+      return;
+    }
+
+    // 2️⃣ طلب إرسال كود التحقق
+    setState(() => _isLoading = true);
+    final result = await _apiService.requestBiometricEnable();
+    setState(() => _isLoading = false);
+    
+    if (!result['success']) {
+      _showMessage(result['message'] ?? 'فشل في الإرسال', false);
+      setState(() {}); // لإرجاع السويتش
+      return;
+    }
+    
+    _showMessage('تم إرسال رمز التحقق لبريدك', true);
+    
+    // 3️⃣ عرض نافذة إدخال الكود
+    _showBiometricVerificationDialog();
+    
+  } else {
+    // ============================================
+    // إلغاء البايومتركس
+    // ============================================
+    
+    // 1️⃣ التحقق من البصمة مباشرة
+    final success = await BiometricService.authenticateWithBiometrics(
+      reason: 'تأكيد إلغاء المصادقة الحيوية'
+    );
+    
+    if (!success) {
+      _showMessage('فشل التحقق من الهوية', false);
+      setState(() {}); // لإرجاع السويتش
+      return;
+    }
+    
+    // 2️⃣ إلغاء من السيرفر
+    setState(() => _isLoading = true);
+    final result = await _apiService.disableBiometric();
+    setState(() => _isLoading = false);
+    
+    if (result['success']) {
+      // 3️⃣ إلغاء من الجهاز
+      await BiometricService.disableBiometric();
+      _showMessage('تم إلغاء المصادقة الحيوية بنجاح', true);
+      setState(() {}); // لتحديث الواجهة
+    } else {
+      _showMessage(result['message'] ?? 'فشل الإلغاء', false);
+      setState(() {}); // لإرجاع السويتش
+    }
+  }
+}
+
+// ============================================
+// نافذة إدخال كود التحقق (للتفعيل)
+// ============================================
+void _showBiometricVerificationDialog() {
+  final controller = TextEditingController();
+  
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text(
+          'تأكيد تفعيل المصادقة الحيوية',
+          style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'أدخل رمز التحقق المرسل لبريدك الإلكتروني',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              maxLength: 6,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 24,
+                letterSpacing: 8,
+              ),
+              decoration: InputDecoration(
+                labelText: 'رمز التحقق',
+                labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                counterText: '',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() {}); // لإرجاع السويتش
+            },
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final code = controller.text.trim();
+              if (code.length != 6) {
+                _showMessage('أدخل الرمز كاملاً (6 أرقام)', false);
+                return;
+              }
+              
+              Navigator.pop(context);
+              
+              // 1️⃣ التحقق من الكود
+              setState(() => _isLoading = true);
+              final result = await _apiService.verifyBiometricEnable(code);
+              setState(() => _isLoading = false);
+              
+              if (!result['success']) {
+                _showMessage(result['message'] ?? 'الرمز غير صحيح', false);
+                setState(() {}); // لإرجاع السويتش
+                return;
+              }
+              
+              // 2️⃣ أخذ البصمة
+              final userData = await _apiService.getUserData();
+              if (userData == null) {
+                _showMessage('حدث خطأ في جلب بيانات المستخدم', false);
+                setState(() {}); // لإرجاع السويتش
+                return;
+              }
+              
+              final biometricSuccess = await BiometricService.enableBiometric(userData['email']);
+              
+              if (biometricSuccess) {
+                _showMessage('تم تفعيل المصادقة الحيوية بنجاح', true);
+                setState(() {}); // لتحديث الواجهة
+              } else {
+                _showMessage('فشل في حفظ البصمة', false);
+                setState(() {}); // لإرجاع السويتش
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2D1B69),
+            ),
+            child: const Text(
+              'تأكيد',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   Widget _buildLogoutButton(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -1169,19 +1424,22 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
     );
   }
 
-  Future<void> _handleLogout() async {
-    await _apiService.logout();
+Future<void> _handleLogout() async {
+  // علامة إنك للتو سويتي logout
+  await BiometricService.setJustLoggedOut(true);
+  
+  await _apiService.logout();
 
-    if (!mounted) return;
+  if (!mounted) return;
 
-    _showMessage('تم تسجيل الخروج بنجاح', true);
+  _showMessage('تم تسجيل الخروج بنجاح', true);
+  
+  await Future.delayed(const Duration(milliseconds: 500));
 
-    await Future.delayed(const Duration(milliseconds: 500));
+  if (!mounted) return;
 
-    if (!mounted) return;
-
-    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
-  }
+  Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+}
 
   void _showMessage(String message, [bool isSuccess = false]) {
     if (!mounted) return;

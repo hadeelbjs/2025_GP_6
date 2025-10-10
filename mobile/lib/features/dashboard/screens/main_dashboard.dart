@@ -23,30 +23,10 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   void initState() {
     super.initState();
-    _checkBiometricSetup();
     _loadNotificationCount();
   }
 
-  Future<void> _checkBiometricSetup() async {
-    await Future.delayed(const Duration(milliseconds: 500));
-    
-    if (!mounted) return;
-
-    try {
-      final isEnabled = await BiometricService.isBiometricEnabled();
-      if (isEnabled) return;
-
-      final isSupported = await BiometricService.isDeviceSupported();
-      if (!isSupported) return;
-
-      final canCheck = await BiometricService.canCheckBiometrics();
-      if (!canCheck) return;
-
-      
-    } catch (e) {
-      debugPrint('خطأ في فحص إعداد البصمة: $e');
-    }
-  }
+ 
 
   void _showMessage(String message, bool isSuccess) {
     if (!mounted) return;

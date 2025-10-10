@@ -55,23 +55,23 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
 
       if (!mounted) return;
 
-      if (result['success']) {
+      if (result['success'] == true && result['contacts'] != null) {
         setState(() {
           _contacts = List<Map<String, dynamic>>.from(
-            result['contacts'].map(
-              (contact) => {
+            result['contacts'].map((contact) {
+              return {
                 'id': contact['id']?.toString() ?? '',
                 'name': contact['name']?.toString() ?? 'غير معروف',
                 'username': contact['username']?.toString() ?? '',
                 'addedAt': contact['addedAt']?.toString() ?? '',
-              },
-            ),
+              };
+            }),
           );
           _results = List.of(_contacts);
         });
       }
     } catch (e) {
-      print('Error loading contacts: $e');
+      // Handle error silently
     }
   }
 
@@ -81,21 +81,23 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
 
       if (!mounted) return;
 
-      if (result['success']) {
+      if (result['success'] == true && result['requests'] != null) {
         setState(() {
           _pendingRequests = List<Map<String, dynamic>>.from(
-            result['requests'].map((req) => {
-              'requestId': req['id']?.toString() ?? '',
-              'userId': req['user']?['id']?.toString() ?? '',
-              'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
-              'username': req['user']?['username']?.toString() ?? 'غير معروف',
-              'createdAt': req['createdAt']?.toString() ?? '',
+            result['requests'].map((req) {
+              return {
+                'requestId': req['requestId']?.toString() ?? req['id']?.toString() ?? '',
+                'userId': req['user']?['id']?.toString() ?? '',
+                'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
+                'username': req['user']?['username']?.toString() ?? '',
+                'createdAt': req['createdAt']?.toString() ?? '',
+              };
             }),
           );
         });
       }
     } catch (e) {
-      print('Error loading pending requests: $e');
+      // Handle error silently
     }
   }
 
@@ -134,7 +136,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      print('Error accepting request: $e');
       _showMessage('خطأ في قبول الطلب', false);
     }
   }
@@ -160,7 +161,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      print('Error rejecting request: $e');
       _showMessage('خطأ في رفض الطلب', false);
     }
   }
@@ -218,7 +218,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
       }
     } catch (e) {
       if (!mounted) return;
-      print('Error deleting contact: $e');
       _showMessage('خطأ في الحذف', false);
     }
   }
@@ -288,32 +287,91 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                 ),
               ),
 
+              // Modern Pending Requests Section
               if (_pendingRequests.isNotEmpty)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.orange.shade200),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        AppColors.primary.withOpacity(0.08),
+                        AppColors.primary.withOpacity(0.03),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.08),
+                        blurRadius: 20,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.notifications_active, color: Colors.orange.shade700, size: 20),
-                          const SizedBox(width: 8),
-                          Text(
-                            'طلبات الصداقة (${_pendingRequests.length})',
-                            style: AppTextStyles.bodyLarge.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange.shade900,
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(
+                              Icons.notifications_active_rounded,
+                              color: AppColors.primary,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'طلبات الصداقة',
+                                  style: AppTextStyles.bodyLarge.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primary,
+                                  ),
+                                ),
+                                Text(
+                                  'لديك ${_pendingRequests.length} ${_pendingRequests.length == 1 ? "طلب جديد" : "طلبات جديدة"}',
+                                  style: AppTextStyles.bodySmall.copyWith(
+                                    color: AppColors.textHint,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 6,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              '${_pendingRequests.length}',
+                              style: AppTextStyles.bodySmall.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
                       ...List.generate(_pendingRequests.length, (index) {
                         final req = _pendingRequests[index];
                         return _buildRequestCard(req);
@@ -473,35 +531,57 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(12),
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.orange.shade100),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primary.withOpacity(0.1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         children: [
           Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 50,
+                height: 50,
                 decoration: BoxDecoration(
-                  color: AppColors.primary.withOpacity(0.1),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primary.withOpacity(0.8),
+                      AppColors.primary,
+                    ],
+                  ),
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Text(
                     fullName.isNotEmpty ? fullName[0].toUpperCase() : '؟',
                     style: AppTextStyles.h3.copyWith(
-                      color: AppColors.primary,
-                      fontSize: 18,
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -510,12 +590,15 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                       fullName,
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.bold,
+                        fontSize: 16,
                       ),
                     ),
+                    const SizedBox(height: 2),
                     Text(
                       '@$username',
                       style: AppTextStyles.bodySmall.copyWith(
                         color: AppColors.textHint,
+                        fontSize: 13,
                       ),
                     ),
                   ],
@@ -523,7 +606,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
@@ -532,21 +615,22 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    elevation: 0,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.check, size: 16),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.check_circle_rounded, size: 18),
+                      const SizedBox(width: 6),
                       Text(
                         'قبول',
                         style: AppTextStyles.buttonMedium.copyWith(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: 15,
                         ),
                       ),
                     ],
@@ -560,21 +644,22 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    elevation: 0,
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      const Icon(Icons.close, size: 16),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.close_rounded, size: 18),
+                      const SizedBox(width: 6),
                       Text(
                         'رفض',
                         style: AppTextStyles.buttonMedium.copyWith(
                           color: Colors.white,
-                          fontSize: 14,
+                          fontSize: 15,
                         ),
                       ),
                     ],

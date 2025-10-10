@@ -23,6 +23,9 @@ class ApiService {
   
   final _storage = const FlutterSecureStorage();
 
+  static const String _tokenKey = 'access_token';
+  static const String _refreshTokenKey = 'refresh_token';
+
   //  التسجيل (يرسل رمز التحقق للإيميل)
   Future<Map<String, dynamic>> register({
     required String fullName,
@@ -723,6 +726,84 @@ Future<Map<String, dynamic>> changePassword(String currentPassword, String newPa
       'success': false,
       'message': 'فشل الاتصال بالسيرفر: $e',
     };
+  }
+}
+// تسجيل دخول بالبايومتريكس
+
+
+// طلب تفعيل البايومتركس
+// طلب تفعيل البايومتركس
+Future<Map<String, dynamic>> requestBiometricEnable() async {
+  try {
+    final headers = await _authHeaders(); // استخدم نفس الطريقة الموجودة
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/request-biometric-enable'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+  }
+}
+
+// تأكيد تفعيل البايومتركس
+Future<Map<String, dynamic>> verifyBiometricEnable(String code) async {
+  try {
+    final headers = await _authHeaders();
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/verify-biometric-enable'),
+      headers: headers,
+      body: jsonEncode({'code': code}),
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+  }
+}
+
+// إلغاء البايومتركس
+Future<Map<String, dynamic>> disableBiometric() async {
+  try {
+    final headers = await _authHeaders();
+    
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/disable-biometric'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+  }
+}
+
+// دخول بالبايومتركس
+Future<Map<String, dynamic>> biometricLogin(String email) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/biometric-login'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: jsonEncode({'email': email}),
+    ).timeout(const Duration(seconds: 10));
+
+    final data = jsonDecode(response.body);
+    
+    if (response.statusCode == 200 && data['success']) {
+      await _storage.write(key: 'access_token', value: data['accessToken']);
+      await _storage.write(key: 'refresh_token', value: data['refreshToken']);
+      await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
+    }
+    
+    return data;
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
   }
 }
 

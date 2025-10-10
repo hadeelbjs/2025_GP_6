@@ -6,6 +6,7 @@ import 'verify-email.dart';
 import 'verify_phone_number.dart';
 import 'login_screen.dart';
 import '../../dashboard/screens/main_dashboard.dart';
+import '../../../services/crypto/signal_protocol_manager.dart';
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -80,6 +81,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // إذا تم التحقق من الإيميل بنجاح
       if (emailVerified == true && mounted) {
+        _showPhoneVerificationOptions();
+        
+      }
+      if (emailVerified == true && mounted) {
+        // توليد مفاتيح Signal
+        final signalManager = SignalProtocolManager();
+        await signalManager.initialize();
+        
+        setState(() => _isLoading = true);
+        
+        final bundle = await signalManager.generateKeys();
+        
+        // رفع Bundle للسيرفر
+        final uploadResult = await _apiService.uploadPreKeyBundle(bundle);
+        
+        setState(() => _isLoading = false);
+        
+        if (uploadResult['success']) {
+          print('✅ تم رفع المفاتيح بنجاح');
+        } else {
+          print('⚠️ فشل رفع المفاتيح: ${uploadResult['message']}');
+        }
+        
         _showPhoneVerificationOptions();
       }
     } else {
@@ -235,6 +259,7 @@ Future<void> _skipPhoneVerification() async {
     );
   }
 }
+
 
   @override
   Widget build(BuildContext context) {

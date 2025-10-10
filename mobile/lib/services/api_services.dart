@@ -725,4 +725,66 @@ Future<Map<String, dynamic>> changePassword(String currentPassword, String newPa
     };
   }
 }
+
+// ============================================
+// Signal Protocol - PreKey Management
+// ============================================
+
+// رفع PreKey Bundle
+Future<Map<String, dynamic>> uploadPreKeyBundle(
+  Map<String, dynamic> bundle,
+) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/prekeys/upload'),
+      headers: headers,
+      body: jsonEncode(bundle),
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل رفع المفاتيح: $e',
+    };
+  }
+}
+
+// جلب PreKey Bundle لمستخدم
+Future<Map<String, dynamic>> getPreKeyBundle(String userId) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/prekeys/$userId'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل جلب المفاتيح: $e',
+    };
+  }
+}
+
+// التحقق من عدد PreKeys المتبقية
+Future<Map<String, dynamic>> checkPreKeysCount() async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/prekeys/count/remaining'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل التحقق من المفاتيح: $e',
+    };
+  }
+}
+
 }

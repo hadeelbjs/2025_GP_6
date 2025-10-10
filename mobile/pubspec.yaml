@@ -38,6 +38,17 @@ dependencies:
   local_auth_windows: ^1.0.9 
   shared_preferences: ^2.2.2
   http: ^1.1.0
+  cryptography: ^2.5.0
+  convert: ^3.1.1
+  libsignal_protocol_dart: ^0.7.4
+  crypto: ^3.0.3
+  #Local Database
+  sqflite: ^2.3.0
+  path: ^1.8.3
+  
+  # WebSocket
+  socket_io_client: ^2.0.3
+  
 
 
   # The following adds the Cupertino Icons font to your application.

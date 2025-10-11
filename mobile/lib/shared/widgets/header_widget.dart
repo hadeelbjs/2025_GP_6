@@ -28,11 +28,7 @@ class HeaderWidget extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.background,
-            ),
-          ),
+          Container(decoration: BoxDecoration(color: AppColors.background)),
 
           if (showBackground) ...[
             Align(

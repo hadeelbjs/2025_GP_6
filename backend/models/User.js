@@ -57,7 +57,7 @@ biometricEnabled: {
 biometricVerificationCode: String,
 biometricVerificationExpires: Date,
 
-//
+// تغيير الايميل 
 newEmailVerificationCode: String,
 newEmailVerificationExpires: Date,
 pendingEmail: String,

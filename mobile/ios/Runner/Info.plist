@@ -47,5 +47,12 @@
 	<true/>
 	<key>NSFaceIDUsageDescription</key>
 	<string>نحتاج إلى Face ID للتحقق من هويتك</string>
+<key>NSCameraUsageDescription</key>
+<string>يحتاج التطبيق لاستخدام الكاميرا لالتقاط الصور.</string>
+<key>NSPhotoLibraryUsageDescription</key>
+<string>يحتاج التطبيق للوصول إلى الصور لاختيار صورة من المعرض.</string>
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>يحتاج التطبيق لحفظ الصور في ألبوم الصور.</string>
+
 </dict>
 </plist>

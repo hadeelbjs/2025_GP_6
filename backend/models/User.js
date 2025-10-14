@@ -56,7 +56,13 @@ biometricEnabled: {
 },
 biometricVerificationCode: String,
 biometricVerificationExpires: Date,
-  
+
+//
+newEmailVerificationCode: String,
+newEmailVerificationExpires: Date,
+pendingEmail: String,
+
+
   // حقول التحقق الثنائي (2FA) لتسجيل الدخول
   twoFACode: String,
   twoFAExpires: Date,

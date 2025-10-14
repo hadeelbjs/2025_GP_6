@@ -42,6 +42,9 @@ dependencies:
   convert: ^3.1.1
   libsignal_protocol_dart: ^0.7.4
   crypto: ^3.0.3
+  image_picker: ^1.1.2
+  file_picker: ^8.0.3
+  open_filex: ^4.3.4
   #Local Database
   sqflite: ^2.3.0
   path: ^1.8.3
@@ -89,6 +92,8 @@ flutter:
      - assets/images/reg-bg-shapes.svg
      - assets/images/logo.png
      - assets/images/logo-white.svg
+     - assets/icons/back_arrow_white.png
+
 
   #   - images/a_dot_ham.jpeg
 

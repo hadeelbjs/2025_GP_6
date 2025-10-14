@@ -7,6 +7,7 @@ import 'stores/identity_key_store.dart';
 import 'stores/pre_key_store.dart';
 import 'stores/signed_pre_key_store.dart';
 import 'stores/session_store.dart';
+import '../api_services.dart';
 
 class SignalProtocolManager {
   static final SignalProtocolManager _instance = 
@@ -14,6 +15,7 @@ class SignalProtocolManager {
   factory SignalProtocolManager() => _instance;
   SignalProtocolManager._internal();
 
+  final ApiService _apiService = ApiService();
   final _storage = const FlutterSecureStorage();
   
   late MyIdentityKeyStore _identityStore;
@@ -39,152 +41,190 @@ class SignalProtocolManager {
     _isInitialized = true;
   }
 
-  // توليد المفاتيح (عند التسجيل)
-  Future<Map<String, dynamic>> generateKeys() async {
-    await initialize();
+  // توليد المفاتيح ورفعها للسيرفر (عند التسجيل)
+  Future<bool> generateAndUploadKeys() async {
+    try {
+      await initialize();
 
-    final identityKeyPair = generateIdentityKeyPair();
-    final registrationId = generateRegistrationId(false);
+      final identityKeyPair = generateIdentityKeyPair();
+      final registrationId = generateRegistrationId(false);
 
-    // ✅ استخدام الدالة الجديدة
-    await _identityStore.saveIdentityKeyPair(identityKeyPair);
-    await _storage.write(
-      key: 'registration_id',
-      value: registrationId.toString(),
-    );
+      await _identityStore.saveIdentityKeyPair(identityKeyPair);
+      await _storage.write(
+        key: 'registration_id',
+        value: registrationId.toString(),
+      );
 
-    final preKeys = generatePreKeys(0, 100);
-    for (var preKey in preKeys) {
-      await _preKeyStore.storePreKey(preKey.id, preKey);
-    }
+      final preKeys = generatePreKeys(0, 100);
+      for (var preKey in preKeys) {
+        await _preKeyStore.storePreKey(preKey.id, preKey);
+      }
 
-    final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
-    await _signedPreKeyStore.storeSignedPreKey(
-      signedPreKey.id,
-      signedPreKey,
-    );
+      final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
+      await _signedPreKeyStore.storeSignedPreKey(
+        signedPreKey.id,
+        signedPreKey,
+      );
 
-    return {
-      'registrationId': registrationId,
-      'identityKey': base64Encode(
-        identityKeyPair.getPublicKey().serialize()
-      ),
-      'signedPreKey': {
-        'keyId': signedPreKey.id,
-        'publicKey': base64Encode(
-          signedPreKey.getKeyPair().publicKey.serialize()
+      // تجهيز البيانات للرفع
+      final bundle = {
+        'registrationId': registrationId,
+        'identityKey': base64Encode(
+          identityKeyPair.getPublicKey().serialize()
         ),
-        'signature': base64Encode(signedPreKey.signature),
-      },
-      'preKeys': preKeys.map((pk) => {
-        'keyId': pk.id,
-        'publicKey': base64Encode(
-          pk.getKeyPair().publicKey.serialize()
-        ),
-      }).toList(),
-    };
-  }
+        'signedPreKey': {
+          'keyId': signedPreKey.id,
+          'publicKey': base64Encode(
+            signedPreKey.getKeyPair().publicKey.serialize()
+          ),
+          'signature': base64Encode(signedPreKey.signature),
+        },
+        'preKeys': preKeys.map((pk) => {
+          'keyId': pk.id,
+          'publicKey': base64Encode(
+            pk.getKeyPair().publicKey.serialize()
+          ),
+        }).toList(),
+      };
 
-  // إنشاء Session
-  Future<void> createSession(
-    String recipientId,
-    Map<String, dynamic> preKeyBundle,
-  ) async {
-    final recipientAddress = SignalProtocolAddress(recipientId, 1);
-    
-    // ✅ استخدام Curve.decodePoint بدل fromBytes
-    ECPublicKey? preKeyPublic;
-    if (preKeyBundle['preKey'] != null) {
-      final preKeyBytes = base64Decode(preKeyBundle['preKey']['publicKey']);
-      preKeyPublic = Curve.decodePoint(preKeyBytes, 0);
+      // رفع المفاتيح للسيرفر
+      final result = await _apiService.uploadPreKeyBundle(bundle);
+      
+      if (!result['success']) {
+        throw Exception(result['message']);
+      }
+
+      return true;
+    } catch (e) {
+      print('Error generating keys: $e');
+      return false;
     }
-    
-    final signedPreKeyBytes = base64Decode(
-      preKeyBundle['signedPreKey']['publicKey']
-    );
-    final signedPreKeyPublic = Curve.decodePoint(signedPreKeyBytes, 0);
-    
-    final identityKeyBytes = base64Decode(preKeyBundle['identityKey']);
-    final identityKeyPublic = Curve.decodePoint(identityKeyBytes, 0);
-    
-    final bundle = PreKeyBundle(
-      preKeyBundle['registrationId'],
-      1, // deviceId
-      preKeyBundle['preKey']?['keyId'],
-      preKeyPublic,
-      preKeyBundle['signedPreKey']['keyId'],
-      signedPreKeyPublic,
-      base64Decode(preKeyBundle['signedPreKey']['signature']),
-      IdentityKey(identityKeyPublic),
-    );
-    
-    final sessionBuilder = SessionBuilder(
-      _sessionStore,
-      _preKeyStore,
-      _signedPreKeyStore,
-      _identityStore,
-      recipientAddress,
-    );
-    
-    await sessionBuilder.processPreKeyBundle(bundle);
   }
 
-  // تشفير
-  Future<Map<String, dynamic>> encryptMessage(
+  // إنشاء Session مع مستخدم آخر
+  Future<bool> createSession(String recipientId) async {
+    try {
+      await initialize();
+
+      // جلب PreKey Bundle من السيرفر
+      final response = await _apiService.getPreKeyBundle(recipientId);
+      
+      if (!response['success']) {
+        throw Exception(response['message']);
+      }
+
+      final bundleData = response['bundle'];
+      
+      // بناء SignalProtocolAddress
+      final recipientAddress = SignalProtocolAddress(recipientId, 1);
+      
+      // معالجة PreKey (اختياري)
+      ECPublicKey? preKeyPublic;
+      int? preKeyId;
+      
+      if (bundleData['preKey'] != null) {
+        final preKeyBytes = base64Decode(bundleData['preKey']['publicKey']);
+        preKeyPublic = Curve.decodePoint(preKeyBytes, 0);
+        preKeyId = bundleData['preKey']['keyId'];
+      }
+      
+      // معالجة SignedPreKey (إجباري)
+      final signedPreKeyBytes = base64Decode(
+        bundleData['signedPreKey']['publicKey']
+      );
+      final signedPreKeyPublic = Curve.decodePoint(signedPreKeyBytes, 0);
+      
+      // معالجة IdentityKey (إجباري)
+      final identityKeyBytes = base64Decode(bundleData['identityKey']);
+      final identityKeyPublic = Curve.decodePoint(identityKeyBytes, 0);
+      
+      // بناء PreKeyBundle
+      final bundle = PreKeyBundle(
+        bundleData['registrationId'],
+        1, // deviceId
+        preKeyId,
+        preKeyPublic,
+        bundleData['signedPreKey']['keyId'],
+        signedPreKeyPublic,
+        base64Decode(bundleData['signedPreKey']['signature']),
+        IdentityKey(identityKeyPublic),
+      );
+      
+      // إنشاء SessionBuilder
+      final sessionBuilder = SessionBuilder(
+        _sessionStore,
+        _preKeyStore,
+        _signedPreKeyStore,
+        _identityStore,
+        recipientAddress,
+      );
+      
+      // معالجة Bundle وإنشاء Session
+      await sessionBuilder.processPreKeyBundle(bundle);
+      
+      print('Session created successfully with $recipientId');
+      return true;
+      
+    } catch (e) {
+      print('Error creating session: $e');
+      return false;
+    }
+  }
+
+  // تشفير رسالة
+  Future<Map<String, dynamic>?> encryptMessage(
     String recipientId,
-    String plaintext,
+    String message,
   ) async {
-    final recipientAddress = SignalProtocolAddress(recipientId, 1);
-    
-    final sessionCipher = SessionCipher(
-      _sessionStore,
-      _preKeyStore,
-      _signedPreKeyStore,
-      _identityStore,
-      recipientAddress,
-    );
-    
-    final ciphertext = await sessionCipher.encrypt(
-      Uint8List.fromList(utf8.encode(plaintext)),
-    );
-    
-    // ✅ استخدام lowercase
-    return {
-      'type': ciphertext.getType() == CiphertextMessage.prekeyType
-          ? 'PREKEY_MESSAGE'
-          : 'SIGNAL_MESSAGE',
-      'ciphertext': base64Encode(ciphertext.serialize()),
-    };
+    try {
+      final address = SignalProtocolAddress(recipientId, 1);
+      
+      // التحقق من وجود Session
+      if (!await _sessionStore.containsSession(address)) {
+        throw Exception('No session exists with user');
+      }
+
+      final cipher = SessionCipher(_sessionStore, _preKeyStore, 
+                                   _signedPreKeyStore, _identityStore, address);
+      
+      final ciphertext = await cipher.encrypt(Uint8List.fromList(utf8.encode(message)));
+      
+      return {
+        'type': ciphertext.getType(),
+        'body': base64Encode(ciphertext.serialize()),
+      };
+    } catch (e) {
+      print('Encryption error: $e');
+      return null;
+    }
   }
 
-  // فك التشفير
-  Future<String> decryptMessage(
+  // فك تشفير رسالة
+  Future<String?> decryptMessage(
     String senderId,
-    String type,
-    String ciphertextBase64,
+    int type,
+    String body,
   ) async {
-    final senderAddress = SignalProtocolAddress(senderId, 1);
-    
-    final sessionCipher = SessionCipher(
-      _sessionStore,
-      _preKeyStore,
-      _signedPreKeyStore,
-      _identityStore,
-      senderAddress,
-    );
-    
-    final ciphertextBytes = base64Decode(ciphertextBase64);
-    Uint8List plaintext;
-    
-    if (type == 'PREKEY_MESSAGE') {
-      final preKeyMessage = PreKeySignalMessage(ciphertextBytes);
-      plaintext = await sessionCipher.decryptFromSignal(preKeyMessage.getWhisperMessage());
-    } else {
-      final message = SignalMessage.fromSerialized(ciphertextBytes);
-      plaintext = await sessionCipher.decryptFromSignal(message);
+    try {
+      final address = SignalProtocolAddress(senderId, 1);
+      final cipher = SessionCipher(_sessionStore, _preKeyStore, 
+                                   _signedPreKeyStore, _identityStore, address);
+      
+      Uint8List plaintext;
+      
+      if (type == CiphertextMessage.prekeyType) {
+        final message = PreKeySignalMessage(base64Decode(body));
+        plaintext = await cipher.decrypt(message);
+      } else {
+        final message = SignalMessage.fromSerialized(base64Decode(body));
+        plaintext = await cipher.decryptFromSignal(message);
+      }
+      
+      return utf8.decode(plaintext);
+    } catch (e) {
+      print('Decryption error: $e');
+      return null;
     }
-    
-    return utf8.decode(plaintext);
   }
 
   // التحقق من وجود Session
@@ -197,5 +237,62 @@ class SignalProtocolManager {
   Future<void> deleteSession(String userId) async {
     final address = SignalProtocolAddress(userId, 1);
     await _sessionStore.deleteSession(address);
+  }
+
+  // التحقق من عدد PreKeys المتبقية
+  Future<void> checkAndRefreshPreKeys() async {
+    try {
+      final result = await _apiService.checkPreKeysCount();
+      
+      if (result['success']) {
+        final count = result['count'] ?? 0;
+        print('Available PreKeys: $count');
+        
+        if (count < 20) {
+          print('Low on PreKeys ($count), generating more...');
+          await _generateAndUploadMorePreKeys();
+        }
+      } else {
+        print('Failed to check PreKeys count: ${result['message']}');
+      }
+    } catch (e) {
+      print('Error checking PreKeys: $e');
+    }
+  }
+
+  // توليد ورفع مفاتيح إضافية
+  Future<void> _generateAndUploadMorePreKeys() async {
+    try {
+      final identityKeyPair = await _identityStore.getIdentityKeyPair();
+      
+      // توليد 100 مفتاح جديد بدءاً من ID عالي لتجنب التضارب
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final startId = timestamp % 100000;
+      final newPreKeys = generatePreKeys(startId, 100);
+      
+      for (var preKey in newPreKeys) {
+        await _preKeyStore.storePreKey(preKey.id, preKey);
+      }
+
+      final bundle = {
+        'preKeys': newPreKeys.map((pk) => {
+          'keyId': pk.id,
+          'publicKey': base64Encode(
+            pk.getKeyPair().publicKey.serialize()
+          ),
+        }).toList(),
+      };
+
+      final result = await _apiService.uploadPreKeyBundle(bundle);
+      
+      if (result['success']) {
+        print('Uploaded ${newPreKeys.length} new PreKeys successfully');
+        print('Total keys: ${result['totalKeys']}, Available: ${result['availableKeys']}');
+      } else {
+        print('Failed to upload PreKeys: ${result['message']}');
+      }
+    } catch (e) {
+      print('Error generating more PreKeys: $e');
+    }
   }
 }

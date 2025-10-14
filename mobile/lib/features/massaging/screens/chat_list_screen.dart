@@ -5,7 +5,8 @@ import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
-
+import '../../../services/crypto/signal_protocol_manager.dart';
+import '../screens/chat_screen.dart';
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
@@ -15,6 +16,7 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final _apiService = ApiService(); 
+  final _signalProtocolManager = SignalProtocolManager();
   List<Map<String, dynamic>> _chats = [];
   bool _isLoading = false;
 
@@ -22,9 +24,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
   void initState() {
     super.initState();
     _loadChats();
+    // تم إزالة _checkPreKeys() لأنها تُستدعى في main.dart عند فتح التطبيق
   }
 
-  //  جلب قائمة الأصدقاء باستخدام ApiService
+  // جلب قائمة الأصدقاء باستخدام ApiService
   Future<void> _loadChats() async {
     setState(() => _isLoading = true);
 
@@ -33,7 +36,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
       if (!mounted) return;
 
-      //  التحقق من انتهاء الجلسة
+      // التحقق من انتهاء الجلسة
       if (result['code'] == 'SESSION_EXPIRED' || 
           result['code'] == 'TOKEN_EXPIRED' ||
           result['code'] == 'NO_TOKEN') {
@@ -65,7 +68,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  //  معالجة انتهاء الجلسة
+  // معالجة انتهاء الجلسة
   void _handleSessionExpired() {
     _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
     
@@ -220,12 +223,38 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final name = chat['name'] as String;
     final avatarColor = chat['avatarColor'] as Color;
     final userId = chat['id'] as String;
-
     final initial = name.isNotEmpty ? name[0] : '';
 
     return InkWell(
-      onTap: () {
-        _showMessage('سيتم فتح المحادثة مع $name', true);
+      onTap: () async {
+        final signalManager = SignalProtocolManager();
+        
+        // التحقق من وجود Session
+        final hasSession = await signalManager.hasSession(userId);
+        
+        if (!hasSession) {
+          // إنشاء Session جديد
+          _showMessage('جاري إعداد التشفير...', true);
+          final success = await signalManager.createSession(userId);
+          
+          if (!success) {
+            _showMessage('فشل إعداد التشفير مع $name', false);
+            return;
+          }
+        }
+        
+        // الانتقال لشاشة المحادثة
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              userId: userId,
+              name: name,
+              username: chat['username'],
+            ),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),

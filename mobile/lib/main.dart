@@ -14,7 +14,7 @@ import 'features/massaging/screens/chat_list_screen.dart';
 import 'features/account/screens/manage_account_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/crypto/signal_protocol_manager.dart';
-import 'features/massaging/screens/chat_screen.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -146,14 +146,39 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       final registrationId = await storage.read(key: 'registration_id');
       
       if (identityKey != null && registrationId != null) {
-        print('Keys already exist');
+        print('Keys exist locally - checking server...');
         
         // تهيئة SignalProtocolManager
         final signalManager = SignalProtocolManager();
         await signalManager.initialize();
         
-        // التحقق من عدد PreKeys المتبقية
-        await signalManager.checkAndRefreshPreKeys();
+        // التحقق من عدد PreKeys على السيرفر
+        final apiService = ApiService();
+        final result = await apiService.checkPreKeysCount();
+        
+        if (result['success']) {
+          final count = result['count'] ?? 0;
+          print('Server PreKeys count: $count');
+          
+          if (count == 0) {
+            // المفاتيح موجودة محلياً لكن السيرفر فاضي
+            // نرفع Bundle كامل للسيرفر
+            print('Server has no keys - uploading full bundle...');
+            final success = await signalManager.generateAndUploadKeys();
+            
+            if (success) {
+              print('Full bundle uploaded successfully');
+            } else {
+              print('Failed to upload full bundle');
+            }
+          } else if (count < 20) {
+            // السيرفر عنده مفاتيح لكن قليلة
+            print('Low on PreKeys - refreshing...');
+            await signalManager.checkAndRefreshPreKeys();
+          } else {
+            print('Keys are sufficient');
+          }
+        }
         return;
       }
       

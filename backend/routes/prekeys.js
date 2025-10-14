@@ -4,9 +4,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const PreKeyBundle = require('../models/PreKeyBundle');
 
-// ========================================
 // رفع PreKey Bundle (كامل أو جزئي)
-// ========================================
 router.post('/upload', auth, async (req, res) => {
   try {
     const { registrationId, identityKey, signedPreKey, preKeys } = req.body;
@@ -24,6 +22,10 @@ router.post('/upload', auth, async (req, res) => {
 
     if (bundle) {
       // تحديث Bundle موجود (إضافة مفاتيح جديدة)
+      console.log(`Updating existing bundle for user ${req.user.id}`);
+      console.log(`Current PreKeys count: ${bundle.preKeys.length}`);
+      console.log(`Adding ${preKeys.length} new PreKeys`);
+      
       const newPreKeys = preKeys.map(pk => ({
         keyId: pk.keyId,
         publicKey: pk.publicKey,
@@ -32,6 +34,7 @@ router.post('/upload', auth, async (req, res) => {
         createdAt: new Date()
       }));
 
+      // إضافة المفاتيح الجديدة
       bundle.preKeys.push(...newPreKeys);
       bundle.lastKeyRotation = Date.now();
       bundle.updatedAt = Date.now();
@@ -39,12 +42,13 @@ router.post('/upload', auth, async (req, res) => {
       // تحديث SignedPreKey إذا تم إرساله
       if (signedPreKey) {
         bundle.signedPreKey = signedPreKey;
+        console.log('Updated SignedPreKey');
       }
 
       await bundle.save();
 
-      console.log(`Added ${newPreKeys.length} new PreKeys for user ${req.user.id}`);
-      console.log(`Total keys: ${bundle.preKeys.length}, Available: ${bundle.getAvailablePreKeysCount()}`);
+      console.log(`Total PreKeys after update: ${bundle.preKeys.length}`);
+      console.log(`Available PreKeys: ${bundle.getAvailablePreKeysCount()}`);
 
       return res.json({
         success: true,
@@ -55,6 +59,8 @@ router.post('/upload', auth, async (req, res) => {
     }
 
     // إنشاء Bundle جديد (أول مرة)
+    console.log(`Creating new bundle for user ${req.user.id}`);
+    
     if (!registrationId || !identityKey || !signedPreKey) {
       return res.status(400).json({
         success: false,
@@ -71,16 +77,20 @@ router.post('/upload', auth, async (req, res) => {
         keyId: pk.keyId,
         publicKey: pk.publicKey,
         used: false,
+        usedAt: null,
         createdAt: new Date()
       }))
     });
 
     await bundle.save();
 
+    console.log(`Bundle created with ${bundle.preKeys.length} PreKeys`);
+
     res.json({
       success: true,
       message: 'تم رفع المفاتيح بنجاح',
-      totalKeys: bundle.preKeys.length
+      totalKeys: bundle.preKeys.length,
+      availableKeys: bundle.getAvailablePreKeysCount()
     });
 
   } catch (err) {
@@ -93,9 +103,7 @@ router.post('/upload', auth, async (req, res) => {
   }
 });
 
-// ========================================
 // جلب PreKey Bundle لمستخدم معين
-// ========================================
 router.get('/:userId', auth, async (req, res) => {
   try {
     const bundle = await PreKeyBundle.findOne({
@@ -151,9 +159,7 @@ router.get('/:userId', auth, async (req, res) => {
   }
 });
 
-// ========================================
 // التحقق من عدد المفاتيح المتبقية
-// ========================================
 router.get('/count/remaining', auth, async (req, res) => {
   try {
     const bundle = await PreKeyBundle.findOne({
@@ -186,9 +192,7 @@ router.get('/count/remaining', auth, async (req, res) => {
   }
 });
 
-// ========================================
 // تدوير SignedPreKey (اختياري)
-// ========================================
 router.post('/rotate-signed-prekey', auth, async (req, res) => {
   try {
     const { signedPreKey } = req.body;
@@ -229,9 +233,7 @@ router.post('/rotate-signed-prekey', auth, async (req, res) => {
   }
 });
 
-// ========================================
 // حذف PreKeys القديمة (تنظيف)
-// ========================================
 router.delete('/cleanup-old', auth, async (req, res) => {
   try {
     const bundle = await PreKeyBundle.findOne({

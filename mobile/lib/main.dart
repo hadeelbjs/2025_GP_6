@@ -12,9 +12,11 @@ import 'features/contact/screens/contacts_list_screen.dart';
 import 'features/contact/screens/add_contact_screen.dart';
 import 'features/massaging/screens/chat_list_screen.dart';
 import 'features/account/screens/manage_account_screen.dart';
-//import 'features/contact/screens/notifications_screen.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'services/crypto/signal_protocol_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
 
@@ -36,7 +38,6 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
         
-        // الصفحات المحمية - تحتاج تسجيل دخول
         '/dashboard': (context) => const ProtectedRoute(
           child: MainDashboard(),
         ),
@@ -49,9 +50,6 @@ class MyApp extends StatelessWidget {
         '/chats': (context) => const ProtectedRoute(
           child: ChatListScreen(),
         ),
-       // '/notifications': (context) => const ProtectedRoute(
-         // child: NotificationsScreen(),
-       // ),
         '/account': (context) => const ProtectedRoute(
           child: AccountManagementScreen(),
         ),
@@ -60,7 +58,6 @@ class MyApp extends StatelessWidget {
   }
 }
 
-// Splash Screen للتحقق من حالة تسجيل الدخول
 class SplashScreen extends StatefulWidget {
   const SplashScreen({Key? key}) : super(key: key);
 
@@ -70,7 +67,6 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
-  final ApiService _apiService = ApiService(); // أضيفي هذا السطر
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -78,7 +74,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   void initState() {
     super.initState();
     
-    // تأثير Animation للوقو
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -101,42 +96,110 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     super.dispose();
   }
 
-Future<void> _checkAuthStatus() async {
-  await Future.delayed(const Duration(seconds: 2));
-  if (!mounted) return;
+  Future<void> _checkAuthStatus() async {
+    await Future.delayed(const Duration(seconds: 2));
+    if (!mounted) return;
 
-  try {
-    print('🔍 فحص حالة التطبيق...');
-    
-    // 1️⃣ فحص إذا للتو تم logout
-    final justLoggedOut = await BiometricService.getJustLoggedOut();
-    print('🚪 هل تم تسجيل خروج للتو؟ $justLoggedOut');
-    
-    if (justLoggedOut) {
-      await BiometricService.setJustLoggedOut(false);
-      // ✅ روح للوقن مباشرة (الزر موجود فيها)
+    try {
+      print('Checking app state...');
+      
+      // 1. فحص إذا للتو تم logout
+      final justLoggedOut = await BiometricService.getJustLoggedOut();
+      print('Just logged out? $justLoggedOut');
+      
+      if (justLoggedOut) {
+        await BiometricService.setJustLoggedOut(false);
+        Navigator.of(context).pushReplacementNamed('/login');
+        return;
+      }
+
+      // 2. فحص إذا مسجل دخول
+      final isAuth = await _authGuard.isAuthenticated();
+      print('Is authenticated? $isAuth');
+      
+      if (isAuth) {
+        // تهيئة التشفير للمستخدم المسجل
+        await _initializeEncryption();
+        
+        Navigator.of(context).pushReplacementNamed('/dashboard');
+        return;
+      }
+
+      // 3. غير مسجل دخول - الذهاب للوقن
       Navigator.of(context).pushReplacementNamed('/login');
-      return;
+
+    } catch (e) {
+      print('Error in Splash: $e');
+      Navigator.of(context).pushReplacementNamed('/login');
     }
-
-    // 2️⃣ فحص إذا مسجل دخول
-    final isAuth = await _authGuard.isAuthenticated();
-    print('🔐 هل المستخدم مسجل دخول؟ $isAuth');
-    
-    if (isAuth) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
-      return;
-    }
-
-    // 3️⃣ أول مرة يفتح التطبيق - روح للوقن مباشرة
-    // ✅ الزر موجود في صفحة اللوقن، ما نحتاج شاشة منفصلة
-    Navigator.of(context).pushReplacementNamed('/login');
-
-  } catch (e) {
-    print('❌ خطأ: $e');
-    Navigator.of(context).pushReplacementNamed('/login');
   }
-}
+
+  /// تهيئة التشفير للمستخدم المسجل دخول
+  Future<void> _initializeEncryption() async {
+    try {
+      final storage = const FlutterSecureStorage();
+      
+      print('User logged in - checking keys...');
+      
+      // التحقق الصحيح من وجود المفاتيح
+      final identityKey = await storage.read(key: 'identity_key');
+      final registrationId = await storage.read(key: 'registration_id');
+      
+      if (identityKey != null && registrationId != null) {
+        print('Keys exist locally - checking server...');
+        
+        // تهيئة SignalProtocolManager
+        final signalManager = SignalProtocolManager();
+        await signalManager.initialize();
+        
+        // التحقق من عدد PreKeys على السيرفر
+        final apiService = ApiService();
+        final result = await apiService.checkPreKeysCount();
+        
+        if (result['success']) {
+          final count = result['count'] ?? 0;
+          print('Server PreKeys count: $count');
+          
+          if (count == 0) {
+            // المفاتيح موجودة محلياً لكن السيرفر فاضي
+            // نرفع Bundle كامل للسيرفر
+            print('Server has no keys - uploading full bundle...');
+            final success = await signalManager.generateAndUploadKeys();
+            
+            if (success) {
+              print('Full bundle uploaded successfully');
+            } else {
+              print('Failed to upload full bundle');
+            }
+          } else if (count < 20) {
+            // السيرفر عنده مفاتيح لكن قليلة
+            print('Low on PreKeys - refreshing...');
+            await signalManager.checkAndRefreshPreKeys();
+          } else {
+            print('Keys are sufficient');
+          }
+        }
+        return;
+      }
+      
+      // المفاتيح غير موجودة - توليد جديدة
+      print('No keys found - generating...');
+      
+      final signalManager = SignalProtocolManager();
+      final success = await signalManager.generateAndUploadKeys();
+      
+      if (success) {
+        print('Keys generated and uploaded successfully');
+      } else {
+        print('Failed to generate/upload keys - will retry later');
+      }
+      
+    } catch (e) {
+      print('Error initializing encryption: $e');
+      // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -147,17 +210,16 @@ Future<void> _checkAuthStatus() async {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // شعار التطبيق SVG
               SvgPicture.asset(
-              'assets/images/logo-white.svg',
-              width: 120,
-              height: 120,
-              fit: BoxFit.contain,
-              colorFilter: const ColorFilter.mode(
-                Colors.white,
-                BlendMode.srcIn,
+                'assets/images/logo-white.svg',
+                width: 120,
+                height: 120,
+                fit: BoxFit.contain,
+                colorFilter: const ColorFilter.mode(
+                  Colors.white,
+                  BlendMode.srcIn,
+                ),
               ),
-            ),
               
               const SizedBox(height: 30),
               

@@ -416,7 +416,6 @@ Future<Map<String, dynamic>> skipPhoneVerification({
 
   // ================================
   // (إضافاتك) دوال الـ Contacts فقط
- 
   // ================================
 
   Future<Map<String, String>> _authHeaders() async {
@@ -730,8 +729,6 @@ Future<Map<String, dynamic>> changePassword(String currentPassword, String newPa
 }
 // تسجيل دخول بالبايومتريكس
 
-
-// طلب تفعيل البايومتركس
 // طلب تفعيل البايومتركس
 Future<Map<String, dynamic>> requestBiometricEnable() async {
   try {

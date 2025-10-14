@@ -66,10 +66,11 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('db connection error:', err));
 
+// Routes
 app.use('/api/auth', require('./routes/auth'));
-// contact 
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/user', require('./routes/user')); 
+app.use('/api/prekeys', require('./routes/prekeys')); 
 
 app.get('/', (req, res) => {
   res.json({ message: 'API is working ' });

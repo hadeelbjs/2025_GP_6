@@ -104,7 +104,9 @@ router.post('/search',
       });
 
     } catch (error) {
-      console.error('خطأ في البحث');
+      console.error('❌ خطأ في البحث:', error.message);
+      console.error('Stack:', error.stack);
+      console.error('Path:', req.path);
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء البحث' 
@@ -197,7 +199,8 @@ router.post('/send-request',
       });
 
     } catch (error) {
-      console.error('خطأ في إرسال الطلب');
+      console.error('❌ خطأ في إرسال الطلب:', error.message);
+      console.error('Stack:', error.stack);
       
       if (error.code === 11000) {
         return res.status(400).json({ 
@@ -229,7 +232,18 @@ router.get('/pending-requests', auth, async (req, res) => {
     .populate('requester', 'fullName username')
     .sort({ createdAt: -1 });
 
-    const requests = pendingRequests.map(req => ({
+    // ✅ فلترة الطلبات - استبعاد الطلبات من مستخدمين محذوفين
+    const validRequests = pendingRequests.filter(req => req.requester !== null);
+
+    // ✅ حذف الطلبات من مستخدمين محذوفين
+    const invalidRequests = pendingRequests.filter(req => req.requester === null);
+    if (invalidRequests.length > 0) {
+      const invalidIds = invalidRequests.map(req => req._id);
+      await Contact.deleteMany({ _id: { $in: invalidIds } });
+      console.log(`🧹 تم حذف ${invalidIds.length} طلبات من مستخدمين محذوفين`);
+    }
+
+    const requests = validRequests.map(req => ({
       requestId: req._id,
       user: {
         id: req.requester._id,
@@ -246,7 +260,9 @@ router.get('/pending-requests', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('خطأ في جلب الطلبات');
+    console.error('❌ خطأ في جلب الطلبات:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('User ID:', req.user?.id);
     res.status(500).json({ 
       success: false, 
       message: 'حدث خطأ أثناء جلب الطلبات' 
@@ -300,7 +316,8 @@ router.post('/accept-request/:requestId',
       });
 
     } catch (error) {
-      console.error('خطأ في قبول الطلب');
+      console.error('❌ خطأ في قبول الطلب:', error.message);
+      console.error('Stack:', error.stack);
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء قبول الطلب' 
@@ -352,7 +369,8 @@ router.post('/reject-request/:requestId',
       });
 
     } catch (error) {
-      console.error('خطأ في رفض الطلب');
+      console.error('❌ خطأ في رفض الطلب:', error.message);
+      console.error('Stack:', error.stack);
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء رفض الطلب' 
@@ -397,7 +415,9 @@ router.get('/list', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('خطأ في جلب الأصدقاء');
+    console.error('❌ خطأ في جلب الأصدقاء:', error.message);
+    console.error('Stack:', error.stack);
+    console.error('User ID:', req.user?.id);
     res.status(500).json({ 
       success: false, 
       message: 'حدث خطأ أثناء جلب القائمة' 
@@ -454,7 +474,8 @@ router.delete('/:contactId',
       });
 
     } catch (error) {
-      console.error('خطأ في الحذف');
+      console.error('❌ خطأ في الحذف:', error.message);
+      console.error('Stack:', error.stack);
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ أثناء الحذف' 

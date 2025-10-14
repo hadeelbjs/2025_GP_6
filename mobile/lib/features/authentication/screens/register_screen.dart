@@ -7,6 +7,7 @@ import 'verify_phone_number.dart';
 import 'login_screen.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -81,29 +82,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       // إذا تم التحقق من الإيميل بنجاح
       if (emailVerified == true && mounted) {
-        _showPhoneVerificationOptions();
-        
-      }
-      if (emailVerified == true && mounted) {
-        // توليد مفاتيح Signal
-        final signalManager = SignalProtocolManager();
-        await signalManager.initialize();
-        
-        setState(() => _isLoading = true);
-        
-        final bundle = await signalManager.generateKeys();
-        
-        // رفع Bundle للسيرفر
-        final uploadResult = await _apiService.uploadPreKeyBundle(bundle);
-        
-        setState(() => _isLoading = false);
-        
-        if (uploadResult['success']) {
-          print('✅ تم رفع المفاتيح بنجاح');
-        } else {
-          print('⚠️ فشل رفع المفاتيح: ${uploadResult['message']}');
-        }
-        
+        // فقط اعرض خيارات التحقق (المفاتيح تولد بعد الحصول على Token)
         _showPhoneVerificationOptions();
       }
     } else {
@@ -114,6 +93,57 @@ class _RegisterScreenState extends State<RegisterScreen> {
           duration: const Duration(seconds: 4),
         ),
       );
+    }
+  }
+  // عرض رسالة  
+  void _showMessage(String message, {required bool isError}) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    SnackBar(
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isError ? Icons.error_outline : Icons.check_circle_outline,
+                color: Colors.white,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isError ? 'خطأ' : 'نجاح',
+                style: const TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            message,
+            style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          ),
+        ],
+      ),
+      backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+      duration: const Duration(seconds: 3),
+    ),
+  );
+}
+
+  // توليد ورفع المفاتيح (دالة مساعدة)
+  Future<void> _generateAndUploadKeys() async {
+    try {
+      final signalManager = SignalProtocolManager();
+      final keysUploaded = await signalManager.generateAndUploadKeys();
+
+      if (!keysUploaded) {
+        _showMessage('تحذير: فشل إعداد مفاتيح تشفير الرسائل', isError: true);
+      }
+    } catch (e) {
+      print(' خطأ في توليد/رفع المفاتيح: $e');
     }
   }
 
@@ -184,82 +214,104 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // الانتقال لتحقق الجوال
   Future<void> _proceedToPhoneVerification() async {
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  final sendSmsResult = await _apiService.sendPhoneVerification(
-    _phoneController.text.trim(),
-  );
-  
-  setState(() => _isLoading = false);
-
-  if (!mounted) return;
-
-  if (sendSmsResult['success']) {
-    // إذا نجح إرسال الرمز، انتقل لصفحة التحقق
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VerifyPhoneScreen(
-          phone: _phoneController.text.trim(),
-          fullName: _fullNameController.text.trim(),
-          email: _emailController.text.trim(),
-        ),
-      ),
+    final sendSmsResult = await _apiService.sendPhoneVerification(
+      _phoneController.text.trim(),
     );
-  } else {
-    // إذا فشل إرسال الرمز، ادخل للصفحة الرئيسية مع رسالة
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text(
-          'حدث خطأ في إرسال رمز التحقق من الخادم. يمكنك التحقق من رقم جوالك لاحقاً من الإعدادات',
-          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-        ),
-        backgroundColor: Colors.orange,
-        duration: Duration(seconds: 4),
-      ),
-    );
-
-    // الدخول للصفحة الرئيسية
-    await Future.delayed(const Duration(milliseconds: 500));
-    if (!mounted) return;
     
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const MainDashboard()),
-      (route) => false,
-    );
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (sendSmsResult['success']) {
+      // إذا نجح إرسال الرمز، انتقل لصفحة التحقق
+      final phoneVerified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VerifyPhoneScreen(
+            phone: _phoneController.text.trim(),
+            fullName: _fullNameController.text.trim(),
+            email: _emailController.text.trim(),
+          ),
+        ),
+      );
+      
+      // بعد التحقق من الجوال - الآن عندك Token
+      if (phoneVerified == true && mounted) {
+        setState(() => _isLoading = true);
+        
+        // توليد ورفع المفاتيح
+        await _generateAndUploadKeys();
+        
+        setState(() => _isLoading = false);
+        
+        if (!mounted) return;
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const MainDashboard()),
+          (route) => false,
+        );
+      }
+    } else {
+      // إذا فشل إرسال الرمز، ادخل للصفحة الرئيسية مع رسالة
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'حدث خطأ في إرسال رمز التحقق من الخادم. يمكنك التحقق من رقم جوالك لاحقاً من الإعدادات',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          ),
+          backgroundColor: Colors.orange,
+          duration: Duration(seconds: 4),
+        ),
+      );
+
+      // الدخول للصفحة الرئيسية
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+        (route) => false,
+      );
+    }
   }
-}
- // تخطي تحقق الجوال والذهاب للصفحة الرئيسية
-Future<void> _skipPhoneVerification() async {
-  setState(() => _isLoading = true);
 
-  // استدعاء API لتخطي التحقق والحصول على التوكن
-  final result = await _apiService.skipPhoneVerification(
-    email: _emailController.text.trim(),
-  );
+  // تخطي تحقق الجوال والذهاب للصفحة الرئيسية
+  Future<void> _skipPhoneVerification() async {
+    setState(() => _isLoading = true);
 
-  setState(() => _isLoading = false);
-
-  if (!mounted) return;
-
-  if (result['success']) {
-    // تم حفظ التوكن تلقائياً في ApiService
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const MainDashboard()),
-      (route) => false,
+    // 1. استدعاء API لتخطي التحقق والحصول على التوكن
+    final result = await _apiService.skipPhoneVerification(
+      email: _emailController.text.trim(),
     );
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result['message'] ?? 'حدث خطأ'),
-        backgroundColor: Colors.red,
-      ),
-    );
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      // 2. ✅ الآن عندك Token - ولّد ورفع المفاتيح
+      await _generateAndUploadKeys();
+      
+      setState(() => _isLoading = false);
+      
+      // 3. الانتقال للصفحة الرئيسية
+      if (!mounted) return;
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+        (route) => false,
+      );
+    } else {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'حدث خطأ'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
-}
-
 
   @override
   Widget build(BuildContext context) {

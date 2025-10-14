@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/custom-text-field.dart';
 import '../../../services/api_services.dart';
+import '../../../services/crypto/signal_protocol_manager.dart';
 import 'verify-email.dart'; 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'register_screen.dart';
 import 'reset_password.dart';
 import '../../../services/biometric_service.dart';
 import '../../dashboard/screens/main_dashboard.dart';
-import '../../dashboard/screens/main_dashboard.dart';
+
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 
@@ -20,7 +21,6 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
   
-  // Controllers للحقول
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   
@@ -34,10 +34,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   // ============================================
-  // معالجة التسجيل
+  // معالجة تسجيل الدخول العادي
   // ============================================
   Future<void> _handleLogin() async {
-    // التحقق من Form
     bool isValid = _formKey.currentState!.validate();
     
     if (!isValid) {
@@ -50,26 +49,28 @@ class _LoginScreenState extends State<LoginScreen> {
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
-      setState(() => _isLoading = false);
+    
+    setState(() => _isLoading = false);
     if (!mounted) return; 
+    
     if (result['success']) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('تم إرسال رمز التحقق إلى بريدك الإلكتروني'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم إرسال رمز التحقق إلى بريدك الإلكتروني'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
+        ),
+      );
 
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => VerifyEmailScreen(
-              email: _emailController.text.trim(),
-              is2FA: true, 
-            ),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => VerifyEmailScreen(
+            email: _emailController.text.trim(),
+            is2FA: true, 
           ),
-        );
+        ),
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -81,69 +82,103 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
+  // ============================================
+  // معالجة الدخول بالبايومتركس
+  // ============================================
+  Future<void> _handleBiometricLogin() async {
+    // 1 - الحصول على إيميل المستخدم المحفوظ
+    final biometricUser = await BiometricService.getBiometricUser();
+    
+    if (biometricUser == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('لم يتم العثور على بيانات البصمة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
-// ============================================
-// معالجة الدخول بالبايومتركس
-// ============================================
-Future<void> _handleBiometricLogin() async {
-  // 1️⃣ الحصول على إيميل المستخدم المحفوظ
-  final biometricUser = await BiometricService.getBiometricUser();
-  
-  if (biometricUser == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('لم يتم العثور على بيانات البصمة'),
-        backgroundColor: Colors.red,
-      ),
+    // 2 - طلب البصمة
+    final authenticated = await BiometricService.authenticateWithBiometrics(
+      reason: 'تسجيل الدخول إلى حسابك',
     );
-    return;
+
+    if (!authenticated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('فشل التحقق من البصمة'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // 3 - تسجيل الدخول
+    setState(() => _isLoading = true);
+    
+    final result = await _apiService.biometricLogin(biometricUser);
+    
+    setState(() => _isLoading = false);
+
+    if (!mounted) return;
+
+    if (result['success']) {
+      // توليد/تحديث المفاتيح
+      await _initializeEncryption();
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('تم تسجيل الدخول بنجاح'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const MainDashboard()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'حدث خطأ'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  // 2️⃣ طلب البصمة
-  final authenticated = await BiometricService.authenticateWithBiometrics(
-    reason: 'تسجيل الدخول إلى حسابك',
-  );
-
-  if (!authenticated) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('فشل التحقق من البصمة'),
-        backgroundColor: Colors.red,
-      ),
-    );
-    return;
+  // تهيئة التشفير بعد تسجيل الدخول
+  Future<void> _initializeEncryption() async {
+    try {
+      print('جاري التحقق من مفاتيح التشفير...');
+      
+      final signalManager = SignalProtocolManager();
+      await signalManager.initialize();
+      
+      // التحقق من وجود المفاتيح
+      const storage = FlutterSecureStorage();
+      final identityKey = await storage.read(key: 'identity_key');
+      
+      if (identityKey == null) {
+        print(' لا توجد مفاتيح - جاري التوليد...');
+        final success = await signalManager.generateAndUploadKeys();
+        
+        if (success) {
+          print(' تم توليد ورفع المفاتيح بنجاح');
+        } else {
+          print(' فشل توليد/رفع المفاتيح');
+        }
+      } else {
+        print(' المفاتيح موجودة بالفعل');
+        // التحقق من عدد PreKeys المتبقية
+        await signalManager.checkAndRefreshPreKeys();
+      }
+    } catch (e) {
+      print(' خطأ في تهيئة التشفير: $e');
+    }
   }
 
-  // 3️⃣ تسجيل الدخول
-  setState(() => _isLoading = true);
-  
-  final result = await _apiService.biometricLogin(biometricUser);
-  
-  setState(() => _isLoading = false);
-
-  if (!mounted) return;
-
-  if (result['success']) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم تسجيل الدخول بنجاح'),
-        backgroundColor: Colors.green,
-      ),
-    );
-
-    Navigator.pushReplacement(
-      context,
-      MaterialPageRoute(builder: (_) => const MainDashboard()),
-    );
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(result['message'] ?? 'حدث خطأ'),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -193,8 +228,6 @@ Future<void> _handleBiometricLogin() async {
                       ),
                       const SizedBox(height: 32),
                       
-                      
-                      
                       // البريد الإلكتروني
                       CustomTextField(
                         controller: _emailController,
@@ -217,7 +250,6 @@ Future<void> _handleBiometricLogin() async {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       
                       // كلمة المرور
                       CustomTextField(
@@ -258,9 +290,9 @@ Future<void> _handleBiometricLogin() async {
                             ),
                           ),
                         ),
-                      )
-                      ,
+                      ),
                       const SizedBox(height: 24),
+                      
                       // زر التسجيل
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleLogin,
@@ -292,93 +324,95 @@ Future<void> _handleBiometricLogin() async {
                               ),
                       ),
                       const SizedBox(height: 16),
-                      const SizedBox(height: 16),
 
-
-FutureBuilder<bool>(
-  future: BiometricService.isBiometricEnabled(),
-  builder: (context, snapshot) {
-    final isEnabled = snapshot.data ?? false;
-    
-    if (!isEnabled) return const SizedBox.shrink();
-    
-    return Column(
-      children: [
-        const SizedBox(height: 20),
-        
-        // خط فاصل
-        Row(
-          children: [
-            Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                'أو',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  color: Colors.grey.shade600,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w400,
-                ),
-              ),
-            ),
-            Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
-          ],
-        ),
-        
-        const SizedBox(height: 20),
-        
-        // زر البايومتركس - متناسق مع تصميم اللوقن
-        Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color: const Color(0xFF2D1B69),
-              width: 2,
-            ),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _isLoading ? null : _handleBiometricLogin,
-              borderRadius: BorderRadius.circular(12),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.fingerprint,
-                      size: 26,
-                      color: Color(0xFF2D1B69),
-                    ),
-                    const SizedBox(width: 10),
-                    const Text(
-                      'الدخول بالبصمة',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF2D1B69),
+                      // زر البايومتركس
+                      FutureBuilder<bool>(
+                        future: BiometricService.isBiometricEnabled(),
+                        builder: (context, snapshot) {
+                          final isEnabled = snapshot.data ?? false;
+                          
+                          if (!isEnabled) return const SizedBox.shrink();
+                          
+                          return Column(
+                            children: [
+                              const SizedBox(height: 20),
+                              
+                              // خط فاصل
+                              Row(
+                                children: [
+                                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    child: Text(
+                                      'أو',
+                                      style: TextStyle(
+                                        fontFamily: 'IBMPlexSansArabic',
+                                        color: Colors.grey.shade600,
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w400,
+                                      ),
+                                    ),
+                                  ),
+                                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                                ],
+                              ),
+                              
+                              const SizedBox(height: 20),
+                              
+                              // زر البايومتركس
+                              Container(
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: const Color(0xFF2D1B69),
+                                    width: 2,
+                                  ),
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    onTap: _isLoading ? null : _handleBiometricLogin,
+                                    borderRadius: BorderRadius.circular(12),
+                                    child: const Padding(
+                                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                                      child: Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.fingerprint,
+                                            size: 26,
+                                            color: Color(0xFF2D1B69),
+                                          ),
+                                          SizedBox(width: 10),
+                                          Text(
+                                            'الدخول بالبصمة',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              fontFamily: 'IBMPlexSansArabic',
+                                              fontWeight: FontWeight.w600,
+                                              color: Color(0xFF2D1B69),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        },
                       ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  },
-),
                       
                       // زر إنشاء حساب جديد
                       TextButton(
                         onPressed: _isLoading
                             ? null
                             : () {
-                                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const RegisterScreen()));
+                                Navigator.pushReplacement(
+                                  context, 
+                                  MaterialPageRoute(builder: (_) => const RegisterScreen())
+                                );
                               },
                         child: const Text(
                           'لا يوجد لديك حساب؟ إنشاء حساب',

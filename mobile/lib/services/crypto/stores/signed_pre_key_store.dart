@@ -1,7 +1,9 @@
+// lib/services/crypto/stores/signed_pre_key_store.dart
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import 'dart:typed_data';
+import 'package:fixnum/fixnum.dart'; 
 
 class MySignedPreKeyStore extends SignedPreKeyStore {
   final FlutterSecureStorage _storage;
@@ -26,9 +28,15 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
           
           final keyPair = ECKeyPair(publicKey, privateKey);
           
+          // تحويل timestamp من int إلى Int64
+          final timestamp = data['timestamp'];
+          final timestampInt64 = timestamp is Int64 
+              ? timestamp 
+              : Int64(timestamp as int);
+          
           _signedPreKeys[id] = SignedPreKeyRecord(
             id,
-            data['timestamp'],
+            timestampInt64, // استخدام Int64
             keyPair,
             base64Decode(data['signature']),
           );
@@ -56,11 +64,12 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
   Future<void> storeSignedPreKey(int signedPreKeyId, SignedPreKeyRecord record) async {
     _signedPreKeys[signedPreKeyId] = record;
     
+    // تحويل Int64 إلى int عند الحفظ
     final data = jsonEncode({
       'public': base64Encode(record.getKeyPair().publicKey.serialize()),
       'private': base64Encode(record.getKeyPair().privateKey.serialize()),
       'signature': base64Encode(record.signature),
-      'timestamp': record.timestamp,
+      'timestamp': record.timestamp.toInt(), // Int64 → int
     });
     
     await _storage.write(key: 'signed_prekey_$signedPreKeyId', value: data);

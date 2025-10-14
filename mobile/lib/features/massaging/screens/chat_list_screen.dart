@@ -5,7 +5,8 @@ import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
-import 'message_thread_screen.dart';
+import '../../../services/crypto/signal_protocol_manager.dart';
+import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -16,6 +17,7 @@ class ChatListScreen extends StatefulWidget {
 
 class _ChatListScreenState extends State<ChatListScreen> {
   final _apiService = ApiService();
+  final _signalProtocolManager = SignalProtocolManager();
   List<Map<String, dynamic>> _chats = [];
   bool _isLoading = false;
 
@@ -25,7 +27,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _loadChats();
   }
 
-  //  جلب قائمة الأصدقاء باستخدام ApiService
+  // جلب قائمة الأصدقاء باستخدام ApiService
   Future<void> _loadChats() async {
     setState(() => _isLoading = true);
 
@@ -34,8 +36,8 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
       if (!mounted) return;
 
-      //  التحقق من انتهاء الجلسة
-      if (result['code'] == 'SESSION_EXPIRED' ||
+      // التحقق من انتهاء الجلسة
+      if (result['code'] == 'SESSION_EXPIRED' || 
           result['code'] == 'TOKEN_EXPIRED' ||
           result['code'] == 'NO_TOKEN') {
         _handleSessionExpired();
@@ -68,15 +70,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  //  معالجة انتهاء الجلسة
+  // معالجة انتهاء الجلسة
   void _handleSessionExpired() {
     _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
 
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/login', (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
       }
     });
   }
@@ -109,24 +112,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
         ),
         backgroundColor: isSuccess ? Colors.green : Colors.red,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
         margin: const EdgeInsets.all(16),
       ),
     );
   }
-
-  // ============= الإضافة الوحيدة (1): دالة فتح المحادثة =============
-  void _openThread(Map<String, dynamic> chat) {
-    final name = (chat['name'] ?? '').toString();
-    final username = (chat['username'] ?? '').toString();
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) =>
-            MessageThreadScreen(peerName: name, peerUsername: username),
-      ),
-    );
-  }
-  // ===================================================================
 
   @override
   Widget build(BuildContext context) {
@@ -167,58 +159,58 @@ class _ChatListScreenState extends State<ChatListScreen> {
                             ),
                           )
                         : _chats.isEmpty
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(24.0),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.chat_bubble_outline,
-                                    size: 64,
-                                    color: AppColors.textHint.withOpacity(0.3),
+                            ? Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(24.0),
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(
+                                        Icons.chat_bubble_outline,
+                                        size: 64,
+                                        color: AppColors.textHint.withOpacity(0.3),
+                                      ),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        'لا توجد محادثات',
+                                        style: AppTextStyles.bodyMedium.copyWith(
+                                          color: AppColors.textHint,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'أضف أصدقاء من جهات الاتصال لبدء المحادثة',
+                                        textAlign: TextAlign.center,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.textHint,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'لا توجد محادثات',
-                                    style: AppTextStyles.bodyMedium.copyWith(
-                                      color: AppColors.textHint,
+                                ),
+                              )
+                            : RefreshIndicator(
+                                onRefresh: _loadChats,
+                                color: AppColors.primary,
+                                child: ListView.separated(
+                                  padding: const EdgeInsets.symmetric(vertical: 15),
+                                  itemCount: _chats.length,
+                                  separatorBuilder: (context, index) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 20,
+                                    ),
+                                    child: Divider(
+                                      color: AppColors.textHint.withOpacity(0.1),
+                                      height: 1,
+                                      thickness: 1,
                                     ),
                                   ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'أضف أصدقاء من جهات الاتصال لبدء المحادثة',
-                                    textAlign: TextAlign.center,
-                                    style: AppTextStyles.bodySmall.copyWith(
-                                      color: AppColors.textHint,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : RefreshIndicator(
-                            onRefresh: _loadChats,
-                            color: AppColors.primary,
-                            child: ListView.separated(
-                              padding: const EdgeInsets.symmetric(vertical: 15),
-                              itemCount: _chats.length,
-                              separatorBuilder: (context, index) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 20,
-                                ),
-                                child: Divider(
-                                  color: AppColors.textHint.withOpacity(0.1),
-                                  height: 1,
-                                  thickness: 1,
+                                  itemBuilder: (context, index) {
+                                    final chat = _chats[index];
+                                    return _buildChatItem(chat);
+                                  },
                                 ),
                               ),
-                              itemBuilder: (context, index) {
-                                final chat = _chats[index];
-                                return _buildChatItem(chat);
-                              },
-                            ),
-                          ),
                   ),
                 ),
               ),
@@ -237,12 +229,38 @@ class _ChatListScreenState extends State<ChatListScreen> {
     final name = chat['name'] as String;
     final avatarColor = chat['avatarColor'] as Color;
     final userId = chat['id'] as String;
-
     final initial = name.isNotEmpty ? name[0] : '';
 
     return InkWell(
-      onTap: () {
-        _showMessage('سيتم فتح المحادثة مع $name', true);
+      onTap: () async {
+        final signalManager = SignalProtocolManager();
+        
+        // التحقق من وجود Session
+        final hasSession = await signalManager.hasSession(userId);
+        
+        if (!hasSession) {
+          // إنشاء Session جديد
+          _showMessage('جاري إعداد التشفير...', true);
+          final success = await signalManager.createSession(userId);
+          
+          if (!success) {
+            _showMessage('فشل إعداد التشفير مع $name', false);
+            return;
+          }
+        }
+        
+        // الانتقال لشاشة المحادثة
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(
+              userId: userId,
+              name: name,
+              username: chat['username'],
+            ),
+          ),
+        );
       },
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -298,20 +316,12 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             ),
 
-            // ============= الإضافة الوحيدة (2): ربط السهم =============
-            InkWell(
-              onTap: () => _openThread(chat),
-              borderRadius: BorderRadius.circular(20),
-              child: Padding(
-                padding: const EdgeInsets.all(6.0),
-                child: Icon(
-                  Icons.chevron_left,
-                  color: AppColors.textHint.withOpacity(0.5),
-                  size: 24,
-                ),
-              ),
+            // السهم
+            Icon(
+              Icons.chevron_left,
+              color: AppColors.textHint.withOpacity(0.5),
+              size: 24,
             ),
-            // ===========================================================
           ],
         ),
       ),

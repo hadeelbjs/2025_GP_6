@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import '../../../services/api_services.dart';
+import '../../../services/crypto/signal_protocol_manager.dart';
 import '../../dashboard/screens/main_dashboard.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
@@ -46,7 +48,6 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         final currentValue = _codeControllers[i].text;
         final previousValue = _previousValues[i];
         
-        // تحقق إذا تم الحذف
         if (currentValue.isEmpty && previousValue.isNotEmpty) {
           if (i > 0) {
             Future.delayed(const Duration(milliseconds: 50), () {
@@ -83,6 +84,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
   }
 
+  // ✅ التحقق من الرمز
   Future<void> _verifyCodeAndReturn() async {
     final code = _codeControllers.map((c) => c.text).join();
 
@@ -104,8 +106,6 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
               code: code,
             );
 
-      setState(() => _isLoading = false);
-
       if (!mounted) return;
 
       if (result['success']) {
@@ -116,19 +116,28 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           isError: false
         );
         
-        await Future.delayed(const Duration(milliseconds: 500));
-        if (!mounted) return;
-        
+        // ✅ إذا كان 2FA (تسجيل دخول)، نولد المفاتيح
         if (widget.is2FA) {
+          await _initializeEncryption();
+          
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (!mounted) return;
+          
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const MainDashboard()),
             (route) => false,
           );
         } else {
+          // ✅ إذا كان تسجيل جديد (verify email)، نرجع للشاشة السابقة
+          // المفاتيح ستتولد في verify_phone أو skip_phone
+          await Future.delayed(const Duration(milliseconds: 500));
+          if (!mounted) return;
+          
           Navigator.pop(context, true);
         }
       } else {
+        setState(() => _isLoading = false);
         _showMessage(result['message'] ?? 'الرمز غير صحيح', isError: true);
         _clearAllFields();
       }
@@ -136,6 +145,37 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       setState(() => _isLoading = false);
       if (!mounted) return;
       _showMessage('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى', isError: true);
+    }
+  }
+
+  // ✅ تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
+  Future<void> _initializeEncryption() async {
+    try {
+      print('🔐 جاري التحقق من مفاتيح التشفير...');
+      
+      final signalManager = SignalProtocolManager();
+      await signalManager.initialize();
+      
+      // التحقق من وجود المفاتيح
+      final storage = const FlutterSecureStorage();
+      final identityKey = await storage.read(key: 'identity_key');
+      
+      if (identityKey == null) {
+        print('🔑 لا توجد مفاتيح - جاري التوليد...');
+        final success = await signalManager.generateAndUploadKeys();
+        
+        if (success) {
+          print('✅ تم توليد ورفع المفاتيح بنجاح');
+        } else {
+          print('⚠️ فشل توليد/رفع المفاتيح');
+        }
+      } else {
+        print('✅ المفاتيح موجودة بالفعل');
+        // التحقق من عدد PreKeys المتبقية
+        await signalManager.checkAndRefreshPreKeys();
+      }
+    } catch (e) {
+      print('❌ خطأ في تهيئة التشفير: $e');
     }
   }
 
@@ -261,10 +301,10 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
               ),
               const SizedBox(height: 30),
               
-              const Text(
-                'تأكيد البريد الإلكتروني',
+              Text(
+                widget.is2FA ? 'التحقق بخطوتين' : 'تأكيد البريد الإلكتروني',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 28,
                   fontFamily: 'IBMPlexSansArabic',
                   fontWeight: FontWeight.w600,

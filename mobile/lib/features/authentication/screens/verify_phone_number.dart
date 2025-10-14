@@ -162,7 +162,6 @@ void _showMessage(String message, {required bool isError}) {
 }
 
 // تخطي التحقق
-// تخطي التحقق
 Future<void> _skipVerification() async {
   final skip = await showDialog<bool>(
     context: context,

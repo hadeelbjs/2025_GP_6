@@ -865,4 +865,91 @@ Future<Map<String, dynamic>> checkPreKeysCount() async {
   }
 }
 
+
+
+// ============================================
+// Messages - الرسائل المشفرة
+// ============================================
+
+// حذف من عند المستقبل فقط
+Future<Map<String, dynamic>> deleteMessageForRecipient(String messageId) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/messages/delete-for-recipient/$messageId'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل حذف الرسالة: $e',
+    };
+  }
+}
+
+// حذف للجميع
+Future<Map<String, dynamic>> deleteMessageForEveryone(String messageId) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.delete(
+      Uri.parse('$baseUrl/messages/delete-for-everyone/$messageId'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل حذف الرسالة: $e',
+    };
+  }
+}
+
+// إرسال رسالة مشفرة
+Future<Map<String, dynamic>> sendEncryptedMessage({
+  required String recipientId,
+  required int encryptedType,
+  required String encryptedBody,
+}) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/messages/send'),
+      headers: headers,
+      body: jsonEncode({
+        'recipientId': recipientId,
+        'encryptedType': encryptedType,
+        'encryptedBody': encryptedBody,
+      }),
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل إرسال الرسالة: $e',
+    };
+  }
+}
+
+// جلب المحادثة
+Future<Map<String, dynamic>> getConversation(String userId) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.get(
+      Uri.parse('$baseUrl/messages/conversation/$userId'),
+      headers: headers,
+    ).timeout(const Duration(seconds: 10));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {
+      'success': false,
+      'message': 'فشل جلب المحادثة: $e',
+    };
+  }
+}
+
 }

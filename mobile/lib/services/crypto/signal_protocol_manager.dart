@@ -201,32 +201,40 @@ class SignalProtocolManager {
 
   // فك تشفير رسالة
   Future<String?> decryptMessage(
-    String senderId,
-    int type,
-    String body,
-  ) async {
-    try {
-      final address = SignalProtocolAddress(senderId, 1);
-      final cipher = SessionCipher(_sessionStore, _preKeyStore, 
-                                   _signedPreKeyStore, _identityStore, address);
-      
-      Uint8List plaintext;
-      
-      if (type == CiphertextMessage.prekeyType) {
-        final message = PreKeySignalMessage(base64Decode(body));
-        plaintext = await cipher.decrypt(message);
-      } else {
-        final message = SignalMessage.fromSerialized(base64Decode(body));
-        plaintext = await cipher.decryptFromSignal(message);
-      }
-      
-      return utf8.decode(plaintext);
-    } catch (e) {
-      print('Decryption error: $e');
-      return null;
+  String senderId,
+  int type,
+  String body,
+) async {
+  try {
+    final address = SignalProtocolAddress(senderId, 1);
+    
+    final cipher = SessionCipher(
+      _sessionStore, 
+      _preKeyStore, 
+      _signedPreKeyStore, 
+      _identityStore, 
+      address
+    );
+    
+    Uint8List plaintext;
+    final bodyBytes = base64Decode(body);
+    
+    if (type == CiphertextMessage.prekeyType) {
+      final message = PreKeySignalMessage(bodyBytes);
+      plaintext = await cipher.decrypt(message);
+    } else if (type == CiphertextMessage.whisperType) {
+      final message = SignalMessage.fromSerialized(bodyBytes);
+      plaintext = await cipher.decryptFromSignal(message);
+    } else {
+      throw Exception('Unknown message type: $type');
     }
+    
+    return utf8.decode(plaintext);
+  } catch (e) {
+    print('Decryption error: $e');
+    return null;
   }
-
+}
   // التحقق من وجود Session
   Future<bool> hasSession(String userId) async {
     final address = SignalProtocolAddress(userId, 1);

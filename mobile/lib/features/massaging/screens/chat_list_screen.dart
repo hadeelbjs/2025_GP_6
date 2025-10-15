@@ -7,7 +7,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
 import 'chat_screen.dart';
-
+import 'message_thread_screen.dart';
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
@@ -254,10 +254,10 @@ class _ChatListScreenState extends State<ChatListScreen> {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => ChatScreen(
-              userId: userId,
-              name: name,
-              username: chat['username'],
+            builder: (context) => MessageThreadScreen(
+              peerUsername: userId,
+              peerName: name,
+              
             ),
           ),
         );

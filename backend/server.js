@@ -1,11 +1,26 @@
 require('dotenv').config();
 const express = require('express');
+const http = require('http'); 
+const socketIO = require('socket.io');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+const server = http.createServer(app); 
+
+
+const io = socketIO(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    credentials: true,
+    methods: ['GET', 'POST']
+  },
+  transports: ['websocket', 'polling']
+});
+
+app.set('io', io);
 
 // Security Middleware
 app.use(helmet());
@@ -66,11 +81,14 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error('db connection error:', err));
 
+
+require('./sockets/messageSocket')(io);
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/user', require('./routes/user')); 
 app.use('/api/prekeys', require('./routes/prekeys')); 
+app.use('/api/messages', require('./routes/messages')); 
 
 app.get('/', (req, res) => {
   res.json({ message: 'API is working ' });
@@ -85,6 +103,8 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server is working on port: ${PORT}`);
+
+server.listen(PORT, () => {
+  console.log(`Server running on port: ${PORT}`);
+  console.log(`Socket.IO ready`);
 });

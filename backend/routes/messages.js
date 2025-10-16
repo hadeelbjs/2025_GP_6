@@ -3,59 +3,8 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Message = require('../models/Message');
-const { v4: uuidv4 } = require('uuid');
 
-// ============================================
-// إرسال رسالة مشفرة
-// ============================================
-router.post('/send', auth, async (req, res) => {
-  try {
-    const { recipientId, encryptedType, encryptedBody } = req.body;
 
-    if (!recipientId || encryptedType === undefined || !encryptedBody) {
-      return res.status(400).json({
-        success: false,
-        message: 'بيانات غير كاملة'
-      });
-    }
-
-    const message = new Message({
-      messageId: uuidv4(),
-      senderId: req.user.id,
-      recipientId,
-      encryptedType,
-      encryptedBody,
-      status: 'sent',
-    });
-
-    await message.save();
-
-    // إرسال عبر Socket.IO
-    const io = req.app.get('io');
-    if (io) {
-      io.to(recipientId).emit('message:new', {
-        messageId: message.messageId,
-        senderId: message.senderId,
-        encryptedType: message.encryptedType,
-        encryptedBody: message.encryptedBody,
-        createdAt: message.createdAt,
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'تم إرسال الرسالة',
-      messageId: message.messageId,
-    });
-
-  } catch (err) {
-    console.error('Send message error:', err);
-    res.status(500).json({
-      success: false,
-      message: 'حدث خطأ في إرسال الرسالة',
-    });
-  }
-});
 
 // ============================================
 // حذف رسالة من عند المستقبل فقط
@@ -114,7 +63,7 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
     // إرسال إشعار للمستقبل عبر Socket.IO
     const io = req.app.get('io');
     if (io) {
-      io.to(recipientId).emit('message:deleted', {
+      io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
         deletedBy: currentUserId,
         deletedFor: 'recipient',
@@ -192,7 +141,7 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
       const recipientId = message.recipientId.toString();
       
       // للمستقبل
-      io.to(recipientId).emit('message:deleted', {
+      io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
         deletedBy: currentUserId,
         deletedFor: 'everyone',
@@ -200,7 +149,7 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
       });
 
       // للمرسل (نفسه) على الأجهزة الأخرى
-      io.to(currentUserId).emit('message:deleted', {
+      io.sendToUser(currentUserId, 'message:deleted', {
         messageId: message.messageId,
         deletedBy: currentUserId,
         deletedFor: 'everyone',

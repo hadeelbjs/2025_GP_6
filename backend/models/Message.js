@@ -37,7 +37,7 @@ const MessageSchema = new mongoose.Schema({
   // حالة الرسالة
   status: {
     type: String,
-    enum: ['sent', 'delivered', 'read', 'deleted'],
+    enum: ['sent', 'delivered', 'verified', 'deleted'],
     default: 'sent',
   },
   
@@ -53,7 +53,7 @@ const MessageSchema = new mongoose.Schema({
     }
   }],
   
-  // حذف للجميع (المرسل والمستقبل)
+  // حذف للجميع
   deletedForEveryone: {
     type: Boolean,
     default: false,
@@ -75,19 +75,32 @@ const MessageSchema = new mongoose.Schema({
     default: Date.now,
     index: true,
   },
+  
+  deliveredAt: {
+    type: Date,
+    default: null,
+  },
 });
 
 // Index للبحث السريع
 MessageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
 
+MessageSchema.index(
+  { createdAt: 1 },
+  { 
+    expireAfterSeconds: 172800, // 48 hours
+    partialFilterExpression: { 
+      status: { $in: ['delivered', 'verified'] } 
+    }
+  }
+);
+
 // دالة للتحقق من إمكانية حذف الرسالة للجميع (خلال 48 ساعة)
 MessageSchema.methods.canDeleteForEveryone = function(userId) {
-  // فقط المرسل يقدر يحذف للجميع
   if (this.senderId.toString() !== userId.toString()) {
     return false;
   }
   
-  // خلال 48 ساعة فقط
   const hoursSinceCreation = (Date.now() - this.createdAt) / (1000 * 60 * 60);
   return hoursSinceCreation <= 48;
 };

@@ -7,7 +7,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
 import 'chat_screen.dart';
-import 'message_thread_screen.dart';
+
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
 
@@ -27,7 +27,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _loadChats();
   }
 
-  // جلب قائمة الأصدقاء باستخدام ApiService
   Future<void> _loadChats() async {
     setState(() => _isLoading = true);
 
@@ -36,7 +35,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
       if (!mounted) return;
 
-      // التحقق من انتهاء الجلسة
       if (result['code'] == 'SESSION_EXPIRED' || 
           result['code'] == 'TOKEN_EXPIRED' ||
           result['code'] == 'NO_TOKEN') {
@@ -70,7 +68,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  // معالجة انتهاء الجلسة
   void _handleSessionExpired() {
     _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
 
@@ -84,18 +81,16 @@ class _ChatListScreenState extends State<ChatListScreen> {
     });
   }
 
-  // توليد لون عشوائي بناءً على الاسم (ثابت لنفس الشخص)
   Color _getRandomColor(String name) {
     final colors = [
-      const Color(0xFFB39DDB), // بنفسجي
-      const Color(0xFF81C784), // أخضر
-      const Color(0xFFFF8A65), // برتقالي
-      const Color(0xFFF06292), // وردي
-      const Color(0xFF64B5F6), // أزرق
-      const Color(0xFFFFD54F), // أصفر
+      const Color(0xFFB39DDB),
+      const Color(0xFF81C784),
+      const Color(0xFFFF8A65),
+      const Color(0xFFF06292),
+      const Color(0xFF64B5F6),
+      const Color(0xFFFFD54F),
     ];
 
-    // استخدام hash code للاسم لإعطاء لون ثابت
     final index = name.hashCode.abs() % colors.length;
     return colors[index];
   }
@@ -235,29 +230,50 @@ class _ChatListScreenState extends State<ChatListScreen> {
       onTap: () async {
         final signalManager = SignalProtocolManager();
         
-        // التحقق من وجود Session
+        // 1. تهيئة أولاً
+        await signalManager.initialize();
+        
+        //  2. تحقق من وجود Keys
+        try {
+          await signalManager.generateAndUploadKeys();
+          print('✅ Keys ready');
+        } catch (e) {
+          print('⚠️ Keys might already exist: $e');
+        }
+        
+        // 3. التحقق من وجود Session
         final hasSession = await signalManager.hasSession(userId);
         
         if (!hasSession) {
-          // إنشاء Session جديد
-          _showMessage('جاري إعداد التشفير...', true);
+          // 4. إنشاء Session جديد
+          if (mounted) {
+            _showMessage('جاري إعداد التشفير...', true);
+          }
+          
           final success = await signalManager.createSession(userId);
           
           if (!success) {
-            _showMessage('فشل إعداد التشفير مع $name', false);
+            if (mounted) {
+              _showMessage('فشل إعداد التشفير مع $name', false);
+            }
             return;
+          }
+          
+          if (mounted) {
+            _showMessage('تم إعداد التشفير بنجاح ✅', true);
           }
         }
         
-        // الانتقال لشاشة المحادثة
+        //الانتقال لشاشة المحادثة
         if (!mounted) return;
+        
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => MessageThreadScreen(
-              peerUsername: userId,
-              peerName: name,
-              
+            builder: (context) => ChatScreen(
+              userId: userId,
+              name: name,
+              username: chat['username'],
             ),
           ),
         );
@@ -266,7 +282,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Row(
           children: [
-            // الصورة الرمزية
             Container(
               width: 60,
               height: 60,
@@ -291,7 +306,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
 
             const SizedBox(width: 15),
 
-            // الاسم
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -316,7 +330,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
               ),
             ),
 
-            // السهم
             Icon(
               Icons.chevron_left,
               color: AppColors.textHint.withOpacity(0.5),

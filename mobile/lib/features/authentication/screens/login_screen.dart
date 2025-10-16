@@ -159,8 +159,16 @@ class _LoginScreenState extends State<LoginScreen> {
       // التحقق من وجود المفاتيح
       const storage = FlutterSecureStorage();
       final identityKey = await storage.read(key: 'identity_key');
-      
-      if (identityKey == null) {
+      final registrationId = await storage.read(key: 'registration_id');
+      final signedPreKeyId = await storage.read(key: 'signed_pre_key_id');
+      final signedPreKey = await storage.read(key: 'signed_pre_key');
+      final signedPreKeySignature = await storage.read(key: 'signed_pre_key_signature');
+      final preKeys = await storage.read(key: 'pre_keys');
+      final preKeyId = await storage.read(key: 'pre_key_id');
+
+      if (identityKey == null || registrationId == null ||
+          signedPreKeyId == null || signedPreKey == null || signedPreKeySignature == null ||
+          preKeys == null || preKeyId == null) {
         print(' لا توجد مفاتيح - جاري التوليد...');
         final success = await signalManager.generateAndUploadKeys();
         

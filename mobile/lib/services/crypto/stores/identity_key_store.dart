@@ -33,6 +33,14 @@ class MyIdentityKeyStore extends IdentityKeyStore {
     await _storage.write(key: 'identity_key', value: data);
   }
 
+  Future<void> saveRegistrationId(int registrationId) async {
+    _localRegistrationId = registrationId;
+    await _storage.write(
+      key: 'registration_id',
+      value: registrationId.toString(),
+    );
+  }
+
   @override
   Future<IdentityKeyPair> getIdentityKeyPair() async {
     if (_identityKeyPair == null) {

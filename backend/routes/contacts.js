@@ -392,21 +392,24 @@ router.get('/list', auth, async (req, res) => {
         { recipient: currentUserId, status: 'accepted' }
       ]
     })
-    .populate('requester', 'fullName username')
-    .populate('recipient', 'fullName username')
-    .sort({ createdAt: -1 });
+      .populate('requester', 'fullName username')
+      .populate('recipient', 'fullName username')
+      .sort({ createdAt: -1 });
 
-    const friendsList = contacts.map(contact => {
-      const isRequester = contact.requester._id.toString() === currentUserId;
-      const friend = isRequester ? contact.recipient : contact.requester;
-      
-      return {
-        id: friend._id,
-        name: friend.fullName,
-        username: friend.username,
-        addedAt: contact.createdAt
-      };
-    });
+    const friendsList = contacts
+      // نتأكد أن الصديق ما هو null قبل نكمل
+      .filter(contact => contact.requester && contact.recipient)
+      .map(contact => {
+        const isRequester = contact.requester._id.toString() === currentUserId;
+        const friend = isRequester ? contact.recipient : contact.requester;
+
+        return {
+          id: friend._id,
+          name: friend.fullName,
+          username: friend.username,
+          addedAt: contact.createdAt
+        };
+      });
 
     res.json({
       success: true,
@@ -418,9 +421,9 @@ router.get('/list', auth, async (req, res) => {
     console.error('❌ خطأ في جلب الأصدقاء:', error.message);
     console.error('Stack:', error.stack);
     console.error('User ID:', req.user?.id);
-    res.status(500).json({ 
-      success: false, 
-      message: 'حدث خطأ أثناء جلب القائمة' 
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ أثناء جلب القائمة'
     });
   }
 });

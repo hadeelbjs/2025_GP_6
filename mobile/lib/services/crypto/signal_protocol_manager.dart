@@ -1,4 +1,3 @@
-// lib/services/crypto/signal_protocol_manager.dart
 import 'package:libsignal_protocol_dart/libsignal_protocol_dart.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
@@ -39,6 +38,7 @@ class SignalProtocolManager {
     await _sessionStore.initialize();
 
     _isInitialized = true;
+    
   }
 
   // توليد المفاتيح ورفعها للسيرفر (عند التسجيل)
@@ -50,6 +50,8 @@ class SignalProtocolManager {
       final registrationId = generateRegistrationId(false);
 
       await _identityStore.saveIdentityKeyPair(identityKeyPair);
+      await _identityStore.saveRegistrationId(registrationId);
+
       await _storage.write(
         key: 'registration_id',
         value: registrationId.toString(),
@@ -103,6 +105,7 @@ class SignalProtocolManager {
 
   // إنشاء Session مع مستخدم آخر
   Future<bool> createSession(String recipientId) async {
+    
     try {
       await initialize();
 
@@ -118,7 +121,7 @@ class SignalProtocolManager {
       // بناء SignalProtocolAddress
       final recipientAddress = SignalProtocolAddress(recipientId, 1);
       
-      // معالجة PreKey (اختياري)
+      // معالجة PreKey (اختياري) لأنه يستخدم مرة واحدة فقط لإنشاء الجلسة
       ECPublicKey? preKeyPublic;
       int? preKeyId;
       
@@ -128,20 +131,21 @@ class SignalProtocolManager {
         preKeyId = bundleData['preKey']['keyId'];
       }
       
-      // معالجة SignedPreKey (إجباري)
+      // معالجة SignedPreKey (إجباري) لأنه يستخدم للتحقق من المفاتيح
       final signedPreKeyBytes = base64Decode(
         bundleData['signedPreKey']['publicKey']
       );
       final signedPreKeyPublic = Curve.decodePoint(signedPreKeyBytes, 0);
       
-      // معالجة IdentityKey (إجباري)
+      // معالجة IdentityKey (إجباري) لأنه يمثل هوية المستخدم
       final identityKeyBytes = base64Decode(bundleData['identityKey']);
       final identityKeyPublic = Curve.decodePoint(identityKeyBytes, 0);
+      
       
       // بناء PreKeyBundle
       final bundle = PreKeyBundle(
         bundleData['registrationId'],
-        1, // deviceId
+        1, // deviceId fixed to 1 since we don't support multiple devices
         preKeyId,
         preKeyPublic,
         bundleData['signedPreKey']['keyId'],
@@ -162,7 +166,7 @@ class SignalProtocolManager {
       // معالجة Bundle وإنشاء Session
       await sessionBuilder.processPreKeyBundle(bundle);
       
-      print('Session created successfully with $recipientId');
+      print('Session created successfully with recipent : $recipientId');
       return true;
       
     } catch (e) {
@@ -268,7 +272,7 @@ class SignalProtocolManager {
     }
   }
 
-  // توليد ورفع مفاتيح إضافية
+  // توليد ورفع مفاتيح إضافية 
   Future<void> _generateAndUploadMorePreKeys() async {
     try {
       final identityKeyPair = await _identityStore.getIdentityKeyPair();

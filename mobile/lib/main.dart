@@ -1,4 +1,3 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'services/api_services.dart';
 import 'services/biometric_service.dart';

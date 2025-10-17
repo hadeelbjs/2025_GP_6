@@ -23,18 +23,15 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  // Controllers & Services
   final _messageController = TextEditingController();
   final _messagingService = MessagingService();
   final _scrollController = ScrollController();
   
-  // State
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
   bool _isSending = false;
   String? _conversationId;
   
-  // Socket Subscription
   StreamSubscription? _newMessageSubscription;
 
   @override
@@ -51,16 +48,12 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // ============================================
-  // تهيئة الشات
-  // ============================================
   Future<void> _initializeChat() async {
     setState(() => _isLoading = true);
     
     try {
       print('🔧 Initializing chat with: ${widget.name}');
 
-      // 1. تهيئة MessagingService
       final initialized = await _messagingService.initialize();
       
       if (!initialized) {
@@ -68,17 +61,11 @@ class _ChatScreenState extends State<ChatScreen> {
         return;
       }
 
-      // 2. ✅ حساب conversationId (استخدام الـ method العامة)
       _conversationId = _messagingService.getConversationId(widget.userId);
       print('💬 Conversation ID: $_conversationId');
 
-      // 3. جلب الرسائل من SQLite
       await _loadMessagesFromDatabase();
-
-      // 4. الاستماع للرسائل الجديدة من Socket
       _subscribeToNewMessages();
-
-      // 5. تحديث المحادثة كـ "مقروءة"
       await _messagingService.markConversationAsRead(_conversationId!);
 
       print('✅ Chat initialized successfully');
@@ -93,9 +80,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================
-  // جلب الرسائل من Database
-  // ============================================
   Future<void> _loadMessagesFromDatabase() async {
     try {
       final messages = await _messagingService.getConversationMessages(
@@ -112,7 +96,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
       print('✅ Loaded ${messages.length} messages');
 
-      //  Auto-scroll للأسفل
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(_scrollController.position.minScrollExtent);
@@ -124,9 +107,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================
-  // الاستماع للرسائل الجديدة (Socket)
-  // ============================================
   void _subscribeToNewMessages() {
     _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
       if (data['conversationId'] == _conversationId) {
@@ -136,9 +116,6 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  // ============================================
-  // ✅ إرسال رسالة
-  // ============================================
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
     
@@ -173,9 +150,6 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================
-  // ✅ فك تشفير رسالة
-  // ============================================
   Future<void> _decryptMessage(String messageId) async {
     try {
       setState(() => _isLoading = true);
@@ -201,10 +175,240 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ============================================
-  // Helper Functions
-  // ============================================
-  
+  // ✅ إظهار خيارات الحذف
+  void _showDeleteOptions(Map<String, dynamic> message) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: EdgeInsets.only(top: 12, bottom: 20),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            
+            Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20),
+              child: Text(
+                'خيارات الحذف',
+                style: AppTextStyles.h3,
+              ),
+            ),
+            
+            SizedBox(height: 20),
+            
+            _buildDeleteOption(
+              icon: Icons.person_remove_outlined,
+              iconColor: Colors.orange,
+              title: 'حذف من عند المستقبل',
+              subtitle: 'ستبقى الرسالة عندك فقط',
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeleteForRecipient(message['id']); // ✅
+              },
+            ),
+            
+            Divider(height: 1),
+            
+            _buildDeleteOption(
+              icon: Icons.delete_forever_outlined,
+              iconColor: Colors.red,
+              title: 'حذف للجميع',
+              subtitle: 'سيتم حذف الرسالة نهائياً',
+              onTap: () {
+                Navigator.pop(context);
+                _confirmDeleteForEveryone(message['id']);
+              },
+            ),
+            
+            SizedBox(height: 10),
+            
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                minimumSize: Size(double.infinity, 50),
+              ),
+              child: Text(
+                'إلغاء',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+            
+            SizedBox(height: 10),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteOption({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          textDirection: TextDirection.rtl,
+          children: [
+            Container(
+              padding: EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: iconColor, size: 24),
+            ),
+            SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    title,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ✅ تأكيد حذف من عند المستقبل
+  void _confirmDeleteForRecipient(String messageId) {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'حذف من عند المستقبل؟',
+            style: AppTextStyles.h3,
+          ),
+          content: Text(
+            'سيتم حذف هذه الرسالة من عند المستقبل فقط. ستبقى الرسالة عندك.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteForRecipient(messageId);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+              ),
+              child: Text('حذف', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteForEveryone(String messageId) {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text('حذف للجميع؟', style: AppTextStyles.h3),
+          content: Text(
+            'سيتم حذف هذه الرسالة من محادثتك ومحادثة المستلم نهائياً. لا يمكن التراجع عن هذا الإجراء.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('إلغاء'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _deleteForEveryone(messageId);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
+              child: Text('تأكيد الحذف', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _deleteForRecipient(String messageId) async {
+    try {
+      final result = await _messagingService.deleteMessage(
+        messageId: messageId,
+        deleteForEveryone: false,
+      );
+      
+      if (result['success']) {
+        await _loadMessagesFromDatabase();
+        _showMessage('تم الحذف من عند المستقبل', true);
+      } else {
+        _showMessage(result['message'], false);
+      }
+    } catch (e) {
+      _showMessage('فشل الحذف', false);
+    }
+  }
+
+  Future<void> _deleteForEveryone(String messageId) async {
+    try {
+      final result = await _messagingService.deleteMessage(
+        messageId: messageId,
+        deleteForEveryone: true,
+      );
+      
+      if (result['success']) {
+        await _loadMessagesFromDatabase();
+        _showMessage('تم الحذف للجميع', true);
+      } else {
+        _showMessage(result['message'], false);
+      }
+    } catch (e) {
+      _showMessage('فشل الحذف', false);
+    }
+  }
+
   void _showMessage(String message, bool isSuccess) {
     if (!mounted) return;
     
@@ -221,14 +425,11 @@ class _ChatScreenState extends State<ChatScreen> {
           borderRadius: BorderRadius.circular(10),
         ),
         margin: const EdgeInsets.all(16),
+        duration: Duration(seconds: 2),
       ),
     );
   }
 
-  // ============================================
-  // UI Build
-  // ============================================
-  
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -398,101 +599,144 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  // ============================================
-  // Message Bubble Widget
-  // ============================================
+Widget _buildMessageBubble(Map<String, dynamic> message) {
+  final isMine = message['isMine'] == 1;
+  final isLocked = message['requiresBiometric'] == 1;
+  final isDeleted = message['status'] == 'deleted'; // ✅ محذوفة من المستقبل
+  final text = message['plaintext'] ?? '';
+  final status = message['status'] ?? 'sent';
   
-  Widget _buildMessageBubble(Map<String, dynamic> message) {
-    final isMine = message['isMine'] == 1;
-    final isLocked = message['requiresBiometric'] == 1;
-    final text = message['plaintext'] ?? '';
-    final status = message['status'] ?? 'sent';
-    
-    final timestamp = message['createdAt'];
-    final time = timestamp != null 
-        ? DateTime.fromMillisecondsSinceEpoch(timestamp)
-        : DateTime.now();
+  final timestamp = message['createdAt'];
+  final time = timestamp != null 
+      ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+      : DateTime.now();
 
-    return GestureDetector(
-      onTap: isLocked ? () => _decryptMessage(message['id']) : null,
-      child: Align(
-        alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.only(bottom: 12),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.of(context).size.width * 0.75,
+  return GestureDetector(
+    onLongPress: () {
+      if (isMine && !isLocked && !isDeleted) {
+        _showDeleteOptions(message);
+      }
+    },
+    
+    onTap: () {
+      if (isLocked && !isMine) {
+        _decryptMessage(message['id']);
+      }
+    },
+    
+    child: Align(
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.75,
+        ),
+        decoration: BoxDecoration(
+          color: isMine 
+              ? AppColors.primary 
+              : Colors.grey.shade200,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(18),
+            topRight: Radius.circular(18),
+            bottomLeft: isMine ? Radius.circular(4) : Radius.circular(18),
+            bottomRight: isMine ? Radius.circular(18) : Radius.circular(4),
           ),
-          decoration: BoxDecoration(
-            color: isMine 
-                ? AppColors.primary 
-                : Colors.grey.shade200,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (isLocked) ...[
-                    Icon(
-                      Icons.lock,
-                      size: 16,
-                      color: isMine ? Colors.white : AppColors.textPrimary,
-                    ),
-                    const SizedBox(width: 8),
-                  ],
-                  Flexible(
-                    child: Text(
-                      isLocked ? 'اضغط للمشاهدة' : text,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: isMine ? Colors.white : AppColors.textPrimary,
-                        fontStyle: isLocked ? FontStyle.italic : FontStyle.normal,
-                      ),
-                    ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 4,
+              offset: Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // ✅ محتوى الرسالة (يظهر دائماً)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isLocked) ...[
+                  Icon(
+                    Icons.lock,
+                    size: 16,
+                    color: isMine ? Colors.white : AppColors.textPrimary,
                   ),
+                  const SizedBox(width: 8),
                 ],
-              ),
-              
-              const SizedBox(height: 6),
-              
+                Flexible(
+                  child: Text(
+                    isLocked ? 'اضغط للمشاهدة' : text,
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      color: isMine ? Colors.white : AppColors.textPrimary,
+                      fontStyle: isLocked ? FontStyle.italic : FontStyle.normal,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            
+            // ✅ إذا محذوفة من المستقبل، أضف نص تحت
+            if (isDeleted && isMine) ...[
+              const SizedBox(height: 4),
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  Icon(
+                    Icons.block,
+                    size: 11,
+                    color: Colors.white.withOpacity(0.6),
+                  ),
+                  const SizedBox(width: 4),
                   Text(
-                    _formatTime(time),
+                    'تم الحذف لدى المستقبل',
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: isMine 
-                          ? Colors.white.withOpacity(0.7)
-                          : AppColors.textHint,
-                      fontSize: 11,
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 10,
+                      fontStyle: FontStyle.italic,
                     ),
                   ),
-                  if (isMine) ...[
-                    const SizedBox(width: 6),
-                    Icon(
-                      _getStatusIcon(status),
-                      size: 14,
-                      color: status == 'verified' 
-                          ? Colors.lightBlueAccent 
-                          : Colors.white.withOpacity(0.7),
-                    ),
-                  ],
                 ],
               ),
             ],
-          ),
+            
+            const SizedBox(height: 6),
+            
+            // ✅ الوقت والحالة
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _formatTime(time),
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: isMine 
+                        ? Colors.white.withOpacity(0.7)
+                        : AppColors.textHint,
+                    fontSize: 11,
+                  ),
+                ),
+                if (isMine) ...[
+                  const SizedBox(width: 6),
+                  Icon(
+                    _getStatusIcon(status),
+                    size: 14,
+                    color: status == 'verified' 
+                        ? Colors.lightBlueAccent 
+                        : Colors.white.withOpacity(0.7),
+                  ),
+                ],
+              ],
+            ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
-  // ============================================
-  // Helper UI Functions
-  // ============================================
-  
+
   String _formatTime(DateTime time) {
     final now = DateTime.now();
     final difference = now.difference(time);
@@ -521,4 +765,3 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 }
-

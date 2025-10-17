@@ -109,14 +109,23 @@ class SignalProtocolManager {
     try {
       await initialize();
 
-      // جلب PreKey Bundle من السيرفر
-      final response = await _apiService.getPreKeyBundle(recipientId);
-      
-      if (!response['success']) {
-        throw Exception(response['message']);
+       final userData = await FlutterSecureStorage().read(key: 'user_data');
+    if (userData != null) {
+      final currentUserId = jsonDecode(userData)['id'];
+      if (recipientId == currentUserId) {
+        return false;
       }
+    }
+    
 
-      final bundleData = response['bundle'];
+    // جلب PreKey Bundle من السيرفر
+    final response = await _apiService.getPreKeyBundle(recipientId);
+    
+    if (!response['success']) {
+      throw Exception(response['message']);
+    }
+
+    final bundleData = response['bundle'];
       
       // بناء SignalProtocolAddress
       final recipientAddress = SignalProtocolAddress(recipientId, 1);

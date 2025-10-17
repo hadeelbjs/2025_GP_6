@@ -1,14 +1,10 @@
-// routes/messages.js
+// backend/routes/messages.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const Message = require('../models/Message');
 
-
-
-// ============================================
-// حذف رسالة من عند المستقبل فقط
-// ============================================
+// ✅ حذف من عند المستقبل فقط
 router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -23,7 +19,7 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
       });
     }
 
-    // فقط المرسل يقدر يحذف من عند المستقبل
+    // فقط المرسل يحذف من عند المستقبل
     if (message.senderId.toString() !== currentUserId) {
       return res.status(403).json({
         success: false,
@@ -31,7 +27,6 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
       });
     }
 
-    // التحقق من أنها ما انحذفت قبل للجميع
     if (message.deletedForEveryone) {
       return res.status(400).json({
         success: false,
@@ -39,56 +34,39 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
       });
     }
 
-    // إضافة المستقبل لقائمة المحذوفين
     const recipientId = message.recipientId.toString();
     
-    const alreadyDeleted = message.deletedFor.some(
-      del => del.userId.toString() === recipientId
-    );
-
-    if (alreadyDeleted) {
-      return res.status(400).json({
-        success: false,
-        message: 'الرسالة محذوفة مسبقاً من عند المستقبل'
-      });
+    // إضافة المستقبل للقائمة
+    if (!message.deletedFor.includes(recipientId)) {
+      message.deletedFor.push(message.recipientId);
+      message.deletedForRecipient = true; // ✅ علامة جديدة
+      await message.save();
     }
 
-    message.deletedFor.push({
-      userId: message.recipientId,
-      deletedAt: new Date()
-    });
-
-    await message.save();
-
-    // إرسال إشعار للمستقبل عبر Socket.IO
+    // إرسال إشعار عبر Socket
     const io = req.app.get('io');
-    if (io) {
+    if (io && io.sendToUser) {
       io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
-        deletedBy: currentUserId,
         deletedFor: 'recipient',
-        timestamp: Date.now(),
       });
     }
 
     res.json({
       success: true,
-      message: 'تم حذف الرسالة من عند المستقبل',
-      messageId: message.messageId,
+      message: 'تم الحذف من عند المستقبل',
     });
 
   } catch (err) {
     console.error('Delete for recipient error:', err);
     res.status(500).json({
       success: false,
-      message: 'حدث خطأ في حذف الرسالة',
+      message: 'حدث خطأ في الحذف',
     });
   }
 });
 
-// ============================================
-// حذف رسالة للجميع (المرسل والمستقبل)
-// ============================================
+// ✅ حذف للجميع (بدون قيد زمني)
 router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -103,23 +81,14 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
       });
     }
 
-    // فقط المرسل يقدر يحذف للجميع
-    if (message.senderId.toString() !== currentUserId) {
+    // ✅ فقط المرسل يحذف (بدون قيد زمني)
+    if (!message.canDeleteForEveryone(currentUserId)) {
       return res.status(403).json({
         success: false,
         message: 'فقط المرسل يمكنه الحذف للجميع'
       });
     }
 
-    // التحقق من الوقت المسموح (48 ساعة)
-    if (!message.canDeleteForEveryone(currentUserId)) {
-      return res.status(400).json({
-        success: false,
-        message: 'انتهت مدة الحذف (48 ساعة)'
-      });
-    }
-
-    // التحقق من أنها ما انحذفت قبل
     if (message.deletedForEveryone) {
       return res.status(400).json({
         success: false,
@@ -127,54 +96,45 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
       });
     }
 
-    // تحديث حالة الرسالة
+    // تحديث حالة الحذف
     message.deletedForEveryone = true;
     message.deletedForEveryoneAt = new Date();
-    message.deletedForEveryoneBy = currentUserId;
     message.status = 'deleted';
-
     await message.save();
 
-    // إرسال إشعار للطرفين عبر Socket.IO
+    // إرسال إشعار عبر Socket للطرفين
     const io = req.app.get('io');
-    if (io) {
+    if (io && io.sendToUser) {
       const recipientId = message.recipientId.toString();
       
       // للمستقبل
       io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
-        deletedBy: currentUserId,
         deletedFor: 'everyone',
-        timestamp: Date.now(),
       });
 
-      // للمرسل (نفسه) على الأجهزة الأخرى
+      // للمرسل (على أجهزته الأخرى)
       io.sendToUser(currentUserId, 'message:deleted', {
         messageId: message.messageId,
-        deletedBy: currentUserId,
         deletedFor: 'everyone',
-        timestamp: Date.now(),
       });
     }
 
     res.json({
       success: true,
-      message: 'تم حذف الرسالة للجميع',
-      messageId: message.messageId,
+      message: 'تم الحذف للجميع',
     });
 
   } catch (err) {
     console.error('Delete for everyone error:', err);
     res.status(500).json({
       success: false,
-      message: 'حدث خطأ في حذف الرسالة',
+      message: 'حدث خطأ في الحذف',
     });
   }
 });
 
-// ============================================
-// جلب المحادثة مع مستخدم
-// ============================================
+// ✅ جلب المحادثة
 router.get('/conversation/:userId', auth, async (req, res) => {
   try {
     const { userId: peerId } = req.params;
@@ -189,7 +149,7 @@ router.get('/conversation/:userId', auth, async (req, res) => {
     .sort({ createdAt: 1 })
     .limit(100);
 
-    // فلترة الرسائل المحذوفة للمستخدم الحالي
+    // فلترة الرسائل المحذوفة
     messages = messages.filter(msg => !msg.isDeletedFor(currentUserId));
 
     const formattedMessages = messages.map(msg => ({
@@ -200,6 +160,7 @@ router.get('/conversation/:userId', auth, async (req, res) => {
       encryptedBody: msg.encryptedBody,
       status: msg.status,
       deletedForEveryone: msg.deletedForEveryone,
+      deletedForRecipient: msg.deletedForRecipient || false, // ✅
       createdAt: msg.createdAt,
     }));
 

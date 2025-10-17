@@ -1,5 +1,3 @@
-// lib/services/socket_service.dart
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io' show Platform;
@@ -31,17 +29,23 @@ class SocketService {
   bool get isConnected => _socket?.connected ?? false;
   String? _userId;
 
-  //  الاتصال بالسيرفر
+  // ✅ لمنع معالجة نفس الرسالة مرتين
+  final Set<String> _processedMessages = {};
+
   Future<bool> connect() async {
     try {
-      // 1. جلب التوكن
+      // ✅ إذا موجود socket نشط، أغلقه أولاً
+      if (_socket != null && _socket!.connected) {
+        print('⚠️ Socket already connected - skipping');
+        return true;
+      }
+
       final token = await _storage.read(key: 'access_token');
       if (token == null) {
         print('❌ No token found');
         return false;
       }
 
-      // 2.  جلب userId (مع validation)
       final userDataStr = await _storage.read(key: 'user_data');
       if (userDataStr == null) {
         print('❌ No user data found');
@@ -56,7 +60,6 @@ class SocketService {
         return false;
       }
 
-      // 3. تحديد Base URL حسب المنصة
       String baseUrl;
       if (Platform.isAndroid) {
         baseUrl = 'http://10.0.2.2:3000';
@@ -69,7 +72,6 @@ class SocketService {
       print('🔌 Connecting to: $baseUrl');
       print('👤 User ID: $_userId');
 
-      // 4. إنشاء Socket
       _socket = IO.io(
         baseUrl,
         IO.OptionBuilder()
@@ -82,7 +84,6 @@ class SocketService {
             .build(),
       );
 
-      // 5. إعداد Event Listeners
       _setupEventListeners();
 
       print('✅ Socket initialization complete');
@@ -94,27 +95,47 @@ class SocketService {
     }
   }
 
-  // ✅ إعداد Event Listeners
   void _setupEventListeners() {
-    // ✅ عند الاتصال
+    // ✅ تنظيف الـ listeners القديمة
+    _socket?.off('connect');
+    _socket?.off('connected');
+    _socket?.off('message:new');
+    _socket?.off('message:sent');
+    _socket?.off('message:status_update');
+    _socket?.off('message:deleted');
+    _socket?.off('typing');
+    _socket?.off('disconnect');
+    _socket?.off('error');
+    _socket?.off('reconnect');
+
     _socket?.on('connect', (_) {
       print('✅ Socket connected!');
       _connectionController.add(true);
     });
 
-    // ✅ تأكيد Authentication
     _socket?.on('connected', (data) {
       print('✅ Authenticated: ${data['userId']}');
     });
 
-    // ✅ استقبال رسالة جديدة
+    // ✅ استقبال رسالة جديدة (مع منع التكرار)
     _socket?.on('message:new', (data) async {
-      print('📨 New message received: ${data['messageId']}');
+      final messageId = data['messageId'] as String;
+      
+      // ✅ إذا سبق معالجة هذه الرسالة، تجاهلها
+      if (_processedMessages.contains(messageId)) {
+        print('⚠️ Message already processed: $messageId');
+        return;
+      }
+      
+      print('📨 New message received: $messageId');
+      
+      // ✅ تسجيل الرسالة
+      _processedMessages.add(messageId);
       
       // إرسال للـ stream
       _messageController.add(Map<String, dynamic>.from(data));
       
-      // ✅ إرسال تأكيد استلام للسيرفر
+      // ✅ إرسال تأكيد استلام مرة واحدة فقط
       _socket?.emit('message:delivered', {
         'messageId': data['messageId'],
         'senderId': data['senderId'],
@@ -123,17 +144,15 @@ class SocketService {
         'createdAt': data['createdAt'],
       });
       
-      print('✅ Delivery confirmation sent for: ${data['messageId']}');
+      print('✅ Delivery confirmation sent for: $messageId');
     });
 
-    // ✅ تأكيد إرسال الرسالة
     _socket?.on('message:sent', (data) async {
       final messageId = data['messageId'];
       final delivered = data['delivered'] ?? false;
       
       print('📤 Message sent confirmation: $messageId (delivered: $delivered)');
       
-      // ✅ تحديث status في SQLite
       try {
         await DatabaseHelper.instance.updateMessageStatus(
           messageId,
@@ -145,52 +164,52 @@ class SocketService {
       }
     });
 
-    // ✅ تحديث حالة الرسالة
-    _socket?.on('message:status_update', (data) {
-      print('📊 Status update: ${data['messageId']} → ${data['status']}');
-      _statusController.add(Map<String, dynamic>.from(data));
-    });
+   _socket?.on('message:deleted', (data) async {
+  print('🗑️ Message deleted: ${data['messageId']}');
+  
+  final deletedFor = data['deletedFor']; // 'recipient' or 'everyone'
+  
+  _deletedController.add(Map<String, dynamic>.from(data));
 
-    // ✅ حذف رسالة
-    _socket?.on('message:deleted', (data) async {
-      print('🗑️ Message deleted: ${data['messageId']}');
-      _deletedController.add(Map<String, dynamic>.from(data));
+  try {
+    if (deletedFor == 'everyone') {
+      // ✅ حذف نهائي من SQLite
+      await DatabaseHelper.instance.deleteMessage(data['messageId']);
+      print('🗑️ Deleted locally from SQLite: ${data['messageId']}');
+    } else {
+      // ✅ تحديث الحالة لـ "deleted"
+      await DatabaseHelper.instance.updateMessageStatus(
+        data['messageId'],
+        'deleted',
+      );
+      print('✅ Marked as deleted: ${data['messageId']}');
+    }
+  } catch (e) {
+    print('⚠️ Local delete failed: $e');
+  }
+});
 
-      // ✅ حذف من التخزين المحلي
-      try {
-        await DatabaseHelper.instance.deleteMessage(data['messageId']);
-        print('🗑️ Deleted locally from SQLite: ${data['messageId']}');
-      } catch (e) {
-        print('⚠️ Local delete failed: $e');
-      }
-    });
-
-    // ✅ مؤشر الكتابة
     _socket?.on('typing', (data) {
       _typingController.add(Map<String, dynamic>.from(data));
     });
 
-    // ✅ قطع الاتصال
     _socket?.on('disconnect', (_) {
       print('❌ Socket disconnected');
       _connectionController.add(false);
     });
 
-    // ✅ خطأ
     _socket?.on('error', (data) {
       print('❌ Socket error: $data');
     });
 
-    // ✅ إعادة الاتصال
     _socket?.on('reconnect', (attempt) {
       print('🔄 Reconnected after $attempt attempts');
       _connectionController.add(true);
+      // ✅ تنظيف الرسائل المعالجة بعد إعادة الاتصال
+      _processedMessages.clear();
     });
   }
 
-  // ============================================
-  // ✅ إرسال رسالة
-  // ============================================
   void sendMessage({
     required String messageId,
     required String recipientId,
@@ -213,9 +232,6 @@ class SocketService {
     print('📤 Message sent via socket: $messageId');
   }
 
-  // ============================================
-  // ✅ تحديث حالة الرسالة
-  // ============================================
   void updateMessageStatus({
     required String messageId,
     required String status,
@@ -235,9 +251,6 @@ class SocketService {
     print('📤 Sent status update: $messageId → $status');
   }
 
-  // ============================================
-  // ✅ إرسال مؤشر الكتابة
-  // ============================================
   void sendTypingIndicator({
     required String recipientId,
     required bool isTyping,
@@ -250,19 +263,14 @@ class SocketService {
     });
   }
 
-  // ============================================
-  // ✅ قطع الاتصال
-  // ============================================
   void disconnect() {
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
+    _processedMessages.clear(); // ✅ تنظيف
     print('🔌 Socket disconnected manually');
   }
 
-  // ============================================
-  // ✅ Dispose
-  // ============================================
   void dispose() {
     disconnect();
     _messageController.close();

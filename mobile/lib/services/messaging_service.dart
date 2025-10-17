@@ -41,7 +41,7 @@ class MessagingService {
   // ============================================
   Future<bool> initialize() async {
     try {
-      print('🔧 Initializing MessagingService...');
+      print('Initializing MessagingService...');
       
       // 1. Cache User ID
       await _cacheUserId();
@@ -72,24 +72,24 @@ class MessagingService {
   // Socket Listeners
   // ============================================
   void _setupSocketListeners() {
-    // ✅ استقبال رسائل جديدة
+    // استقبال رسائل جديدة
     _socketService.onNewMessage.listen((data) async {
       await _handleIncomingMessage(data);
     });
 
-    // ✅ تحديث حالة الرسالة
+    //  تحديث حالة الرسالة
     _socketService.onStatusUpdate.listen((data) async {
       await _handleStatusUpdate(data);
     });
 
-    // ✅ حذف رسالة
+    //  حذف رسالة
     _socketService.onMessageDeleted.listen((data) async {
       await _handleMessageDeleted(data);
     });
   }
 
   // ============================================
-  // ✅ إرسال رسالة (مُحسّن)
+  //إرسال رسالة 
   // ============================================
   Future<Map<String, dynamic>> sendMessage({
     required String recipientId,
@@ -101,7 +101,6 @@ class MessagingService {
       final conversationId = _generateConversationId(recipientId);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-      print('📤 Sending message: $messageId');
 
       // 1️⃣ تشفير الرسالة
       final encrypted = await _signalProtocol.encryptMessage(
@@ -113,7 +112,6 @@ class MessagingService {
         throw Exception('Encryption failed');
       }
 
-      print('✅ Message encrypted: type=${encrypted['type']}');
 
       // 2️⃣ حفظ في SQLite (status: sending)
       await _db.saveMessage({
@@ -156,7 +154,6 @@ class MessagingService {
 
       print('✅ Message sent via Socket');
 
-      // ✅ Socket سيحدث status تلقائياً عند استلام message:sent
 
       return {
         'success': true,
@@ -175,57 +172,62 @@ class MessagingService {
   // ============================================
   // ✅ معالجة الرسائل الواردة
   // ============================================
-  Future<void> _handleIncomingMessage(Map data) async {
-    try {
-      print('📨 Processing incoming message: ${data['messageId']}');
+Future<void> _handleIncomingMessage(Map data) async {
+  try {
+    print('📨 Processing incoming message: ${data['messageId']}');
 
-      final messageId = data['messageId'] as String;
-      final senderId = data['senderId'] as String; 
-      final encryptedType = data['encryptedType'] as int;
-      final encryptedBody = data['encryptedBody'] as String;
-      
-      final timestamp = data['createdAt'] != null 
-          ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
-          : DateTime.now().millisecondsSinceEpoch;
-
-      final conversationId = _generateConversationId(senderId);
-
-      // ✅ حفظ في SQLite (مشفرة، تحتاج biometric)
-      await _db.saveMessage({
-        'id': messageId,
-        'conversationId': conversationId,
-        'senderId': senderId,
-        'receiverId': await _getCurrentUserId(),
-        'ciphertext': encryptedBody,
-        'encryptionType': encryptedType,
-        'plaintext': null, // ✅ null = locked
-        'status': 'delivered',
-        'createdAt': timestamp,
-        'deliveredAt': DateTime.now().millisecondsSinceEpoch,
-        'isMine': 0,
-        'requiresBiometric': 1, // ✅ يحتاج بايومتركس
-        'isDecrypted': 0,
-      });
-
-      print('✅ Incoming message saved to SQLite');
-
-      // ✅ زيادة عداد غير المقروءة
-      await _db.incrementUnreadCount(conversationId);
-
-      // ✅ إرسال notification للـ UI
-      _newMessageController.add({
-        'messageId': messageId,
-        'conversationId': conversationId,
-        'senderId': senderId,
-        'isLocked': true,
-      });
-
-      print('✅ Incoming message processed');
-
-    } catch (e) {
-      print('❌ Handle incoming message error: $e');
+    final messageId = data['messageId'] as String;
+    
+    // ✅ فحص إذا الرسالة موجودة مسبقاً
+    final existing = await _db.getMessage(messageId);
+    if (existing != null) {
+      print('⚠️ Message already exists: $messageId');
+      return; // ✅ تجاهل
     }
+    
+    final senderId = data['senderId'] as String; 
+    final encryptedType = data['encryptedType'] as int;
+    final encryptedBody = data['encryptedBody'] as String;
+    
+    final timestamp = data['createdAt'] != null 
+        ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
+        : DateTime.now().millisecondsSinceEpoch;
+
+    final conversationId = _generateConversationId(senderId);
+
+    await _db.saveMessage({
+      'id': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'receiverId': await _getCurrentUserId(),
+      'ciphertext': encryptedBody,
+      'encryptionType': encryptedType,
+      'plaintext': null,
+      'status': 'delivered',
+      'createdAt': timestamp,
+      'deliveredAt': DateTime.now().millisecondsSinceEpoch,
+      'isMine': 0,
+      'requiresBiometric': 1,
+      'isDecrypted': 0,
+    });
+
+    print('✅ Incoming message saved to SQLite');
+
+    await _db.incrementUnreadCount(conversationId);
+
+    _newMessageController.add({
+      'messageId': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'isLocked': true,
+    });
+
+    print('✅ Incoming message processed');
+
+  } catch (e) {
+    print('❌ Handle incoming message error: $e');
   }
+}
 
   // ============================================
   // ✅ معالجة تحديث Status

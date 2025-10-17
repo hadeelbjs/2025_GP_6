@@ -113,7 +113,7 @@ class DatabaseHelper {
       'messages',
       where: whereClause,
       whereArgs: whereArgs,
-      orderBy: 'createdAt DESC',
+      orderBy: 'createdAt ASC',
       limit: limit,
     );
   }

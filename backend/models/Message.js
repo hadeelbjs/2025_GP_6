@@ -1,4 +1,4 @@
-// models/Message.js
+// backend/models/Message.js
 const mongoose = require('mongoose');
 
 const MessageSchema = new mongoose.Schema({
@@ -23,7 +23,6 @@ const MessageSchema = new mongoose.Schema({
     index: true,
   },
   
-  // البيانات المشفرة
   encryptedType: {
     type: Number,
     required: true,
@@ -34,41 +33,31 @@ const MessageSchema = new mongoose.Schema({
     required: true,
   },
   
-  // حالة الرسالة
   status: {
     type: String,
     enum: ['sent', 'delivered', 'verified', 'deleted'],
     default: 'sent',
   },
   
-  // قائمة المستخدمين اللي محذوفة عندهم الرسالة
+  // ✅ حذف من عند مستخدمين محددين
   deletedFor: [{
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    deletedAt: {
-      type: Date,
-      default: Date.now
-    }
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   }],
   
-  // حذف للجميع
+  // ✅ حذف من عند المستقبل فقط
+  deletedForRecipient: {
+    type: Boolean,
+    default: false,
+  },
+  
+  // ✅ حذف للجميع
   deletedForEveryone: {
     type: Boolean,
     default: false,
   },
   
-  deletedForEveryoneAt: {
-    type: Date,
-    default: null,
-  },
-  
-  deletedForEveryoneBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null,
-  },
+  deletedForEveryoneAt: Date,
   
   createdAt: {
     type: Date,
@@ -76,39 +65,39 @@ const MessageSchema = new mongoose.Schema({
     index: true,
   },
   
-  deliveredAt: {
-    type: Date,
-    default: null,
-  },
+  deliveredAt: Date,
 });
 
 // Index للبحث السريع
 MessageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
 
+// ✅ حذف الرسائل المحذوفة للجميع بعد 7 أيام (للتنظيف التلقائي)
 MessageSchema.index(
-  { createdAt: 1 },
+  { deletedForEveryoneAt: 1 },
   { 
-    expireAfterSeconds: 172800, // 48 hours
+    expireAfterSeconds: 604800, // 7 days
     partialFilterExpression: { 
-      status: { $in: ['delivered', 'verified'] } 
+      deletedForEveryone: true,
+      deletedForEveryoneAt: { $exists: true }
     }
   }
 );
 
-// دالة للتحقق من إمكانية حذف الرسالة للجميع (خلال 48 ساعة)
+// ✅ دالة التحقق من الحذف (بدون قيد زمني)
 MessageSchema.methods.canDeleteForEveryone = function(userId) {
+  // فقط المرسل يقدر يحذف
   if (this.senderId.toString() !== userId.toString()) {
     return false;
   }
   
-  const hoursSinceCreation = (Date.now() - this.createdAt) / (1000 * 60 * 60);
-  return hoursSinceCreation <= 48;
+  // ✅ بدون قيد زمني - يقدر يحذف متى ما بغى
+  return true;
 };
 
-// دالة للتحقق من أن الرسالة محذوفة للمستخدم
+// دالة التحقق من أن الرسالة محذوفة للمستخدم
 MessageSchema.methods.isDeletedFor = function(userId) {
   if (this.deletedForEveryone) return true;
-  return this.deletedFor.some(del => del.userId.toString() === userId.toString());
+  return this.deletedFor.some(id => id.toString() === userId.toString());
 };
 
 module.exports = mongoose.model('Message', MessageSchema);

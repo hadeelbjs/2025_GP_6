@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'services/api_services.dart';
 import 'services/biometric_service.dart';
+import 'services/messaging_service.dart'; 
 import 'features/authentication/screens/biometric_login_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'services/auth_guard.dart';
@@ -117,8 +118,11 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       print('Is authenticated? $isAuth');
       
       if (isAuth) {
-        // تهيئة التشفير للمستخدم المسجل
+        // ✅ تهيئة التشفير
         await _initializeEncryption();
+        
+        // ✅ تهيئة MessagingService (Socket + Listeners)
+        await _initializeMessaging();
         
         Navigator.of(context).pushReplacementNamed('/dashboard');
         return;
@@ -130,6 +134,26 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     } catch (e) {
       print('Error in Splash: $e');
       Navigator.of(context).pushReplacementNamed('/login');
+    }
+  }
+
+  ///  تهيئة MessagingService
+  Future<void> _initializeMessaging() async {
+    try {
+      print('🔌 Initializing MessagingService...');
+      
+      final success = await MessagingService().initialize();
+      
+      if (success) {
+        print('✅ MessagingService initialized successfully');
+      } else {
+        print('❌ MessagingService initialization failed');
+        // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
+      }
+      
+    } catch (e) {
+      print('❌ Error initializing MessagingService: $e');
+      // لا نوقف التطبيق
     }
   }
 

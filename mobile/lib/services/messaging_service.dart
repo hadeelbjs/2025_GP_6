@@ -28,8 +28,15 @@ class MessagingService {
   final _storage = const FlutterSecureStorage();
   
   final _uuid = const Uuid();
-  String? _userIdCache;
+String? _userIdCache;
 
+  // ✅ متغيرات لمنع التكرار
+  final Set<String> _processedMessageIds = {};
+  bool _listenersSetup = false;
+  StreamSubscription? _messageSubscription;
+  StreamSubscription? _statusSubscription;
+  StreamSubscription? _deleteSubscription;
+  Timer? _cleanupTimer;
   // Streams
   final _newMessageController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get onNewMessage => _newMessageController.stream;
@@ -59,6 +66,9 @@ class MessagingService {
       // 4. Setup Socket Listeners
       _setupSocketListeners();
 
+      // 5. ✅ ابدأ التنظيف الدوري للذاكرة
+      _startMessageCacheCleanup();
+
       print('✅ MessagingService initialized successfully');
       return true;
 
@@ -71,23 +81,31 @@ class MessagingService {
   // ============================================
   // Socket Listeners
   // ============================================
-  void _setupSocketListeners() {
+void _setupSocketListeners() {
+    // ✅ تأكد من عدم إنشاء listeners مكررة
+    if (_listenersSetup) {
+      print('⚠️ Listeners already setup - skipping');
+      return;
+    }
+
     // استقبال رسائل جديدة
-    _socketService.onNewMessage.listen((data) async {
+    _messageSubscription = _socketService.onNewMessage.listen((data) async {
       await _handleIncomingMessage(data);
     });
 
     //  تحديث حالة الرسالة
-    _socketService.onStatusUpdate.listen((data) async {
+    _statusSubscription = _socketService.onStatusUpdate.listen((data) async {
       await _handleStatusUpdate(data);
     });
 
     //  حذف رسالة
-    _socketService.onMessageDeleted.listen((data) async {
+    _deleteSubscription = _socketService.onMessageDeleted.listen((data) async {
       await _handleMessageDeleted(data);
     });
-  }
 
+    _listenersSetup = true;
+    print('✅ Socket listeners setup complete');
+  }
   // ============================================
   //إرسال رسالة 
   // ============================================
@@ -174,16 +192,26 @@ class MessagingService {
   // ============================================
 Future<void> _handleIncomingMessage(Map data) async {
   try {
-    print('📨 Processing incoming message: ${data['messageId']}');
-
     final messageId = data['messageId'] as String;
     
-    // ✅ فحص إذا الرسالة موجودة مسبقاً
+    print('📨 Processing incoming message: $messageId');
+
+    // ✅ تحقق من معالجة الرسالة مسبقاً (في الذاكرة) - فحص سريع!
+    if (_processedMessageIds.contains(messageId)) {
+      print('⚠️ Already processed in memory: $messageId');
+      return;
+    }
+
+    // ✅ تحقق من وجود الرسالة في قاعدة البيانات
     final existing = await _db.getMessage(messageId);
     if (existing != null) {
-      print('⚠️ Message already exists: $messageId');
-      return; // ✅ تجاهل
+      print('⚠️ Already exists in DB: $messageId');
+      _processedMessageIds.add(messageId); // أضفها للذاكرة
+      return;
     }
+
+    // ✅ أضف للذاكرة قبل المعالجة لمنع التكرار
+    _processedMessageIds.add(messageId);
     
     final senderId = data['senderId'] as String; 
     final encryptedType = data['encryptedType'] as int;
@@ -215,12 +243,15 @@ Future<void> _handleIncomingMessage(Map data) async {
 
     await _db.incrementUnreadCount(conversationId);
 
-    _newMessageController.add({
-      'messageId': messageId,
-      'conversationId': conversationId,
-      'senderId': senderId,
-      'isLocked': true,
-    });
+    // ✅ إشعار المستمعين مرة واحدة فقط
+    if (!_newMessageController.isClosed) {
+      _newMessageController.add({
+        'messageId': messageId,
+        'conversationId': conversationId,
+        'senderId': senderId,
+        'isLocked': true,
+      });
+    }
 
     print('✅ Incoming message processed');
 
@@ -228,7 +259,6 @@ Future<void> _handleIncomingMessage(Map data) async {
     print('❌ Handle incoming message error: $e');
   }
 }
-
   // ============================================
   // ✅ معالجة تحديث Status
   // ============================================
@@ -472,8 +502,27 @@ Future<void> _handleIncomingMessage(Map data) async {
     print('✅ User ID cached: $_userIdCache');
   }
 
-  // ✅ Dispose
+  // ✅ تنظيف الذاكرة المؤقتة للرسائل المعالجة (كل 5 دقائق)
+  void _startMessageCacheCleanup() {
+    _cleanupTimer?.cancel(); // إلغاء أي timer سابق
+    _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      if (_processedMessageIds.length > 100) {
+        // احتفظ بآخر 50 رسالة فقط
+        final toKeep = _processedMessageIds.skip(_processedMessageIds.length - 50).toList();
+        _processedMessageIds.clear();
+        _processedMessageIds.addAll(toKeep);
+        print('🧹 Cleaned message cache - kept ${_processedMessageIds.length} recent IDs');
+      }
+    });
+  }
+// ✅ Dispose
   void dispose() {
+    _messageSubscription?.cancel();
+    _statusSubscription?.cancel();
+    _deleteSubscription?.cancel();
+    _cleanupTimer?.cancel();
+    _processedMessageIds.clear();
+    _listenersSetup = false;
     _socketService.dispose();
     _newMessageController.close();
   }

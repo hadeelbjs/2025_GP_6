@@ -1,6 +1,5 @@
-
 import 'dart:convert';
-import 'dart:io' show Platform; 
+import 'dart:io' show Platform, File; 
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -21,6 +20,71 @@ class ApiService {
   }
   
   final _storage = const FlutterSecureStorage();
+  
+  // ============================================
+  // Upload Methods - رفع الصور والملفات
+  // ============================================
+
+  Future<Map<String, dynamic>> uploadImage(File imageFile) async {
+    try {
+      final token = await _storage.read(key: 'access_token');
+      
+      if (token == null) {
+        return {'success': false, 'message': 'يجب تسجيل الدخول أولاً'};
+      }
+
+      final uri = Uri.parse('$baseUrl/upload/image');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('image', imageFile.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 30));
+      final response = await http.Response.fromStream(streamedResponse);
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'فشل رفع الصورة: $e'};
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadFile(File file) async {
+    try {
+      final token = await _storage.read(key: 'access_token');
+      
+      if (token == null) {
+        return {'success': false, 'message': 'يجب تسجيل الدخول أولاً'};
+      }
+
+      final uri = Uri.parse('$baseUrl/upload/file');
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+      request.files.add(await http.MultipartFile.fromPath('file', file.path));
+
+      final streamedResponse = await request.send().timeout(const Duration(seconds: 60));
+      final response = await http.Response.fromStream(streamedResponse);
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'فشل رفع الملف: $e'};
+    }
+  }
+
+  static String getFullUrl(String relativePath) {
+    if (relativePath.startsWith('http')) {
+      return relativePath;
+    }
+    
+    final cleanPath = relativePath.startsWith('/') 
+        ? relativePath.substring(1) 
+        : relativePath;
+    
+    if (Platform.isAndroid) {
+      return 'http://10.0.2.2:3000/$cleanPath';
+    } else if (Platform.isIOS) {
+      return 'http://localhost:3000/$cleanPath';
+    } else {
+      return 'http://localhost:3000/$cleanPath';
+    }
+  }
+
 
   static const String _tokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';

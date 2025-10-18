@@ -4,6 +4,67 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Message = require('../models/Message');
 
+// ✅ إرسال رسالة مع Base64
+router.post('/send', auth, async (req, res) => {
+  try {
+    const { 
+      recipientId, 
+      encryptedType, 
+      encryptedBody,
+      attachmentData,    // Base64
+      attachmentType,    // 'image' or 'file'
+      attachmentName,
+      attachmentMimeType,
+    } = req.body;
+
+    const messageId = require('uuid').v4();
+
+    const message = new Message({
+      messageId,
+      senderId: req.user.id,
+      recipientId,
+      encryptedType,
+      encryptedBody,
+      attachmentData: attachmentData || null,
+      attachmentType: attachmentType || null,
+      attachmentName: attachmentName || null,
+      attachmentMimeType: attachmentMimeType || null,
+      status: 'sent',
+    });
+
+    await message.save();
+
+    // ✅ إرسال عبر Socket
+    const io = req.app.get('io');
+    if (io && io.sendToUser) {
+      io.sendToUser(recipientId, 'message:new', {
+        messageId: message.messageId,
+        senderId: req.user.id,
+        encryptedType: message.encryptedType,
+        encryptedBody: message.encryptedBody,
+        attachmentData: message.attachmentData,
+        attachmentType: message.attachmentType,
+        attachmentName: message.attachmentName,
+        attachmentMimeType: message.attachmentMimeType,
+        createdAt: message.createdAt.toISOString(),
+      });
+    }
+
+    res.json({
+      success: true,
+      messageId: message.messageId,
+      message: 'تم إرسال الرسالة',
+    });
+
+  } catch (err) {
+    console.error('Send message error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في إرسال الرسالة',
+    });
+  }
+});
+
 // ✅ حذف من عند المستقبل فقط
 router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   try {
@@ -19,7 +80,6 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
       });
     }
 
-    // فقط المرسل يحذف من عند المستقبل
     if (message.senderId.toString() !== currentUserId) {
       return res.status(403).json({
         success: false,
@@ -36,14 +96,13 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
 
     const recipientId = message.recipientId.toString();
     
-    // إضافة المستقبل للقائمة
     if (!message.deletedFor.includes(recipientId)) {
       message.deletedFor.push(message.recipientId);
-      message.deletedForRecipient = true; // ✅ علامة جديدة
+      message.deletedForRecipient = true;
       await message.save();
     }
 
-    // إرسال إشعار عبر Socket
+    // ✅ Socket للمستقبل
     const io = req.app.get('io');
     if (io && io.sendToUser) {
       io.sendToUser(recipientId, 'message:deleted', {
@@ -66,7 +125,7 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   }
 });
 
-// ✅ حذف للجميع (بدون قيد زمني)
+// ✅ حذف للجميع
 router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -81,7 +140,6 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
       });
     }
 
-    // ✅ فقط المرسل يحذف (بدون قيد زمني)
     if (!message.canDeleteForEveryone(currentUserId)) {
       return res.status(403).json({
         success: false,
@@ -96,24 +154,20 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
       });
     }
 
-    // تحديث حالة الحذف
     message.deletedForEveryone = true;
     message.deletedForEveryoneAt = new Date();
     message.status = 'deleted';
     await message.save();
 
-    // إرسال إشعار عبر Socket للطرفين
     const io = req.app.get('io');
     if (io && io.sendToUser) {
       const recipientId = message.recipientId.toString();
       
-      // للمستقبل
       io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'everyone',
       });
 
-      // للمرسل (على أجهزته الأخرى)
       io.sendToUser(currentUserId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'everyone',
@@ -149,7 +203,6 @@ router.get('/conversation/:userId', auth, async (req, res) => {
     .sort({ createdAt: 1 })
     .limit(100);
 
-    // فلترة الرسائل المحذوفة
     messages = messages.filter(msg => !msg.isDeletedFor(currentUserId));
 
     const formattedMessages = messages.map(msg => ({
@@ -158,9 +211,13 @@ router.get('/conversation/:userId', auth, async (req, res) => {
       recipientId: msg.recipientId,
       encryptedType: msg.encryptedType,
       encryptedBody: msg.encryptedBody,
+      attachmentData: msg.attachmentData,
+      attachmentType: msg.attachmentType,
+      attachmentName: msg.attachmentName,
+      attachmentMimeType: msg.attachmentMimeType,
       status: msg.status,
       deletedForEveryone: msg.deletedForEveryone,
-      deletedForRecipient: msg.deletedForRecipient || false, // ✅
+      deletedForRecipient: msg.deletedForRecipient || false,
       createdAt: msg.createdAt,
     }));
 

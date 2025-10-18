@@ -6,10 +6,10 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const app = express();
 const server = http.createServer(app); 
-
 
 const io = socketIO(server, {
   cors: {
@@ -23,7 +23,9 @@ const io = socketIO(server, {
 app.set('io', io);
 
 // Security Middleware
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // ✅ للسماح بتحميل الصور
+}));
 
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -31,6 +33,9 @@ app.use(cors({
 }));
 
 app.use(express.json({ limit: '10kb' }));
+
+// ✅ خدمة الملفات الثابتة (الصور والملفات المرفوعة)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // حماية من NoSQL Injection بإزالة أي $ من المدخلات 
 app.use((req, res, next) => {
@@ -73,25 +78,43 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true
 });
 
+// ✅ Rate Limiter خاص للرفع
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 20, // 20 ملف كحد أقصى
+  message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
+});
+
 app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
+app.use('/api/upload', uploadLimiter); // ✅ حماية endpoint الرفع
 
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('db connection error:', err));
+  .then(() => console.log(' Connected to MongoDB'))
+  .catch(err => console.error('❌ DB connection error:', err));
 
-
+// Socket.IO
 require('./sockets/messageSocket')(io);
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/user', require('./routes/user')); 
 app.use('/api/prekeys', require('./routes/prekeys')); 
-app.use('/api/messages', require('./routes/messages')); 
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/upload', require('./routes/upload')); // ✅ Route جديد للرفع
 
 app.get('/', (req, res) => {
-  res.json({ message: 'API is working ' });
+  res.json({ 
+    message: 'API is working',
+    endpoints: {
+      auth: '/api/auth',
+      contacts: '/api/contacts',
+      messages: '/api/messages',
+      upload: '/api/upload' // ✅
+    }
+  });
 });
 
 app.use((err, req, res, next) => {
@@ -105,6 +128,6 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
-  console.log(`Server running on port: ${PORT}`);
-  console.log(`Socket.IO ready`);
+  console.log(` Server running on port: ${PORT}`);
+  console.log(` Socket.IO ready`);
 });

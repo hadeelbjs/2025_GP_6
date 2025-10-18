@@ -20,13 +20,13 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 4, // ✅ زيادة الإصدار
       onCreate: _onCreate,
+      onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
-    // جدول الرسائل المحلي
     await db.execute('''
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
@@ -43,11 +43,14 @@ class DatabaseHelper {
         isMine INTEGER DEFAULT 0,
         requiresBiometric INTEGER DEFAULT 1,
         isDecrypted INTEGER DEFAULT 0,
+        deletedForRecipient INTEGER DEFAULT 0,
+        attachmentData TEXT,
+        attachmentType TEXT,
+        attachmentName TEXT,
         FOREIGN KEY (conversationId) REFERENCES conversations(id)
       )
     ''');
 
-    // جدول المحادثات
     await db.execute('''
       CREATE TABLE conversations (
         id TEXT PRIMARY KEY,
@@ -60,7 +63,6 @@ class DatabaseHelper {
       )
     ''');
 
-    // فهارس للبحث السريع
     await db.execute('''
       CREATE INDEX idx_messages_conversation 
       ON messages(conversationId, createdAt DESC)
@@ -72,9 +74,24 @@ class DatabaseHelper {
     ''');
   }
 
-  // ============================================
-  // حفظ رسالة محلياً
-  // ============================================
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('ALTER TABLE messages ADD COLUMN deletedForRecipient INTEGER DEFAULT 0');
+      print('✅ Upgraded to v2');
+    }
+    
+    if (oldVersion < 3) {
+      await db.execute('ALTER TABLE messages ADD COLUMN attachmentData TEXT');
+      await db.execute('ALTER TABLE messages ADD COLUMN attachmentType TEXT');
+      print('✅ Upgraded to v3');
+    }
+    
+    if (oldVersion < 4) {
+      await db.execute('ALTER TABLE messages ADD COLUMN attachmentName TEXT');
+      print('✅ Upgraded to v4');
+    }
+  }
+
   Future<void> saveMessage(Map<String, dynamic> message) async {
     final db = await database;
     await db.insert(
@@ -83,7 +100,6 @@ class DatabaseHelper {
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     
-    // ✅ تحديث آخر رسالة في المحادثة
     await _updateConversationLastMessage(
       message['conversationId'],
       message['plaintext'] ?? '🔒 رسالة مشفرة',
@@ -91,9 +107,6 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // جلب رسائل محادثة
-  // ============================================
   Future<List<Map<String, dynamic>>> getMessages(
     String conversationId, {
     int limit = 50,
@@ -118,9 +131,6 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // ✅ جلب رسالة واحدة بالـ ID
-  // ============================================
   Future<Map<String, dynamic>?> getMessage(String messageId) async {
     final db = await database;
     
@@ -135,9 +145,6 @@ class DatabaseHelper {
     return result.first;
   }
 
-  // ============================================
-  // تحديث حالة رسالة
-  // ============================================
   Future<void> updateMessageStatus(
     String messageId,
     String status,
@@ -157,9 +164,6 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // ✅ تحديث رسالة (لفك التشفير)
-  // ============================================
   Future<void> updateMessage(
     String messageId,
     Map<String, dynamic> updates,
@@ -172,7 +176,6 @@ class DatabaseHelper {
       whereArgs: [messageId],
     );
     
-    // ✅ إذا تم فك التشفير، حدّث آخر رسالة في المحادثة
     if (updates.containsKey('plaintext')) {
       final message = await getMessage(messageId);
       if (message != null) {
@@ -185,9 +188,6 @@ class DatabaseHelper {
     }
   }
 
-  // ============================================
-  // ✅ جلب عدد الرسائل غير المقروءة
-  // ============================================
   Future<int> getUnreadCount(String conversationId) async {
     final db = await database;
     
@@ -201,9 +201,6 @@ class DatabaseHelper {
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
-  // ============================================
-  // ✅ تحديث كل رسائل المحادثة لـ "read"
-  // ============================================
   Future<void> markConversationAsRead(String conversationId) async {
     final db = await database;
     
@@ -217,7 +214,6 @@ class DatabaseHelper {
       whereArgs: [conversationId, 'read'],
     );
     
-    // ✅ تحديث عداد غير المقروءة في جدول المحادثات
     await db.update(
       'conversations',
       {'unreadCount': 0},
@@ -226,9 +222,6 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // ✅ جلب كل المحادثات (للقائمة الرئيسية)
-  // ============================================
   Future<List<Map<String, dynamic>>> getConversations() async {
     final db = await database;
     
@@ -238,9 +231,6 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // ✅ حفظ/تحديث محادثة
-  // ============================================
   Future<void> saveConversation(Map<String, dynamic> conversation) async {
     final db = await database;
     
@@ -251,9 +241,6 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // ✅ تحديث آخر رسالة في المحادثة (Private)
-  // ============================================
   Future<void> _updateConversationLastMessage(
     String conversationId,
     String lastMessage,
@@ -261,7 +248,6 @@ class DatabaseHelper {
   ) async {
     final db = await database;
     
-    // جلب المحادثة الحالية
     final conversation = await db.query(
       'conversations',
       where: 'id = ?',
@@ -270,7 +256,6 @@ class DatabaseHelper {
     );
     
     if (conversation.isNotEmpty) {
-      // تحديث آخر رسالة
       await db.update(
         'conversations',
         {
@@ -284,9 +269,6 @@ class DatabaseHelper {
     }
   }
 
-  // ============================================
-  // ✅ زيادة عداد الرسائل غير المقروءة
-  // ============================================
   Future<void> incrementUnreadCount(String conversationId) async {
     final db = await database;
     
@@ -297,9 +279,6 @@ class DatabaseHelper {
     ''', [conversationId]);
   }
 
-  // ============================================
-  // حذف كل رسائل محادثة
-  // ============================================
   Future<void> deleteConversation(String conversationId) async {
     final db = await database;
     await db.delete(
@@ -314,45 +293,21 @@ class DatabaseHelper {
     );
   }
 
-  // ============================================
-  // ✅ حذف رسالة واحدة (مُصحّح)
-  // ============================================
   Future<int> deleteMessage(String messageId) async {
     final db = await database;
     return await db.delete(
       'messages',
-      where: 'id = ?', // ✅ صحيح الآن
+      where: 'id = ?',
       whereArgs: [messageId],
     );
   }
 
-  // ============================================
-  // حذف كل البيانات (تسجيل الخروج)
-  // ============================================
   Future<void> clearAllData() async {
     final db = await database;
     await db.delete('messages');
     await db.delete('conversations');
   }
 
-  // ============================================
-  // ✅ البحث في الرسائل
-  // ============================================
-  Future<List<Map<String, dynamic>>> searchMessages(String query) async {
-    final db = await database;
-    
-    return await db.query(
-      'messages',
-      where: 'plaintext LIKE ?',
-      whereArgs: ['%$query%'],
-      orderBy: 'createdAt DESC',
-      limit: 50,
-    );
-  }
-
-  // ============================================
-  // ✅ إغلاق Database
-  // ============================================
   Future<void> close() async {
     if (_database != null) {
       await _database!.close();

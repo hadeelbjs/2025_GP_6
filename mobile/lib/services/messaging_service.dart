@@ -1,11 +1,11 @@
 // lib/services/messaging_service.dart
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
-import 'dart:convert';
 
-// Services
 import 'socket_service.dart';
 import 'api_services.dart';
 import 'biometric_service.dart';
@@ -14,13 +14,11 @@ import 'crypto/signal_protocol_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class MessagingService {
-  // Singleton Pattern
   static final MessagingService _instance = MessagingService._internal();
   factory MessagingService() => _instance;
   
   MessagingService._internal();
 
-  // Services
   final _socketService = SocketService();
   final _apiService = ApiService();
   final _db = DatabaseHelper.instance;
@@ -28,45 +26,39 @@ class MessagingService {
   final _storage = const FlutterSecureStorage();
   
   final _uuid = const Uuid();
-String? _userIdCache;
+  String? _userIdCache;
 
-  // ✅ متغيرات لمنع التكرار
   final Set<String> _processedMessageIds = {};
   bool _listenersSetup = false;
   StreamSubscription? _messageSubscription;
   StreamSubscription? _statusSubscription;
   StreamSubscription? _deleteSubscription;
   Timer? _cleanupTimer;
-  // Streams
+  
   final _newMessageController = StreamController<Map<String, dynamic>>.broadcast();
+  final _messageDeletedController = StreamController<Map<String, dynamic>>.broadcast();
+  final _messageStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  
   Stream<Map<String, dynamic>> get onNewMessage => _newMessageController.stream;
+  Stream<Map<String, dynamic>> get onMessageDeleted => _messageDeletedController.stream;
+  Stream<Map<String, dynamic>> get onMessageStatusUpdate => _messageStatusController.stream;
 
   bool get isConnected => _socketService.isConnected;
 
-  // ============================================
-  // التهيئة
-  // ============================================
   Future<bool> initialize() async {
     try {
-      print('Initializing MessagingService...');
+      print('🔧 Initializing MessagingService...');
       
-      // 1. Cache User ID
       await _cacheUserId();
-      
-      // 2. Initialize Signal Protocol
       await SignalProtocolManager().initialize();
 
-      // 3. Connect Socket
       final socketConnected = await _socketService.connect();
       if (!socketConnected) {
         print('❌ Socket connection failed');
         return false;
       }
 
-      // 4. Setup Socket Listeners
       _setupSocketListeners();
-
-      // 5. ✅ ابدأ التنظيف الدوري للذاكرة
       _startMessageCacheCleanup();
 
       print('✅ MessagingService initialized successfully');
@@ -78,27 +70,20 @@ String? _userIdCache;
     }
   }
 
-  // ============================================
-  // Socket Listeners
-  // ============================================
-void _setupSocketListeners() {
-    // ✅ تأكد من عدم إنشاء listeners مكررة
+  void _setupSocketListeners() {
     if (_listenersSetup) {
       print('⚠️ Listeners already setup - skipping');
       return;
     }
 
-    // استقبال رسائل جديدة
     _messageSubscription = _socketService.onNewMessage.listen((data) async {
       await _handleIncomingMessage(data);
     });
 
-    //  تحديث حالة الرسالة
     _statusSubscription = _socketService.onStatusUpdate.listen((data) async {
       await _handleStatusUpdate(data);
     });
 
-    //  حذف رسالة
     _deleteSubscription = _socketService.onMessageDeleted.listen((data) async {
       await _handleMessageDeleted(data);
     });
@@ -106,19 +91,42 @@ void _setupSocketListeners() {
     _listenersSetup = true;
     print('✅ Socket listeners setup complete');
   }
-  // ============================================
-  //إرسال رسالة 
-  // ============================================
+  
+  // ✅ إرسال رسالة مع Base64
   Future<Map<String, dynamic>> sendMessage({
     required String recipientId,
     required String recipientName,
     required String messageText,
+    File? imageFile,
+    File? attachmentFile,
+    String? fileName,
   }) async {
     try {
       final messageId = _uuid.v4();
       final conversationId = _generateConversationId(recipientId);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
 
+      // ✅ تحويل الملفات إلى Base64
+      String? attachmentData;
+      String? attachmentType;
+      String? attachmentName;
+      String? attachmentMimeType;
+
+      if (imageFile != null) {
+        final bytes = await imageFile.readAsBytes();
+        attachmentData = base64Encode(bytes);
+        attachmentType = 'image';
+        attachmentName = imageFile.path.split('/').last;
+        attachmentMimeType = 'image/${attachmentName.split('.').last}';
+        print('📷 Image encoded: ${attachmentName} (${bytes.length} bytes)');
+      } else if (attachmentFile != null) {
+        final bytes = await attachmentFile.readAsBytes();
+        attachmentData = base64Encode(bytes);
+        attachmentType = 'file';
+        attachmentName = fileName ?? attachmentFile.path.split('/').last;
+        attachmentMimeType = 'application/octet-stream';
+        print('📎 File encoded: ${attachmentName} (${bytes.length} bytes)');
+      }
 
       // 1️⃣ تشفير الرسالة
       final encrypted = await _signalProtocol.encryptMessage(
@@ -130,8 +138,7 @@ void _setupSocketListeners() {
         throw Exception('Encryption failed');
       }
 
-
-      // 2️⃣ حفظ في SQLite (status: sending)
+      // 2️⃣ حفظ في SQLite
       await _db.saveMessage({
         'id': messageId,
         'conversationId': conversationId,
@@ -145,33 +152,41 @@ void _setupSocketListeners() {
         'isMine': 1,
         'requiresBiometric': 0,
         'isDecrypted': 1,
+        'attachmentData': attachmentData,
+        'attachmentType': attachmentType,
+        'attachmentName': attachmentName,
       });
 
-      print('✅ Message saved to SQLite');
+      print('✅ Message saved to SQLite with attachment');
 
-      // 3️⃣ حفظ/تحديث المحادثة
+      // 3️⃣ حفظ المحادثة
       await _db.saveConversation({
         'id': conversationId,
         'contactId': recipientId,
         'contactName': recipientName,
-        'lastMessage': messageText,
+        'lastMessage': attachmentType == 'image' 
+            ? '📷 صورة' 
+            : attachmentType == 'file' 
+              ? '📎 $attachmentName' 
+              : messageText,
         'lastMessageTime': timestamp,
         'unreadCount': 0,
         'updatedAt': timestamp,
       });
 
-      print('✅ Conversation updated');
-
-      // 4️⃣ ✅ إرسال عبر Socket فقط (لا API!)
-      _socketService.sendMessage(
+      // 4️⃣ إرسال عبر Socket مع المرفقات
+      _socketService.sendMessageWithAttachment(
         messageId: messageId,
         recipientId: recipientId,
         encryptedType: encrypted['type'],
         encryptedBody: encrypted['body'],
+        attachmentData: attachmentData,
+        attachmentType: attachmentType,
+        attachmentName: attachmentName,
+        attachmentMimeType: attachmentMimeType,
       );
 
-      print('✅ Message sent via Socket');
-
+      print('✅ Message sent via Socket with attachments');
 
       return {
         'success': true,
@@ -187,98 +202,97 @@ void _setupSocketListeners() {
     }
   }
 
-  // ============================================
-  // ✅ معالجة الرسائل الواردة
-  // ============================================
-Future<void> _handleIncomingMessage(Map data) async {
-  try {
-    final messageId = data['messageId'] as String;
-    
-    print('📨 Processing incoming message: $messageId');
+  // ✅ استقبال رسالة مع Base64
+  Future<void> _handleIncomingMessage(Map data) async {
+    try {
+      final messageId = data['messageId'] as String;
+      
+      print('📨 Processing incoming message: $messageId');
 
-    // ✅ تحقق من معالجة الرسالة مسبقاً (في الذاكرة) - فحص سريع!
-    if (_processedMessageIds.contains(messageId)) {
-      print('⚠️ Already processed in memory: $messageId');
-      return;
-    }
+      if (_processedMessageIds.contains(messageId)) {
+        print('⚠️ Already processed: $messageId');
+        return;
+      }
 
-    // ✅ تحقق من وجود الرسالة في قاعدة البيانات
-    final existing = await _db.getMessage(messageId);
-    if (existing != null) {
-      print('⚠️ Already exists in DB: $messageId');
-      _processedMessageIds.add(messageId); // أضفها للذاكرة
-      return;
-    }
+      final existing = await _db.getMessage(messageId);
+      if (existing != null) {
+        print('⚠️ Already exists in DB: $messageId');
+        _processedMessageIds.add(messageId);
+        return;
+      }
 
-    // ✅ أضف للذاكرة قبل المعالجة لمنع التكرار
-    _processedMessageIds.add(messageId);
-    
-    final senderId = data['senderId'] as String; 
-    final encryptedType = data['encryptedType'] as int;
-    final encryptedBody = data['encryptedBody'] as String;
-    
-    final timestamp = data['createdAt'] != null 
-        ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
-        : DateTime.now().millisecondsSinceEpoch;
+      _processedMessageIds.add(messageId);
+      
+      final senderId = data['senderId'] as String;
+      final encryptedType = data['encryptedType'] as int;
+      final encryptedBody = data['encryptedBody'] as String;
+      final attachmentData = data['attachmentData'] as String?;
+      final attachmentType = data['attachmentType'] as String?;
+      final attachmentName = data['attachmentName'] as String?;
+      
+      final timestamp = data['createdAt'] != null 
+          ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
+          : DateTime.now().millisecondsSinceEpoch;
 
-    final conversationId = _generateConversationId(senderId);
+      final conversationId = _generateConversationId(senderId);
 
-    await _db.saveMessage({
-      'id': messageId,
-      'conversationId': conversationId,
-      'senderId': senderId,
-      'receiverId': await _getCurrentUserId(),
-      'ciphertext': encryptedBody,
-      'encryptionType': encryptedType,
-      'plaintext': null,
-      'status': 'delivered',
-      'createdAt': timestamp,
-      'deliveredAt': DateTime.now().millisecondsSinceEpoch,
-      'isMine': 0,
-      'requiresBiometric': 1,
-      'isDecrypted': 0,
-    });
-
-    print('✅ Incoming message saved to SQLite');
-
-    await _db.incrementUnreadCount(conversationId);
-
-    // ✅ إشعار المستمعين مرة واحدة فقط
-    if (!_newMessageController.isClosed) {
-      _newMessageController.add({
-        'messageId': messageId,
+      // ✅ حفظ الرسالة المشفرة مع المرفقات
+      await _db.saveMessage({
+        'id': messageId,
         'conversationId': conversationId,
         'senderId': senderId,
-        'isLocked': true,
+        'receiverId': await _getCurrentUserId(),
+        'ciphertext': encryptedBody,
+        'encryptionType': encryptedType,
+        'plaintext': null,
+        'status': 'delivered',
+        'createdAt': timestamp,
+        'deliveredAt': DateTime.now().millisecondsSinceEpoch,
+        'isMine': 0,
+        'requiresBiometric': 1,
+        'isDecrypted': 0,
+        'attachmentData': attachmentData,
+        'attachmentType': attachmentType,
+        'attachmentName': attachmentName,
       });
+
+      print('✅ Incoming message saved with attachment: $attachmentType');
+
+      await _db.incrementUnreadCount(conversationId);
+
+      if (!_newMessageController.isClosed) {
+        _newMessageController.add({
+          'messageId': messageId,
+          'conversationId': conversationId,
+          'senderId': senderId,
+          'isLocked': true,
+        });
+      }
+
+    } catch (e) {
+      print('❌ Handle incoming message error: $e');
     }
-
-    print('✅ Incoming message processed');
-
-  } catch (e) {
-    print('❌ Handle incoming message error: $e');
   }
-}
-  // ============================================
-  // ✅ معالجة تحديث Status
-  // ============================================
+  
   Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
     try {
       final messageId = data['messageId'];
       final newStatus = data['status'];
 
-      print('📊 Status update: $messageId → $newStatus');
-
       await _db.updateMessageStatus(messageId, newStatus);
+      
+      if (!_messageStatusController.isClosed) {
+        _messageStatusController.add({
+          'messageId': messageId,
+          'status': newStatus,
+        });
+      }
 
     } catch (e) {
       print('❌ Handle status update error: $e');
     }
   }
 
-  // ============================================
-  // ✅ معالجة حذف رسالة
-  // ============================================
   Future<void> _handleMessageDeleted(Map<String, dynamic> data) async {
     try {
       final messageId = data['messageId'];
@@ -286,13 +300,20 @@ Future<void> _handleIncomingMessage(Map data) async {
 
       print('🗑️ Message deleted: $messageId ($deletedFor)');
 
-      // ✅ حذف من SQLite
-      final deletedCount = await _db.deleteMessage(messageId);
+      if (deletedFor == 'everyone') {
+        await _db.deleteMessage(messageId);
+      } else if (deletedFor == 'recipient') {
+        await _db.updateMessage(messageId, {
+          'status': 'deleted',
+          'deletedForRecipient': 1,
+        });
+      }
       
-      if (deletedCount > 0) {
-        print('🗑️ Message $messageId removed from SQLite');
-      } else {
-        print('⚠️ Message $messageId not found locally');
+      if (!_messageDeletedController.isClosed) {
+        _messageDeletedController.add({
+          'messageId': messageId,
+          'deletedFor': deletedFor,
+        });
       }
 
     } catch (e) {
@@ -300,14 +321,12 @@ Future<void> _handleIncomingMessage(Map data) async {
     }
   }
 
-  // ============================================
-  // ✅ فك تشفير رسالة (Biometric)
-  // ============================================
+  // ✅ فك تشفير رسالة واحدة (يطلب التحقق كل مرة)
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {
       print('🔓 Decrypting message: $messageId');
 
-      // 1. التحقق بالبايومتركس
+      // ✅ التحقق البيومتري - كل مرة تفتح رسالة
       final authenticated = await BiometricService.authenticateWithBiometrics(
         reason: 'تحقق من هويتك لقراءة الرسالة',
       );
@@ -319,13 +338,12 @@ Future<void> _handleIncomingMessage(Map data) async {
         };
       }
 
-      // 2. جلب الرسالة من SQLite
       final message = await _db.getMessage(messageId);
       if (message == null) {
         throw Exception('Message not found');
       }
 
-      // 3. فك التشفير
+      // ✅ فك التشفير
       final decrypted = await _signalProtocol.decryptMessage(
         message['senderId'],
         message['encryptionType'],
@@ -336,25 +354,22 @@ Future<void> _handleIncomingMessage(Map data) async {
         throw Exception('Decryption failed');
       }
 
-      print('✅ Message decrypted successfully');
-
-      // 4. تحديث في SQLite
+      // ✅ تحديث الرسالة
       await _db.updateMessage(messageId, {
         'plaintext': decrypted,
         'isDecrypted': 1,
-        'requiresBiometric': 0,
+        'requiresBiometric': 1, // ✅ يبقى يطلب تحقق كل مرة
         'status': 'read',
         'readAt': DateTime.now().millisecondsSinceEpoch,
       });
 
-      // 5. ✅ إرسال status update للمرسل
       _socketService.updateMessageStatus(
         messageId: messageId,
         status: 'verified',
         recipientId: message['senderId'],
       );
 
-      print('✅ Message marked as verified');
+      print('✅ Message decrypted: $messageId');
 
       return {
         'success': true,
@@ -370,9 +385,7 @@ Future<void> _handleIncomingMessage(Map data) async {
     }
   }
 
-  // ============================================
-  // ✅ جلب رسائل المحادثة
-  // ============================================
+  // ✅ جلب الرسائل
   Future<List<Map<String, dynamic>>> getConversationMessages(
     String conversationId, {
     int limit = 50,
@@ -385,9 +398,6 @@ Future<void> _handleIncomingMessage(Map data) async {
     }
   }
 
-  // ============================================
-  // ✅ جلب كل المحادثات
-  // ============================================
   Future<List<Map<String, dynamic>>> getAllConversations() async {
     try {
       return await _db.getConversations();
@@ -397,39 +407,49 @@ Future<void> _handleIncomingMessage(Map data) async {
     }
   }
 
-  // ============================================
-  // ✅ تحديث المحادثة كـ "مقروءة"
-  // ============================================
   Future<void> markConversationAsRead(String conversationId) async {
     try {
       await _db.markConversationAsRead(conversationId);
-      print('✅ Conversation marked as read: $conversationId');
     } catch (e) {
       print('❌ Mark as read error: $e');
     }
   }
 
-  // ============================================
   // ✅ حذف رسالة
-  // ============================================
   Future<Map<String, dynamic>> deleteMessage({
     required String messageId,
     required bool deleteForEveryone,
   }) async {
     try {
-      final result = deleteForEveryone
-          ? await _apiService.deleteMessageForEveryone(messageId)
-          : await _apiService.deleteMessageForRecipient(messageId);
-
-      if (result['success']) {
-        if (deleteForEveryone) {
-          await _db.deleteMessage(messageId);
-        } else {
-          await _db.updateMessageStatus(messageId, 'deleted');
-        }
+      final message = await _db.getMessage(messageId);
+      
+      if (message == null) {
+        return {'success': false, 'message': 'الرسالة غير موجودة'};
       }
 
-      return result;
+      if (deleteForEveryone) {
+        // حذف للجميع
+        final result = await _apiService.deleteMessageForEveryone(messageId);
+        
+        if (result['success']) {
+          await _db.deleteMessage(messageId);
+          print('✅ Message deleted for everyone');
+        }
+        
+        return result;
+      } else {
+        // حذف من عند المستقبل فقط
+        final result = await _apiService.deleteMessageForRecipient(messageId);
+        
+        if (result['success']) {
+          await _db.updateMessage(messageId, {
+            'deletedForRecipient': 1,
+          });
+          print('✅ Message deleted for recipient');
+        }
+        
+        return result;
+      }
 
     } catch (e) {
       print('❌ Delete message error: $e');
@@ -440,43 +460,29 @@ Future<void> _handleIncomingMessage(Map data) async {
     }
   }
 
-  // ============================================
-  // ✅ حذف محادثة
-  // ============================================
   Future<void> deleteConversation(String conversationId) async {
     try {
       await _db.deleteConversation(conversationId);
-      print('✅ Conversation deleted: $conversationId');
     } catch (e) {
       print('❌ Delete conversation error: $e');
     }
   }
 
-  // ============================================
-  // ✅ تسجيل خروج
-  // ============================================
   Future<void> logout() async {
     try {
       _socketService.disconnect();
       await _db.clearAllData();
-      print('✅ Logged out successfully');
     } catch (e) {
       print('❌ Logout error: $e');
     }
   }
 
-  // ============================================
-  // Helper Functions
-  // ============================================
-  
-  // ✅ توليد Conversation ID
   String _generateConversationId(String otherUserId) {
     final currentUserId = _getCurrentUserIdSync(); 
     final ids = [currentUserId, otherUserId]..sort();
     return '${ids[0]}-${ids[1]}';
   }
 
-  // ✅ جلب User ID (async)
   Future<String> _getCurrentUserId() async {
     final userDataStr = await _storage.read(key: 'user_data');
     
@@ -488,34 +494,28 @@ Future<void> _handleIncomingMessage(Map data) async {
     throw Exception('User not logged in');
   }
 
-  // ✅ جلب User ID (sync - من Cache)
   String _getCurrentUserIdSync() {
     if (_userIdCache != null) {
       return _userIdCache!;
     }
-    throw Exception('User ID not cached. Call _cacheUserId() first');
+    throw Exception('User ID not cached');
   }
 
-  // ✅ تخزين User ID في Cache
   Future<void> _cacheUserId() async {
     _userIdCache = await _getCurrentUserId();
-    print('✅ User ID cached: $_userIdCache');
   }
 
-  // ✅ تنظيف الذاكرة المؤقتة للرسائل المعالجة (كل 5 دقائق)
   void _startMessageCacheCleanup() {
-    _cleanupTimer?.cancel(); // إلغاء أي timer سابق
+    _cleanupTimer?.cancel();
     _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
       if (_processedMessageIds.length > 100) {
-        // احتفظ بآخر 50 رسالة فقط
         final toKeep = _processedMessageIds.skip(_processedMessageIds.length - 50).toList();
         _processedMessageIds.clear();
         _processedMessageIds.addAll(toKeep);
-        print('🧹 Cleaned message cache - kept ${_processedMessageIds.length} recent IDs');
       }
     });
   }
-// ✅ Dispose
+  
   void dispose() {
     _messageSubscription?.cancel();
     _statusSubscription?.cancel();
@@ -525,9 +525,11 @@ Future<void> _handleIncomingMessage(Map data) async {
     _listenersSetup = false;
     _socketService.dispose();
     _newMessageController.close();
+    _messageDeletedController.close();
+    _messageStatusController.close();
   }
 
   String getConversationId(String otherUserId) {
-  return _generateConversationId(otherUserId);
-}
+    return _generateConversationId(otherUserId);
+  }
 }

@@ -486,23 +486,18 @@ Widget _buildChatList() {
                           ),
                         ),
                       
-                      Expanded(
-                        child: Text(
-                          lastMessage != null 
-                              ? (isLocked ? 'رسالة مشفرة' : lastMessage)
-                              : '@${chat['username']}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: lastMessage != null
-                                ? AppColors.textSecondary
-                                : AppColors.textHint,
-                            fontWeight: unreadCount > 0
-                                ? FontWeight.w500
-                                : FontWeight.normal,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                     Expanded(
+                      child: Text(
+                      
+                        '@${chat['username']}', 
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textHint,
+                          fontWeight: FontWeight.normal,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ),
                     ],
                   ),
                 ],

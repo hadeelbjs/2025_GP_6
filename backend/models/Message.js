@@ -90,10 +90,21 @@ const MessageSchema = new mongoose.Schema({
   deliveredAt: Date,
 });
 
+
 // Index للبحث السريع
 MessageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
 
-// ✅ دالة التحقق من الحذف
+MessageSchema.index(
+  { createdAt: 1 },
+  { 
+    expireAfterSeconds: 172800,  // 48 hours = 2 days
+    name: 'auto_delete_messages'  
+  }
+);
+
+
+
+// دالة التحقق من الحذف
 MessageSchema.methods.canDeleteForEveryone = function(userId) {
   if (this.senderId.toString() !== userId.toString()) {
     return false;
@@ -101,6 +112,7 @@ MessageSchema.methods.canDeleteForEveryone = function(userId) {
   return true;
 };
 
+// دالة التحقق من أن الرسالة محذوفة للمستخدم
 MessageSchema.methods.isDeletedFor = function(userId) {
   if (this.deletedForEveryone) return true;
   return this.deletedFor.some(id => id.toString() === userId.toString());

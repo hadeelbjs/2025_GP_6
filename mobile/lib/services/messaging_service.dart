@@ -27,6 +27,8 @@ class MessagingService {
   
   final _uuid = const Uuid();
   String? _userIdCache;
+  String? _currentOpenChatUserId;
+
 
   final Set<String> _processedMessageIds = {};
   bool _listenersSetup = false;
@@ -266,22 +268,27 @@ class MessagingService {
       });
 
       print('✅ Incoming message saved with attachment: $attachmentType');
-
+ if (_currentOpenChatUserId != senderId) {
       await _db.incrementUnreadCount(conversationId);
-
-      if (!_newMessageController.isClosed) {
-        _newMessageController.add({
-          'messageId': messageId,
-          'conversationId': conversationId,
-          'senderId': senderId,
-          'isLocked': true,
-        });
-      }
-
-    } catch (e) {
-      print('❌ Handle incoming message error: $e');
+      print('📊 Incremented unread count for $conversationId');
+    } else {
+      print('✅ User inside chat - no unread count increment');
+      await _db.markConversationAsRead(conversationId);
     }
+
+    _newMessageController.add({
+      'messageId': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'isLocked': true,
+    });
+
+    print('✅ Incoming message processed');
+
+  } catch (e) {
+    print('❌ Handle incoming message error: $e');
   }
+}
   
   Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
     try {
@@ -544,5 +551,10 @@ class MessagingService {
 
   String getConversationId(String otherUserId) {
     return _generateConversationId(otherUserId);
+  }
+
+  void setCurrentOpenChat(String? userId) {
+    _currentOpenChatUserId = userId;
+    print('📱 Current open chat: ${userId ?? "none"}');
   }
 }

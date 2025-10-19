@@ -81,15 +81,50 @@ module.exports = (io) => {
     userSockets.set(userId.toString(), socket.id);
       onlineUsers.add(userId.toString());
 
-    socket.emit('connected', {
-      userId,
-      message: 'Connected to messaging server'
-    });
+ socket.emit('connected', {
+  userId,
+  message: 'Connected to messaging server'
+});
 
-    setTimeout(() => {
-      console.log(`🔔 About to broadcast ${userId} as online`);
-      broadcastStatusToContacts(userId.toString(), true, io);
-    }, 500);
+// ✅ إرسال الرسائل المعلقة فوراً
+(async () => {
+  try {
+    const pendingMessages = await Message.find({
+      recipientId: userId,
+      status: { $in: ['sent', 'pending'] }
+    }).sort({ createdAt: 1 }).limit(50);
+
+    if (pendingMessages.length > 0) {
+      console.log(`📬 Sending ${pendingMessages.length} pending messages to user ${userId}`);
+
+      for (const msg of pendingMessages) {
+        socket.emit('message:new', {
+          messageId: msg.messageId,
+          senderId: msg.senderId.toString(),
+          recipientId: msg.recipientId.toString(),
+          encryptedType: msg.encryptedType,
+          encryptedBody: msg.encryptedBody,
+          attachmentData: msg.attachmentData || null,
+          attachmentType: msg.attachmentType || null,
+          attachmentName: msg.attachmentName || null,
+          attachmentMimeType: msg.attachmentMimeType || null,
+          createdAt: msg.createdAt ? msg.createdAt.toISOString() : new Date().toISOString(),
+        });
+
+        console.log(`📨 Delivered pending message: ${msg.messageId}`);
+      }
+    } else {
+      console.log(`📭 No pending messages for user ${userId}`);
+    }
+  } catch (err) {
+    console.error('❌ Failed to send pending messages:', err);
+  }
+})();
+
+setTimeout(() => {
+  console.log(`🔔 About to broadcast ${userId} as online`);
+  broadcastStatusToContacts(userId.toString(), true, io);
+}, 500);
 
     // ✅ إرسال رسالة مع مرفقات
     socket.on('message:send', async (data) => {

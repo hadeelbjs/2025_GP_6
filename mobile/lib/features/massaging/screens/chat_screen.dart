@@ -55,6 +55,8 @@ class _ChatScreenState extends State<ChatScreen> {
     super.initState();
     _initializeChat();
     _listenToUserStatus(); 
+      _messagingService.setCurrentOpenChat(widget.userId);
+
   }
 
   @override
@@ -65,6 +67,8 @@ class _ChatScreenState extends State<ChatScreen> {
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
     _userStatusSubscription?.cancel(); 
+      _messagingService.setCurrentOpenChat(null);
+
     super.dispose();
   }
 
@@ -140,7 +144,7 @@ class _ChatScreenState extends State<ChatScreen> {
               _messages.removeAt(index);
                _showMessage('تم الحذف للجميع', true);
 
-            } else if (deletedFor == 'recipient') {
+          } else if (deletedFor == 'recipient') {
              _messages.removeAt(index);
                _showMessage('تم حذف رسالة', false);
               _messages[index]['status'] = 'deleted';
@@ -151,19 +155,21 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
 
-    _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
-      final messageId = data['messageId'];
-      final newStatus = data['status'];
-      
-      if (mounted) {
-        setState(() {
-          final index = _messages.indexWhere((m) => m['id'] == messageId);
-          if (index != -1) {
-            _messages[index]['status'] = newStatus;
-          }
-        });
+   _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
+  final messageId = data['messageId'];
+  final newStatus = data['status'];
+  
+  if (mounted) {
+    setState(() {
+      final index = _messages.indexWhere((m) => m['id'] == messageId);
+      if (index != -1) {
+        final updatedMessage = Map<String, dynamic>.from(_messages[index]);
+        updatedMessage['status'] = newStatus;
+        _messages[index] = updatedMessage;
       }
     });
+  }
+});
   }
 
 void _listenToUserStatus() {

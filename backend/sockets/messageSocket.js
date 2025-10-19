@@ -3,6 +3,49 @@ const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
 
 const userSockets = new Map();
+const onlineUsers = new Set(); 
+
+async function broadcastStatusToContacts(userId, isOnline, io) {
+  try {
+    const Contact = require('../models/Contact');
+    
+    console.log(`🔔 Broadcasting ${userId} status: ${isOnline ? 'online' : 'offline'}`);
+    
+    // ✅ البحث باستخدام requester و recipient (مو userId و contactId)
+    const contacts = await Contact.find({
+      $or: [
+        { requester: userId, status: 'accepted' },
+        { recipient: userId, status: 'accepted' }
+      ]
+    });
+    
+    console.log(`📋 Found ${contacts.length} contacts for user ${userId}`);
+    
+    // إرسال الحالة لكل جهة اتصال
+    contacts.forEach(contact => {
+      // ✅ تحديد الطرف الآخر
+      const contactUserId = contact.requester.toString() === userId.toString() 
+        ? contact.recipient.toString() 
+        : contact.requester.toString();
+      
+      console.log(`   Sending to contact: ${contactUserId}`);
+      
+      // إرسال الحالة الجديدة
+      const sent = io.sendToUser(contactUserId, 'user:status', {
+        userId: userId,
+        isOnline: isOnline
+      });
+      
+      console.log(`📡 ${sent ? '✅' : '❌'} Sent status to ${contactUserId}: ${userId} is ${isOnline ? 'online' : 'offline'}`);
+    });
+    
+  } catch (err) {
+    console.error('❌ Error broadcasting status:', err);
+    console.error('Full error:', err.stack);
+  }
+}
+
+
 
 module.exports = (io) => {
 
@@ -36,11 +79,17 @@ module.exports = (io) => {
     console.log(`✅ User connected: ${userId} (Socket: ${socket.id})`);
 
     userSockets.set(userId.toString(), socket.id);
+      onlineUsers.add(userId.toString());
 
     socket.emit('connected', {
       userId,
       message: 'Connected to messaging server'
     });
+
+    setTimeout(() => {
+      console.log(`🔔 About to broadcast ${userId} as online`);
+      broadcastStatusToContacts(userId.toString(), true, io);
+    }, 500);
 
     // ✅ إرسال رسالة مع مرفقات
     socket.on('message:send', async (data) => {
@@ -255,9 +304,32 @@ module.exports = (io) => {
       });
     });
 
-    socket.on('disconnect', () => {
+    socket.on('request:user_status', (data) => {
+      const { targetUserId } = data;
+      const isOnline = onlineUsers.has(targetUserId.toString());
+      
+      socket.emit('user:status', {
+        userId: targetUserId,
+        isOnline: isOnline
+      });
+      
+      console.log(`📡 Status request for ${targetUserId}: ${isOnline ? 'online' : 'offline'}`);
+    });
+
+  socket.on('disconnect', () => {
       console.log(`❌ User disconnected: ${userId}`);
+      
       userSockets.delete(userId.toString());
+      onlineUsers.delete(userId.toString());
+      
+      setTimeout(() => {
+        if (!onlineUsers.has(userId.toString())) {
+          console.log(`🔔 About to broadcast ${userId} as offline`);
+          broadcastStatusToContacts(userId.toString(), false, io);
+        } else {
+          console.log(`⚠️ User ${userId} reconnected quickly`);
+        }
+      }, 1000);
     });
   });
 

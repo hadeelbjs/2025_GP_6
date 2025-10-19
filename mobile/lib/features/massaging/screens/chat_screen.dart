@@ -47,10 +47,14 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription? _deleteSubscription;
   StreamSubscription? _statusSubscription;
 
+  StreamSubscription? _userStatusSubscription;
+  bool _isOtherUserOnline = false;
+
   @override
   void initState() {
     super.initState();
     _initializeChat();
+    _listenToUserStatus(); 
   }
 
   @override
@@ -60,6 +64,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _newMessageSubscription?.cancel();
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
+    _userStatusSubscription?.cancel(); 
     super.dispose();
   }
 
@@ -160,6 +165,27 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
   }
+
+void _listenToUserStatus() {
+  // ⏱️ طلب الحالة الأولية مرة واحدة
+  Future.delayed(Duration(seconds: 1), () {
+    if (mounted) {
+      _messagingService.requestUserStatus(widget.userId);
+    }
+  });
+  
+  // 🆕 الاستماع للتحديثات التلقائية من السيرفر
+  _userStatusSubscription = _messagingService.onUserStatusChange.listen((data) {
+    if (data['userId'] == widget.userId) {
+      if (mounted) {
+        setState(() {
+          _isOtherUserOnline = data['isOnline'] ?? false;
+        });
+        print('📡 ${widget.name} is now: ${_isOtherUserOnline ? "online" : "offline"}');
+      }
+    }
+  });
+}
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -558,7 +584,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                   const SizedBox(width: 6),
                   Text(
-                    _messagingService.isConnected ? 'متصل' : 'غير متصل',
+                    _isOtherUserOnline ? 'متصل' : 'غير متصل', 
                     style: AppTextStyles.bodySmall.copyWith(color: Colors.white.withOpacity(0.8)),
                   ),
                 ],

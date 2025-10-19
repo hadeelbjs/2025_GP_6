@@ -44,6 +44,11 @@ class MessagingService {
   Stream<Map<String, dynamic>> get onMessageStatusUpdate => _messageStatusController.stream;
 
   bool get isConnected => _socketService.isConnected;
+   Stream<Map<String, dynamic>> get onUserStatusChange => _socketService.onUserStatusChange;
+  
+  void requestUserStatus(String userId) {
+    _socketService.requestUserStatus(userId);
+  }
 
   Future<bool> initialize() async {
     try {
@@ -52,11 +57,15 @@ class MessagingService {
       await _cacheUserId();
       await SignalProtocolManager().initialize();
 
+       if (!_socketService.isConnected) {
       final socketConnected = await _socketService.connect();
       if (!socketConnected) {
         print('❌ Socket connection failed');
         return false;
       }
+    } else {
+      print('✅ Socket already connected, reusing connection');
+    }
 
       _setupSocketListeners();
       _startMessageCacheCleanup();
@@ -474,8 +483,8 @@ class MessagingService {
 
   Future<void> logout() async {
     try {
-      _socketService.disconnect();
-      await _db.clearAllData();
+    _socketService.disconnectOnLogout();  
+         await _db.clearAllData();
     } catch (e) {
       print('❌ Logout error: $e');
     }

@@ -8,6 +8,8 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:open_filex/open_filex.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/messaging_service.dart';
@@ -127,9 +129,15 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() {
           final index = _messages.indexWhere((m) => m['id'] == messageId);
           if (index != -1) {
+            _messages.removeAt(index);
+
             if (deletedFor == 'everyone') {
               _messages.removeAt(index);
+               _showMessage('تم الحذف للجميع', true);
+
             } else if (deletedFor == 'recipient') {
+             _messages.removeAt(index);
+               _showMessage('تم حذف رسالة', false);
               _messages[index]['status'] = 'deleted';
               _messages[index]['deletedForRecipient'] = 1;
             }
@@ -880,7 +888,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  void _openAttachment(String base64Data, String type, String? name) {
+  void _openAttachment(String base64Data, String type, String? name) async {
     if (type == 'image') {
       Navigator.push(
         context,
@@ -889,7 +897,25 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
       );
     } else if (type == 'file') {
-      _showMessage('فتح الملف: ${name ?? "ملف"}', true);
+      try {
+        // ✅ تحويل Base64 إلى ملف مؤقت
+        final bytes = base64Decode(base64Data);
+        final tempDir = await getTemporaryDirectory();
+        final fileName = name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
+        final tempFile = File('${tempDir.path}/$fileName');
+        
+        await tempFile.writeAsBytes(bytes);
+        
+        // ✅ فتح الملف
+        final result = await OpenFilex.open(tempFile.path);
+        
+        if (result.type != ResultType.done) {
+          _showMessage('تعذر فتح الملف: ${result.message}', false);
+        }
+        
+      } catch (e) {
+        _showMessage('فشل فتح الملف', false);
+      }
     }
   }
 }

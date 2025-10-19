@@ -73,6 +73,7 @@ module.exports = (io) => {
           createdAt: new Date().toISOString(),
         });
 
+        // ✅ تأكيد للمرسل
         socket.emit('message:sent', {
           messageId,
           delivered,
@@ -129,6 +130,7 @@ module.exports = (io) => {
           { upsert: true, new: true }
         );
 
+        // ✅ إشعار المرسل بالاستلام
         io.sendToUser(senderId, 'message:status_update', {
           messageId,
           status: 'delivered',
@@ -164,7 +166,7 @@ module.exports = (io) => {
       }
     });
 
-    // ✅ الحذف - مُصلح تماماً
+    // ✅ حذف رسالة - مُصلح بالكامل
     socket.on('message:delete', async (data) => {
       try {
         const { messageId, deleteFor } = data;
@@ -191,9 +193,9 @@ module.exports = (io) => {
           message.status = 'deleted';
           await message.save();
 
-          // ✅ إرسال للطرفين
           const recipientId = message.recipientId.toString();
           
+          // ✅ إرسال للطرفين فوراً
           io.sendToUser(recipientId, 'message:deleted', {
             messageId,
             deletedFor: 'everyone',
@@ -215,24 +217,27 @@ module.exports = (io) => {
 
           const recipientId = message.recipientId.toString();
           
+          // ✅ تحديث قاعدة البيانات
           if (!message.deletedFor.includes(recipientId)) {
             message.deletedFor.push(message.recipientId);
             message.deletedForRecipient = true;
             await message.save();
           }
 
-          // ✅ إرسال للمستقبل فقط
-          io.sendToUser(recipientId, 'message:deleted', {
+          // ✅ إرسال فوري للمستقبل
+          const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
             messageId,
             deletedFor: 'recipient',
           });
 
+          // ✅ تأكيد للمرسل
           socket.emit('message:deleted', {
             messageId,
             deletedFor: 'recipient',
+            confirmedDelivery: sentToRecipient,
           });
 
-          console.log(`✅ Message deleted for recipient: ${messageId}`);
+          console.log(`✅ Message deleted for recipient: ${messageId} (delivered: ${sentToRecipient})`);
         }
 
       } catch (err) {
@@ -241,6 +246,7 @@ module.exports = (io) => {
       }
     });
 
+    // ✅ حالة الكتابة
     socket.on('typing', (data) => {
       const { recipientId, isTyping } = data;
       io.sendToUser(recipientId, 'typing', {

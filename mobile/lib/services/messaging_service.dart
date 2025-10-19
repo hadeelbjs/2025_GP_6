@@ -293,40 +293,40 @@ class MessagingService {
     }
   }
 
-  Future<void> _handleMessageDeleted(Map<String, dynamic> data) async {
-    try {
-      final messageId = data['messageId'];
-      final deletedFor = data['deletedFor'];
+ Future<void> _handleMessageDeleted(Map<String, dynamic> data) async {
+  try {
+    final messageId = data['messageId'];
+    final deletedFor = data['deletedFor'];
 
-      print('🗑️ Message deleted: $messageId ($deletedFor)');
 
-      if (deletedFor == 'everyone') {
-        await _db.deleteMessage(messageId);
-      } else if (deletedFor == 'recipient') {
-        await _db.updateMessage(messageId, {
-          'status': 'deleted',
-          'deletedForRecipient': 1,
-        });
-      }
-      
-      if (!_messageDeletedController.isClosed) {
-        _messageDeletedController.add({
-          'messageId': messageId,
-          'deletedFor': deletedFor,
-        });
-      }
-
-    } catch (e) {
-      print('❌ Handle message deleted error: $e');
+    if (!_messageDeletedController.isClosed) {
+      _messageDeletedController.add({
+        'messageId': messageId,
+        'deletedFor': deletedFor,
+      });
+      print('✅ UI notified about deletion');
     }
-  }
+
+    // ✅ ثم حذف من SQLite
+    await Future.delayed(Duration(milliseconds: 50)); 
+    
+    if (deletedFor == 'everyone') {
+      await _db.deleteMessage(messageId);
+    } else if (deletedFor == 'recipient') {
+      await _db.deleteMessage(messageId);
+    }
+
+  } catch (e) {
+   
+}
+ }
 
   // ✅ فك تشفير رسالة واحدة (يطلب التحقق كل مرة)
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {
       print('🔓 Decrypting message: $messageId');
 
-      // ✅ التحقق البيومتري - كل مرة تفتح رسالة
+      // ✅ التحقق البيومتري - كل مرة تُفتح رسالة
       final authenticated = await BiometricService.authenticateWithBiometrics(
         reason: 'تحقق من هويتك لقراءة الرسالة',
       );
@@ -415,7 +415,7 @@ class MessagingService {
     }
   }
 
-  // ✅ حذف رسالة
+  // ✅ حذف رسالة - مُحدَّث
   Future<Map<String, dynamic>> deleteMessage({
     required String messageId,
     required bool deleteForEveryone,
@@ -428,27 +428,31 @@ class MessagingService {
       }
 
       if (deleteForEveryone) {
-        // حذف للجميع
-        final result = await _apiService.deleteMessageForEveryone(messageId);
+        // ✅ حذف للجميع
+        _socketService.deleteMessage(
+          messageId: messageId,
+          deleteFor: 'everyone',
+        );
         
-        if (result['success']) {
-          await _db.deleteMessage(messageId);
-          print('✅ Message deleted for everyone');
-        }
+        // ✅ حذف محلي فوري
+        await _db.deleteMessage(messageId);
+        print('✅ Message deleted for everyone (local)');
         
-        return result;
+        return {'success': true, 'message': 'تم الحذف للجميع'};
       } else {
-        // حذف من عند المستقبل فقط
-        final result = await _apiService.deleteMessageForRecipient(messageId);
+        // ✅ حذف من عند المستقبل فقط
+        _socketService.deleteMessage(
+          messageId: messageId,
+          deleteFor: 'recipient',
+        );
         
-        if (result['success']) {
-          await _db.updateMessage(messageId, {
-            'deletedForRecipient': 1,
-          });
-          print('✅ Message deleted for recipient');
-        }
+        // ✅ تحديث محلي - إضافة علامة "تم الحذف لدى المستقبل"
+        await _db.updateMessage(messageId, {
+          'deletedForRecipient': 1,
+        });
+        print('✅ Message marked as deleted for recipient');
         
-        return result;
+        return {'success': true, 'message': 'تم الحذف من عند المستقبل'};
       }
 
     } catch (e) {

@@ -37,7 +37,7 @@ router.post('/send', auth, async (req, res) => {
     // ✅ إرسال عبر Socket
     const io = req.app.get('io');
     if (io && io.sendToUser) {
-      io.sendToUser(recipientId, 'message:new', {
+      const sent = io.sendToUser(recipientId, 'message:new', {
         messageId: message.messageId,
         senderId: req.user.id,
         encryptedType: message.encryptedType,
@@ -48,6 +48,8 @@ router.post('/send', auth, async (req, res) => {
         attachmentMimeType: message.attachmentMimeType,
         createdAt: message.createdAt.toISOString(),
       });
+
+      console.log(`✅ Message sent to recipient: ${sent ? 'delivered' : 'saved for later'}`);
     }
 
     res.json({
@@ -65,7 +67,7 @@ router.post('/send', auth, async (req, res) => {
   }
 });
 
-// ✅ حذف من عند المستقبل فقط
+// ✅ حذف من عند المستقبل فقط - مُحدَّث
 router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -96,19 +98,22 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
 
     const recipientId = message.recipientId.toString();
     
+    // ✅ تحديث في قاعدة البيانات
     if (!message.deletedFor.includes(recipientId)) {
       message.deletedFor.push(message.recipientId);
       message.deletedForRecipient = true;
       await message.save();
     }
 
-    // ✅ Socket للمستقبل
+    // ✅ إرسال Socket فوري للمستقبل
     const io = req.app.get('io');
     if (io && io.sendToUser) {
-      io.sendToUser(recipientId, 'message:deleted', {
+      const sent = io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'recipient',
       });
+      
+      console.log(`✅ Delete notification sent to recipient: ${sent}`);
     }
 
     res.json({
@@ -125,7 +130,7 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   }
 });
 
-// ✅ حذف للجميع
+// ✅ حذف للجميع - مُحدَّث
 router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -163,15 +168,19 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
     if (io && io.sendToUser) {
       const recipientId = message.recipientId.toString();
       
+      // ✅ إرسال للمستقبل
       io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'everyone',
       });
 
+      // ✅ إرسال للمرسل (تأكيد)
       io.sendToUser(currentUserId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'everyone',
       });
+
+      console.log(`✅ Message deleted for everyone: ${messageId}`);
     }
 
     res.json({
@@ -203,6 +212,7 @@ router.get('/conversation/:userId', auth, async (req, res) => {
     .sort({ createdAt: 1 })
     .limit(100);
 
+    // ✅ فلترة الرسائل المحذوفة
     messages = messages.filter(msg => !msg.isDeletedFor(currentUserId));
 
     const formattedMessages = messages.map(msg => ({

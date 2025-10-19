@@ -162,32 +162,33 @@ class SocketService {
       _statusController.add(Map<String, dynamic>.from(data));
     });
 
-    // ✅ استقبال حذف - مُصلح
     _socket?.on('message:deleted', (data) async {
-      print('🗑️ Message deleted event: ${data['messageId']} (${data['deletedFor']})');
-      
-      final deletedFor = data['deletedFor'];
-      
-      _deletedController.add(Map<String, dynamic>.from(data));
-
-      try {
-        if (deletedFor == 'everyone') {
-          await DatabaseHelper.instance.deleteMessage(data['messageId']);
-          print('✅ Deleted from SQLite (everyone)');
-        } else if (deletedFor == 'recipient') {
-          await DatabaseHelper.instance.updateMessage(
-            data['messageId'],
-            {
-              'status': 'deleted',
-              'deletedForRecipient': 1,
-            },
-          );
-          print('✅ Marked as deleted for recipient');
-        }
-      } catch (e) {
-        print('⚠️ Local delete failed: $e');
-      }
-    });
+ 
+  
+  final messageId = data['messageId'];
+  final deletedFor = data['deletedFor'];
+  
+  // ✅ 1. إشعار الواجهة أولاً (أعلى أولوية)
+  if (!_deletedController.isClosed) {
+    _deletedController.add(Map<String, dynamic>.from(data));
+    print('✅ UI controller notified');
+  }
+  
+  // ✅ 2. ثم حذف من SQLite
+  try {
+    await Future.delayed(Duration(milliseconds: 30)); // تأخير صغير
+    
+    if (deletedFor == 'everyone') {
+      await DatabaseHelper.instance.deleteMessage(messageId);
+      print('✅ Deleted from SQLite (everyone)');
+    } else if (deletedFor == 'recipient') {
+      await DatabaseHelper.instance.deleteMessage(messageId);
+      print('✅ Deleted from SQLite (recipient)');
+    }
+  } catch (e) {
+    print('⚠️ SQLite delete failed: $e');
+  }
+});
 
     _socket?.on('disconnect', (_) {
       print('❌ Socket disconnected');
@@ -255,7 +256,7 @@ class SocketService {
     print('📤 Status update sent: $messageId → $status');
   }
 
-  // ✅ حذف رسالة - جديد
+  // ✅ حذف رسالة - مُحدَّث
   void deleteMessage({
     required String messageId,
     required String deleteFor, // 'everyone' or 'recipient'

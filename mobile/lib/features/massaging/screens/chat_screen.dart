@@ -124,53 +124,36 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _subscribeToRealtimeUpdates() {
-    _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
-      if (data['conversationId'] == _conversationId) {
-        _loadMessagesFromDatabase();
-      }
-    });
+  _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
+    if (data['conversationId'] == _conversationId) {
+      _loadMessagesFromDatabase();
+    }
+  });
 
-    _deleteSubscription = _messagingService.onMessageDeleted.listen((data) {
-      final messageId = data['messageId'];
-      final deletedFor = data['deletedFor'];
-      
-      if (mounted) {
-        setState(() {
-          final index = _messages.indexWhere((m) => m['id'] == messageId);
-          if (index != -1) {
-            _messages.removeAt(index);
-
-            if (deletedFor == 'everyone') {
-              _messages.removeAt(index);
-               _showMessage('تم الحذف للجميع', true);
-
-          } else if (deletedFor == 'recipient') {
-             _messages.removeAt(index);
-               _showMessage('تم حذف رسالة', false);
-              _messages[index]['status'] = 'deleted';
-              _messages[index]['deletedForRecipient'] = 1;
-            }
-          }
-        });
-      }
-    });
-
-   _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
-  final messageId = data['messageId'];
-  final newStatus = data['status'];
-  
-  if (mounted) {
+  _deleteSubscription = _messagingService.onMessageDeleted.listen((data) async {
+    if (!mounted) return;
+    final deletedMessageId = data['messageId'];
     setState(() {
-      final index = _messages.indexWhere((m) => m['id'] == messageId);
-      if (index != -1) {
-        final updatedMessage = Map<String, dynamic>.from(_messages[index]);
-        updatedMessage['status'] = newStatus;
-        _messages[index] = updatedMessage;
-      }
-    });
-  }
-});
-  }
+    _messages.removeWhere((m) => m['id'] == deletedMessageId);
+  });
+  });
+
+  _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
+    final messageId = data['messageId'];
+    final newStatus = data['status'];
+    
+    if (mounted) {
+      setState(() {
+        final index = _messages.indexWhere((m) => m['id'] == messageId);
+        if (index != -1) {
+          final updatedMessage = Map<String, dynamic>.from(_messages[index]);
+          updatedMessage['status'] = newStatus;
+          _messages[index] = updatedMessage;
+        }
+      });
+    }
+  });
+}
 
 void _listenToUserStatus() {
   // ⏱️ طلب الحالة الأولية مرة واحدة

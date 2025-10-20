@@ -252,83 +252,81 @@ setTimeout(() => {
 
     // ✅ حذف رسالة - مُصلح بالكامل
     socket.on('message:delete', async (data) => {
-      try {
-        const { messageId, deleteFor } = data;
-        const senderId = userId;
+  try {
+    const { messageId, deleteFor } = data;
+    const senderId = userId;
 
-        console.log(`🗑️ Delete request: ${messageId} (deleteFor: ${deleteFor})`);
+    console.log(`🗑️ Delete request: ${messageId} (deleteFor: ${deleteFor})`);
 
-        const message = await Message.findOne({ messageId });
-        
-        if (!message) {
-          socket.emit('error', { message: 'الرسالة غير موجودة' });
-          return;
-        }
+    const message = await Message.findOne({ messageId });
+    
+    if (!message) {
+      socket.emit('error', { message: 'الرسالة غير موجودة' });
+      return;
+    }
 
-        if (deleteFor === 'everyone') {
-          // ✅ حذف للجميع
-          if (message.senderId.toString() !== senderId) {
-            socket.emit('error', { message: 'فقط المرسل يمكنه الحذف للجميع' });
-            return;
-          }
-
-          message.deletedForEveryone = true;
-          message.deletedForEveryoneAt = new Date();
-          message.status = 'deleted';
-          await message.save();
-
-          const recipientId = message.recipientId.toString();
-          
-          // ✅ إرسال للطرفين فوراً
-          io.sendToUser(recipientId, 'message:deleted', {
-            messageId,
-            deletedFor: 'everyone',
-          });
-
-          socket.emit('message:deleted', {
-            messageId,
-            deletedFor: 'everyone',
-          });
-
-          console.log(`✅ Message deleted for everyone: ${messageId}`);
-
-        } else if (deleteFor === 'recipient') {
-          // ✅ حذف من عند المستقبل فقط
-          if (message.senderId.toString() !== senderId) {
-            socket.emit('error', { message: 'ليس لديك صلاحية' });
-            return;
-          }
-
-          const recipientId = message.recipientId.toString();
-          
-          // ✅ تحديث قاعدة البيانات
-          if (!message.deletedFor.includes(recipientId)) {
-            message.deletedFor.push(message.recipientId);
-            message.deletedForRecipient = true;
-            await message.save();
-          }
-
-          // ✅ إرسال فوري للمستقبل
-          const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
-            messageId,
-            deletedFor: 'recipient',
-          });
-
-          // ✅ تأكيد للمرسل
-          socket.emit('message:deleted', {
-            messageId,
-            deletedFor: 'recipient',
-            confirmedDelivery: sentToRecipient,
-          });
-
-          console.log(`✅ Message deleted for recipient: ${messageId} (delivered: ${sentToRecipient})`);
-        }
-
-      } catch (err) {
-        console.error('❌ Delete message error:', err);
-        socket.emit('error', { message: 'فشل الحذف' });
+    if (deleteFor === 'everyone') {
+      // ✅ حذف للجميع
+      if (message.senderId.toString() !== senderId) {
+        socket.emit('error', { message: 'فقط المرسل يمكنه الحذف للجميع' });
+        return;
       }
-    });
+
+      message.deletedForEveryone = true;
+      message.deletedForEveryoneAt = new Date();
+      message.status = 'deleted';
+      await message.save();
+
+      const recipientId = message.recipientId.toString();
+      
+      // ✅ إرسال للمستقبل أولاً
+      const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
+        messageId,
+        deletedFor: 'everyone',
+      });
+      
+      console.log(`${sentToRecipient ? '✅' : '⚠️'} Sent delete to recipient ${recipientId}`);
+
+      // ✅ ثم إرسال للمرسل (تأكيد)
+      socket.emit('message:deleted', {
+        messageId,
+        deletedFor: 'everyone',
+      });
+      
+      console.log(`✅ Delete confirmed to sender ${senderId}`);
+
+    } else if (deleteFor === 'recipient') {
+      // ✅ حذف من عند المستقبل فقط
+      if (message.senderId.toString() !== senderId) {
+        socket.emit('error', { message: 'ليس لديك صلاحية' });
+        return;
+      }
+
+      const recipientId = message.recipientId.toString();
+      
+      // ✅ تحديث قاعدة البيانات
+      if (!message.deletedFor.includes(recipientId)) {
+        message.deletedFor.push(message.recipientId);
+        message.deletedForRecipient = true;
+        await message.save();
+      }
+
+      // ✅ إرسال فوري للمستقبل فقط
+      const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
+        messageId,
+        deletedFor: 'recipient',
+      });
+
+      console.log(`${sentToRecipient ? '✅' : '⚠️'} Delete sent to recipient ${recipientId}`);
+      
+      // ✅ لا نرسل للمرسل هنا (هو حذفها من عنده فقط محلياً)
+    }
+
+  } catch (err) {
+    console.error('❌ Delete message error:', err);
+    socket.emit('error', { message: 'فشل الحذف' });
+  }
+});
 
     // ✅ حالة الكتابة
     socket.on('typing', (data) => {

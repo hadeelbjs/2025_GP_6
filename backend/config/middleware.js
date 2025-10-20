@@ -4,6 +4,8 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 
+app.set('trust proxy', true);
+
 const configureMiddleware = (app) => {
   // Security Headers
   app.use(

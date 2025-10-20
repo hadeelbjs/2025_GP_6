@@ -4,6 +4,8 @@ const http = require('http');
 const path = require('path');
 const mongoose = require('mongoose');
 
+app.set('trust proxy', true);
+
 // Import configurations
 const { configureMiddleware } = require('./config/middleware');
 const { configureRoutes } = require('./config/routes');

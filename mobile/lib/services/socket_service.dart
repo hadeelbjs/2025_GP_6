@@ -74,13 +74,8 @@ class SocketService {
       }
 
       String baseUrl;
-      if (Platform.isAndroid) {
-        baseUrl = 'http://10.0.2.2:3000';
-      } else if (Platform.isIOS) {
-        baseUrl = 'http://localhost:3000';
-      } else {
-        baseUrl = 'http://localhost:3000';
-      }
+      baseUrl = 'https://waseed-team-production.up.railway.app';
+
 
       print('🔌 Connecting to: $baseUrl');
 
@@ -134,7 +129,7 @@ class SocketService {
     _socket?.on('connected', (data) {
     });
 
-    // ✅ استقبال رسالة مع Base64
+    // استقبال رسالة مع Base64
     _socket?.on('message:new', (data) async {
       final messageId = data['messageId'] as String;
       
@@ -220,7 +215,7 @@ class SocketService {
     });
   }
 
-  // ✅ إرسال رسالة مع Base64
+  // إرسال رسالة مع Base64
   void sendMessageWithAttachment({
     required String messageId,
     required String recipientId,
@@ -232,7 +227,7 @@ class SocketService {
     String? attachmentMimeType,
   }) {
     if (_socket == null || !isConnected) {
-      print('❌ Cannot send: Socket not connected');
+      print('Cannot send: Socket not connected');
       return;
     }
 

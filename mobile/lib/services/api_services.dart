@@ -5,19 +5,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
   // ============================
-  // Base URL بحسب المنصة
+  // Base URL 
   // ============================
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      // Android Emulator -> يصل للـ localhost على المضيف عبر 10.0.2.2
-      return 'http://10.0.2.2:3000/api';
-    } else if (Platform.isIOS) {
-      // iOS Simulator -> يتصل مباشرة على نفس الجهاز
-      return 'http://localhost:3000/api';
-    } else {
-      return 'http://localhost:3000/api';
-    }
-  }
+    static const String baseUrl = 'https://waseed-team-production.up.railway.app/api';
+
   
   final _storage = const FlutterSecureStorage();
   
@@ -76,13 +67,9 @@ class ApiService {
         ? relativePath.substring(1) 
         : relativePath;
     
-    if (Platform.isAndroid) {
-      return 'http://10.0.2.2:3000/$cleanPath';
-    } else if (Platform.isIOS) {
-      return 'http://localhost:3000/$cleanPath';
-    } else {
-      return 'http://localhost:3000/$cleanPath';
-    }
+    
+      return '$baseUrl/$cleanPath';
+    
   }
 
 

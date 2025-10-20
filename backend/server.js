@@ -1,133 +1,100 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http'); 
-const socketIO = require('socket.io');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const http = require('http');
 const path = require('path');
+const mongoose = require('mongoose');
 
+// Import configurations
+const { configureMiddleware } = require('./config/middleware');
+const { configureRoutes } = require('./config/routes');
+const { configureSocketIO } = require('./config/socket');
+const { connectDatabase } = require('./config/database');
+
+// Initialize Express App
 const app = express();
-const server = http.createServer(app); 
+const server = http.createServer(app);
 
-const io = socketIO(server, {
-  cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
-    credentials: true,
-    methods: ['GET', 'POST']
-  },
-  transports: ['websocket', 'polling']
-});
-
+// Configure Socket.IO
+const io = configureSocketIO(server);
 app.set('io', io);
 
-// Security Middleware
-app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" } // ✅ للسماح بتحميل الصور
-}));
+// Configure Middleware (Security, CORS, Rate Limiting, etc.)
+configureMiddleware(app);
 
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
-}));
+// Connect to Database
+connectDatabase();
 
-app.use(express.json({ limit: '10kb' }));
+// Configure Routes
+configureRoutes(app);
 
-// ✅ خدمة الملفات الثابتة (الصور والملفات المرفوعة)
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// حماية من NoSQL Injection بإزالة أي $ من المدخلات 
-app.use((req, res, next) => {
-  if (req.query) {
-    Object.keys(req.query).forEach(key => {
-      const value = req.query[key];
-      if (typeof value === 'string') {
-        req.query[key] = value.replace(/\$/g, '');
-      }
-    });
-  }
-  
-  if (req.body) {
-    const sanitize = (obj) => {
-      Object.keys(obj).forEach(key => {
-        if (typeof obj[key] === 'string') {
-          obj[key] = obj[key].replace(/\$/g, '');
-        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
-          sanitize(obj[key]);
-        }
-      });
-    };
-    sanitize(req.body);
-  }
-  
-  next();
-});
-
-// Rate Limiting
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 100,
-  message: { success: false, message: 'تم تجاوز عدد الطلبات' }
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 5,
-  message: { success: false, message: 'تجاوزت عدد محاولات تسجيل الدخول' },
-  skipSuccessfulRequests: true
-});
-
-// ✅ Rate Limiter خاص للرفع
-const uploadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 20, // 20 ملف كحد أقصى
-  message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
-});
-
-app.use('/api/', generalLimiter);
-app.use('/api/auth/login', authLimiter);
-app.use('/api/auth/register', authLimiter);
-app.use('/api/upload', uploadLimiter); // ✅ حماية endpoint الرفع
-
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log(' Connected to MongoDB'))
-  .catch(err => console.error('❌ DB connection error:', err));
-
-// Socket.IO
-require('./sockets/messageSocket')(io);
-
-// Routes
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/contacts', require('./routes/contacts'));
-app.use('/api/user', require('./routes/user')); 
-app.use('/api/prekeys', require('./routes/prekeys')); 
-app.use('/api/messages', require('./routes/messages'));
-app.use('/api/upload', require('./routes/upload')); // ✅ Route جديد للرفع
-
+// Health Check Endpoints
 app.get('/', (req, res) => {
-  res.json({ 
-    message: 'API is working',
+  res.json({
+    success: true,
+    message: 'Waseed Backend API is running',
+    version: '1.0.0',
+    timestamp: new Date().toISOString(),
     endpoints: {
       auth: '/api/auth',
       contacts: '/api/contacts',
       messages: '/api/messages',
-      upload: '/api/upload' // ✅
-    }
+      upload: '/api/upload',
+      prekeys: '/api/prekeys',
+      user: '/api/user',
+    },
   });
 });
 
+app.get('/health', (req, res) => {
+  res.json({
+    success: true,
+    status: 'healthy',
+    uptime: process.uptime(),
+    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+    timestamp: new Date().toISOString(),
+  });
+});
+
+// Global Error Handler
 app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ 
-    success: false, 
-    message: 'حدث خطأ في السيرفر' 
+  console.error('Error:', err.stack);
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'حدث خطأ في السيرفر',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
   });
 });
 
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => {
-  console.log(` Server running on port: ${PORT}`);
-  console.log(` Socket.IO ready`);
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'المسار غير موجود',
+    path: req.originalUrl,
+  });
 });
+
+// Start Server
+const PORT = process.env.PORT || 3000;
+const HOST = '0.0.0.0';
+
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
+  console.log(`Socket.IO ready`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`Started at: ${new Date().toISOString()}`);
+});
+
+// Graceful Shutdown
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received. Shutting down gracefully...');
+  server.close(() => {
+    console.log('Server closed');
+    mongoose.connection.close(false, () => {
+      console.log('MongoDB connection closed');
+      process.exit(0);
+    });
+  });
+});
+
+module.exports = { app, server, io };

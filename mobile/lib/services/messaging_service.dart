@@ -54,7 +54,6 @@ class MessagingService {
 
   Future<bool> initialize() async {
     try {
-      print('🔧 Initializing MessagingService...');
       
       await _cacheUserId();
       await SignalProtocolManager().initialize();
@@ -62,28 +61,24 @@ class MessagingService {
        if (!_socketService.isConnected) {
       final socketConnected = await _socketService.connect();
       if (!socketConnected) {
-        print('❌ Socket connection failed');
         return false;
       }
     } else {
-      print('✅ Socket already connected, reusing connection');
+      print('Socket already connected, reusing connection');
     }
 
       _setupSocketListeners();
       _startMessageCacheCleanup();
 
-      print('✅ MessagingService initialized successfully');
       return true;
 
     } catch (e) {
-      print('❌ MessagingService initialization error: $e');
       return false;
     }
   }
 
   void _setupSocketListeners() {
     if (_listenersSetup) {
-      print('⚠️ Listeners already setup - skipping');
       return;
     }
 
@@ -117,7 +112,7 @@ class MessagingService {
       final conversationId = _generateConversationId(recipientId);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-      // ✅ تحويل الملفات إلى Base64
+      //  تحويل الملفات إلى Base64
       String? attachmentData;
       String? attachmentType;
       String? attachmentName;
@@ -129,17 +124,15 @@ class MessagingService {
         attachmentType = 'image';
         attachmentName = imageFile.path.split('/').last;
         attachmentMimeType = 'image/${attachmentName.split('.').last}';
-        print('📷 Image encoded: ${attachmentName} (${bytes.length} bytes)');
       } else if (attachmentFile != null) {
         final bytes = await attachmentFile.readAsBytes();
         attachmentData = base64Encode(bytes);
         attachmentType = 'file';
         attachmentName = fileName ?? attachmentFile.path.split('/').last;
         attachmentMimeType = 'application/octet-stream';
-        print('📎 File encoded: ${attachmentName} (${bytes.length} bytes)');
       }
 
-      // 1️⃣ تشفير الرسالة
+      //  تشفير الرسالة
       final encrypted = await _signalProtocol.encryptMessage(
         recipientId,
         messageText,
@@ -149,7 +142,7 @@ class MessagingService {
         throw Exception('Encryption failed');
       }
 
-      // 2️⃣ حفظ في SQLite
+      //  حفظ في SQLite
       await _db.saveMessage({
         'id': messageId,
         'conversationId': conversationId,
@@ -168,9 +161,8 @@ class MessagingService {
         'attachmentName': attachmentName,
       });
 
-      print('✅ Message saved to SQLite with attachment');
 
-      // 3️⃣ حفظ المحادثة
+      // حفظ المحادثة
       await _db.saveConversation({
         'id': conversationId,
         'contactId': recipientId,
@@ -197,7 +189,6 @@ class MessagingService {
         attachmentMimeType: attachmentMimeType,
       );
 
-      print('✅ Message sent via Socket with attachments');
 
       return {
         'success': true,
@@ -205,7 +196,6 @@ class MessagingService {
       };
 
     } catch (e) {
-      print('❌ Send message error: $e');
       return {
         'success': false,
         'message': 'فشل إرسال الرسالة: $e',
@@ -213,21 +203,18 @@ class MessagingService {
     }
   }
 
-  // ✅ استقبال رسالة مع Base64
+  // استقبال رسالة مع Base64
   Future<void> _handleIncomingMessage(Map data) async {
     try {
       final messageId = data['messageId'] as String;
       
-      print('📨 Processing incoming message: $messageId');
 
       if (_processedMessageIds.contains(messageId)) {
-        print('⚠️ Already processed: $messageId');
         return;
       }
 
       final existing = await _db.getMessage(messageId);
       if (existing != null) {
-        print('⚠️ Already exists in DB: $messageId');
         _processedMessageIds.add(messageId);
         return;
       }
@@ -247,7 +234,7 @@ class MessagingService {
 
       final conversationId = _generateConversationId(senderId);
 
-      // ✅ حفظ الرسالة المشفرة مع المرفقات
+      // حفظ الرسالة المشفرة مع المرفقات
       await _db.saveMessage({
         'id': messageId,
         'conversationId': conversationId,
@@ -267,12 +254,9 @@ class MessagingService {
         'attachmentName': attachmentName,
       });
 
-      print('✅ Incoming message saved with attachment: $attachmentType');
  if (_currentOpenChatUserId != senderId) {
       await _db.incrementUnreadCount(conversationId);
-      print('📊 Incremented unread count for $conversationId');
     } else {
-      print('✅ User inside chat - no unread count increment');
       await _db.markConversationAsRead(conversationId);
     }
 
@@ -283,10 +267,8 @@ class MessagingService {
       'isLocked': true,
     });
 
-    print('✅ Incoming message processed');
 
   } catch (e) {
-    print('❌ Handle incoming message error: $e');
   }
 }
   
@@ -305,7 +287,6 @@ class MessagingService {
       }
 
     } catch (e) {
-      print('❌ Handle status update error: $e');
     }
   }
 
@@ -320,10 +301,9 @@ class MessagingService {
         'messageId': messageId,
         'deletedFor': deletedFor,
       });
-      print('✅ UI notified about deletion');
     }
 
-    // ✅ ثم حذف من SQLite
+    // ثم حذف من SQLite
     await Future.delayed(Duration(milliseconds: 50)); 
     
     if (deletedFor == 'everyone') {
@@ -337,12 +317,11 @@ class MessagingService {
 }
  }
 
-  // ✅ فك تشفير رسالة واحدة (يطلب التحقق كل مرة)
+  //فك تشفير رسالة واحدة (يطلب التحقق كل مرة)
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {
-      print('🔓 Decrypting message: $messageId');
 
-      // ✅ التحقق البيومتري - كل مرة تُفتح رسالة
+      // التحقق البيومتري - كل مرة تُفتح رسالة
       final authenticated = await BiometricService.authenticateWithBiometrics(
         reason: 'تحقق من هويتك لقراءة الرسالة',
       );
@@ -359,7 +338,7 @@ class MessagingService {
         throw Exception('Message not found');
       }
 
-      // ✅ فك التشفير
+      // فك التشفير
       final decrypted = await _signalProtocol.decryptMessage(
         message['senderId'],
         message['encryptionType'],
@@ -370,11 +349,11 @@ class MessagingService {
         throw Exception('Decryption failed');
       }
 
-      // ✅ تحديث الرسالة
+      // تحديث الرسالة
       await _db.updateMessage(messageId, {
         'plaintext': decrypted,
         'isDecrypted': 1,
-        'requiresBiometric': 1, // ✅ يبقى يطلب تحقق كل مرة
+        'requiresBiometric': 1, 
         'status': 'read',
         'readAt': DateTime.now().millisecondsSinceEpoch,
       });
@@ -385,7 +364,6 @@ class MessagingService {
         recipientId: message['senderId'],
       );
 
-      print('✅ Message decrypted: $messageId');
 
       return {
         'success': true,
@@ -393,7 +371,6 @@ class MessagingService {
       };
 
     } catch (e) {
-      print('❌ Decrypt message error: $e');
       return {
         'success': false,
         'message': 'فشل فك التشفير: $e',
@@ -401,7 +378,7 @@ class MessagingService {
     }
   }
 
-  // ✅ جلب الرسائل
+  //  جلب الرسائل
   Future<List<Map<String, dynamic>>> getConversationMessages(
     String conversationId, {
     int limit = 50,
@@ -409,7 +386,6 @@ class MessagingService {
     try {
       return await _db.getMessages(conversationId, limit: limit);
     } catch (e) {
-      print('❌ Get messages error: $e');
       return [];
     }
   }
@@ -418,7 +394,6 @@ class MessagingService {
     try {
       return await _db.getConversations();
     } catch (e) {
-      print('❌ Get conversations error: $e');
       return [];
     }
   }
@@ -427,11 +402,10 @@ class MessagingService {
     try {
       await _db.markConversationAsRead(conversationId);
     } catch (e) {
-      print('❌ Mark as read error: $e');
     }
   }
 
-  // ✅ حذف رسالة - مُحدَّث
+  // حذف رسالة - مُحدَّث
   Future<Map<String, dynamic>> deleteMessage({
     required String messageId,
     required bool deleteForEveryone,
@@ -444,35 +418,32 @@ class MessagingService {
       }
 
       if (deleteForEveryone) {
-        // ✅ حذف للجميع
+        //  حذف للجميع
         _socketService.deleteMessage(
           messageId: messageId,
           deleteFor: 'everyone',
         );
         
-        // ✅ حذف محلي فوري
+        // حذف محلي فوري
         await _db.deleteMessage(messageId);
-        print('✅ Message deleted for everyone (local)');
         
         return {'success': true, 'message': 'تم الحذف للجميع'};
       } else {
-        // ✅ حذف من عند المستقبل فقط
+        // حذف من عند المستقبل فقط
         _socketService.deleteMessage(
           messageId: messageId,
           deleteFor: 'recipient',
         );
         
-        // ✅ تحديث محلي - إضافة علامة "تم الحذف لدى المستقبل"
+        //  تحديث محلي - إضافة علامة "تم الحذف لدى المستقبل"
         await _db.updateMessage(messageId, {
           'deletedForRecipient': 1,
         });
-        print('✅ Message marked as deleted for recipient');
         
         return {'success': true, 'message': 'تم الحذف من عند المستقبل'};
       }
 
     } catch (e) {
-      print('❌ Delete message error: $e');
       return {
         'success': false,
         'message': 'فشل الحذف: $e',
@@ -484,7 +455,6 @@ class MessagingService {
     try {
       await _db.deleteConversation(conversationId);
     } catch (e) {
-      print('❌ Delete conversation error: $e');
     }
   }
 
@@ -493,7 +463,6 @@ class MessagingService {
     _socketService.disconnectOnLogout();  
          await _db.clearAllData();
     } catch (e) {
-      print('❌ Logout error: $e');
     }
   }
 
@@ -555,6 +524,5 @@ class MessagingService {
 
   void setCurrentOpenChat(String? userId) {
     _currentOpenChatUserId = userId;
-    print('📱 Current open chat: ${userId ?? "none"}');
   }
 }

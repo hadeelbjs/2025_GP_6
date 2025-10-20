@@ -1,4 +1,3 @@
-// lib/features/massaging/screens/chat_screen.dart
 
 import 'dart:async';
 import 'dart:io';
@@ -119,7 +118,6 @@ class _ChatScreenState extends State<ChatScreen> {
       });
 
     } catch (e) {
-      print('❌ Error loading messages: $e');
     }
   }
 
@@ -826,7 +824,6 @@ void _listenToUserStatus() {
                   ],
                 ),
               
-              // ✅ رسالة "تم الحذف لدى المستقبل"
               if (isDeletedForRecipient && isMine) ...[
                 const SizedBox(height: 4),
                 Row(
@@ -935,7 +932,6 @@ void _listenToUserStatus() {
   }
 }
 
-// ✅ عارض الصور (Base64)
 class _ImageViewerScreen extends StatelessWidget {
   final String base64Data;
   

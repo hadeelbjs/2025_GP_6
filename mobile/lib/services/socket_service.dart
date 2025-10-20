@@ -128,12 +128,10 @@ class SocketService {
   
   // 🆕 إعادة طلب الحالة بعد الاتصال
   Future.delayed(Duration(milliseconds: 500), () {
-    print('🔄 Socket ready - can request status now');
   });
 });
 
     _socket?.on('connected', (data) {
-      print('✅ Authenticated: ${data['userId']}');
     });
 
     // ✅ استقبال رسالة مع Base64
@@ -141,11 +139,9 @@ class SocketService {
       final messageId = data['messageId'] as String;
       
       if (_processedMessages.contains(messageId)) {
-        print('⚠️ Already processed: $messageId');
         return;
       }
       
-      print('📨 New message received: $messageId');
       
       _processedMessages.add(messageId);
       
@@ -162,14 +158,12 @@ class SocketService {
         'createdAt': data['createdAt'],
       });
       
-      print('✅ Delivery confirmation sent');
     });
 
     _socket?.on('message:sent', (data) async {
       final messageId = data['messageId'];
       final delivered = data['delivered'] ?? false;
       
-      print('📤 Message sent: $messageId (delivered: $delivered)');
       
       try {
         await DatabaseHelper.instance.updateMessageStatus(
@@ -177,12 +171,10 @@ class SocketService {
           delivered ? 'delivered' : 'sent',
         );
       } catch (e) {
-        print('❌ Failed to update status: $e');
       }
     });
 
     _socket?.on('message:status_update', (data) {
-      print('📊 Status update: ${data['messageId']} → ${data['status']}');
       _statusController.add(Map<String, dynamic>.from(data));
     });
 
@@ -192,35 +184,29 @@ class SocketService {
   final messageId = data['messageId'];
   final deletedFor = data['deletedFor'];
   
-  // ✅ 1. إشعار الواجهة أولاً (أعلى أولوية)
+  //  1. إشعار الواجهة أولاً (أعلى أولوية)
   if (!_deletedController.isClosed) {
     _deletedController.add(Map<String, dynamic>.from(data));
-    print('✅ UI controller notified');
   }
   
-  // ✅ 2. ثم حذف من SQLite
+  // 2. ثم حذف من SQLite
   try {
     await Future.delayed(Duration(milliseconds: 30)); // تأخير صغير
     
     if (deletedFor == 'everyone') {
       await DatabaseHelper.instance.deleteMessage(messageId);
-      print('✅ Deleted from SQLite (everyone)');
     } else if (deletedFor == 'recipient') {
       await DatabaseHelper.instance.deleteMessage(messageId);
-      print('✅ Deleted from SQLite (recipient)');
     }
   } catch (e) {
-    print('⚠️ SQLite delete failed: $e');
   }
 });
 
    _socket?.on('user:status', (data) {
-      print('📡 User status received: ${data['userId']} → ${data['isOnline']}');
       _userStatusController.add(Map<String, dynamic>.from(data));
     });
 
     _socket?.on('disconnect', (_) {
-      print('❌ Socket disconnected');
       _connectionController.add(false);
     });
 
@@ -229,7 +215,6 @@ class SocketService {
     });
 
     _socket?.on('reconnect', (attempt) {
-      print('🔄 Reconnected after $attempt attempts');
       _connectionController.add(true);
       _processedMessages.clear();
     });
@@ -263,7 +248,6 @@ class SocketService {
       'createdAt': DateTime.now().toIso8601String(),
     });
 
-    print('📤 Message sent via socket: $messageId');
   }
 
   void updateMessageStatus({
@@ -272,7 +256,6 @@ class SocketService {
     required String recipientId,
   }) {
     if (!isConnected) {
-      print('❌ Cannot update status: Socket not connected');
       return;
     }
 
@@ -282,16 +265,14 @@ class SocketService {
       'recipientId': recipientId,
     });
 
-    print('📤 Status update sent: $messageId → $status');
   }
 
-  // ✅ حذف رسالة - مُحدَّث
+  //  حذف رسالة - مُحدَّث
   void deleteMessage({
     required String messageId,
     required String deleteFor, // 'everyone' or 'recipient'
   }) {
     if (!isConnected) {
-      print('❌ Cannot delete: Socket not connected');
       return;
     }
 
@@ -300,18 +281,15 @@ class SocketService {
       'deleteFor': deleteFor,
     });
 
-    print('📤 Delete request sent: $messageId ($deleteFor)');
   }
 
 
   void requestUserStatus(String userId) {
   if (_socket == null) {
-    print('❌ Socket is null');
     return;
   }
   
   if (!_socket!.connected) {
-    print('⚠️ Socket not connected yet, retrying in 1 second...');
     Future.delayed(Duration(seconds: 1), () {
       requestUserStatus(userId); // إعادة المحاولة
     });
@@ -322,16 +300,13 @@ class SocketService {
     'targetUserId': userId,
   });
 
-  print('📡 Requested status for user: $userId');
 }
   void disconnectOnLogout() {
-    print('🔌 Disconnecting socket on logout...');
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
     _processedMessages.clear();
     _isConnecting = false;
-    print('✅ Socket disconnected');
   }
 
   void dispose() {

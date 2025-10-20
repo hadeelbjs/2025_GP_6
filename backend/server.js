@@ -4,7 +4,6 @@ const http = require('http');
 const path = require('path');
 const mongoose = require('mongoose');
 
-app.set('trust proxy', true);
 
 // Import configurations
 const { configureMiddleware } = require('./config/middleware');
@@ -15,6 +14,8 @@ const { connectDatabase } = require('./config/database');
 // Initialize Express App
 const app = express();
 const server = http.createServer(app);
+
+app.set('trust proxy', true);
 
 // Configure Socket.IO
 const io = configureSocketIO(server);

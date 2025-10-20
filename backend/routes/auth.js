@@ -23,6 +23,29 @@ const generateCode = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
+// Middleware للتحقق من قوة الباسورد
+const validatePasswordMiddleware = (req, res, next) => {
+  const { password } = req.body;
+  
+  if (!password) {
+    return res.status(400).json({
+      success: false,
+      message: 'الرجاء إدخال كلمة المرور'
+    });
+  }
+  
+  const errors = User.validatePasswordStrength(password);
+  
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: errors[0] // أول خطأ
+    });
+  }
+  
+  next();
+};
+
 // التسجيل - إرسال رمز تحقق للإيميل
 router.post(
   '/register',
@@ -37,8 +60,8 @@ router.post(
         if (!phone) throw new Error('رقم الجوال غير صالح');
         return true;
     }),
-    body('password').isLength({ min: 6 }).withMessage('يجب أن تكون كلمة المرور ٦ أحرف على الأقل')
   ],
+  validatePasswordMiddleware, // التحقق من قوة الباسورد
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -84,6 +107,8 @@ router.post(
         email: email.toLowerCase(),
         phone: normalizedPhone,
         password: hashedPassword,
+        passwordChangedAt: new Date(), // تسجيل تاريخ إنشاء الباسورد
+        passwordHistory: [{ hash: hashedPassword, changedAt: new Date() }], // إضافة للتاريخ
         isPhoneVerified: false,
         emailVerificationCode: verificationCode,
         emailVerificationExpires: verificationExpires,
@@ -132,7 +157,6 @@ router.post('/verify-email', async (req, res) => {
     user.emailVerificationExpires = undefined;
     await user.save();
 
-    // لا نرسل توكن هنا - سيتم بعد التحقق من الجوال أو التخطي
     res.json({
       success: true,
       message: 'تم تأكيد البريد الإلكتروني بنجاح'
@@ -147,7 +171,7 @@ router.post('/verify-email', async (req, res) => {
   }
 });
 
-//  إرسال رمز تحقق SMS للهاتف
+// إرسال رمز تحقق SMS للهاتف
 router.post('/send-phone-verification', async (req, res) => {
   const { phone } = req.body;
   const normalizedPhone = normalizePhone(phone);
@@ -198,7 +222,6 @@ router.post('/verify-phone', async (req, res) => {
         user.isPhoneVerified = true;
         await user.save();
 
-        // إرسال التوكن بعد التحقق من الجوال
         const token = jwt.sign(
           { user: { id: user.id, username: user.username } },
           process.env.JWT_SECRET,
@@ -281,7 +304,6 @@ router.post('/refresh-token', async (req, res) => {
   }
 
   try {
-    // التحقق من صلاحية الـ refresh token
     const decoded = jwt.verify(
       refreshToken,
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
@@ -296,7 +318,6 @@ router.post('/refresh-token', async (req, res) => {
       });
     }
 
-    // إنشاء access token جديد
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -306,7 +327,7 @@ router.post('/refresh-token', async (req, res) => {
     res.json({
       success: true,
       accessToken,
-      refreshToken, // نفس الـ refresh token
+      refreshToken,
       user: {
         id: user.id,
         fullName: user.fullName,
@@ -348,7 +369,6 @@ router.post('/skip-phone-verification', async (req, res) => {
       });
     }
 
-    // إرسال التوكن حتى لو الجوال غير مؤكد
     const token = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -470,7 +490,7 @@ router.post('/resend-verification-phone', async (req, res) => {
   }
 });
 
-// تسجيل الدخول (إجباري التحقق الثنائي)
+// ✅ تسجيل الدخول مع التحقق من انتهاء صلاحية الباسورد
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -490,6 +510,19 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+      });
+    }
+
+    // ✅ التحقق من انتهاء صلاحية الباسورد (90 يوم)
+    if (user.isPasswordExpired()) {
+      user.passwordResetRequired = true;
+      await user.save();
+      
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_EXPIRED',
+        message: 'انتهت صلاحية كلمة المرور. يرجى تغييرها.',
+        email: user.email
       });
     }
 
@@ -516,7 +549,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-//  التحقق من رمز 2FA
+// التحقق من رمز 2FA
 router.post('/verify-2fa', async (req, res) => {
   const { email, code } = req.body;
 
@@ -534,12 +567,10 @@ router.post('/verify-2fa', async (req, res) => {
       });
     }
 
-    // مسح رمز 2FA
     user.twoFACode = undefined;
     user.twoFAExpires = undefined;
     await user.save();
 
-    // إنشاء التوكنات
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -593,7 +624,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const resetCode = generateCode();
     user.passwordResetCode = resetCode;
-    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 دقائق
+    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     await sendVerificationEmail(user.email, user.fullName, resetCode);
@@ -644,8 +675,8 @@ router.post('/verify-reset-code', async (req, res) => {
   }
 });
 
-// إعادة تعيين كلمة المرور
-router.post('/reset-password', async (req, res) => {
+// إعادة تعيين كلمة المرور مع التحقق من القوة والتاريخ
+router.post('/reset-password', validatePasswordMiddleware, async (req, res) => {
   const { email, code, newPassword } = req.body;
 
   try {
@@ -662,11 +693,26 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
+    // التحقق من عدم تكرار آخر 12 باسورد
+    const isUnique = await user.checkPasswordHistory(newPassword);
+    
+    if (!isUnique) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام أحد آخر 12 كلمات مرور سابقة'
+      });
+    }
+
     // تشفير كلمة المرور الجديدة
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    // إضافة الباسورد الجديد للتاريخ
+    user.addToPasswordHistory(hashedPassword);
+    
     user.password = hashedPassword;
+    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordResetRequired = false; // إلغاء إجبار التغيير
     user.passwordResetCode = undefined;
     user.passwordResetExpires = undefined;
     await user.save();
@@ -678,6 +724,131 @@ router.post('/reset-password', async (req, res) => {
 
   } catch (err) {
     console.error('Reset Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// تغيير كلمة المرور (للمستخدم المسجل دخول)
+router.post('/change-password', authMiddleware, validatePasswordMiddleware, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    // التحقق من الباسورد الحالي
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'كلمة المرور الحالية غير صحيحة'
+      });
+    }
+
+    // التحقق من عدم تكرار آخر 12 باسورد
+    const isUnique = await user.checkPasswordHistory(newPassword);
+    
+    if (!isUnique) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام أحد آخر 12 كلمات مرور سابقة'
+      });
+    }
+
+    // تشفير كلمة المرور الجديدة
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // إضافة الباسورد الجديد للتاريخ
+    user.addToPasswordHistory(hashedPassword);
+    
+    user.password = hashedPassword;
+    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordResetRequired = false; // إلغاء إجبار التغيير
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Change Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// توليد باسورد عشوائي قوي
+router.get('/generate-secure-password', (req, res) => {
+  try {
+    const length = parseInt(req.query.length) || 12;
+    
+    if (length < 8 || length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'الطول يجب أن يكون بين 8 و 50 حرف'
+      });
+    }
+
+    const password = User.generateSecurePassword(length);
+
+    res.json({
+      success: true,
+      password
+    });
+
+  } catch (err) {
+    console.error('Generate Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// التحقق من حالة الباسورد (متى يحتاج تغيير)
+router.get('/password-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const daysSinceChange = user.passwordChangedAt 
+      ? Math.floor((Date.now() - user.passwordChangedAt.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    const daysUntilExpiry = 90 - daysSinceChange;
+    const isExpired = user.isPasswordExpired();
+
+    res.json({
+      success: true,
+      passwordChangedAt: user.passwordChangedAt,
+      daysSinceChange,
+      daysUntilExpiry: daysUntilExpiry > 0 ? daysUntilExpiry : 0,
+      isExpired,
+      passwordResetRequired: user.passwordResetRequired || false
+    });
+
+  } catch (err) {
+    console.error('Password Status Error:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في السيرفر'
@@ -797,6 +968,19 @@ router.post('/biometric-login', async (req, res) => {
       });
     }
 
+    // التحقق من انتهاء صلاحية الباسورد حتى مع البايومتركس
+    if (user.isPasswordExpired()) {
+      user.passwordResetRequired = true;
+      await user.save();
+      
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_EXPIRED',
+        message: 'انتهت صلاحية كلمة المرور. يرجى تغييرها قبل تسجيل الدخول.',
+        email: user.email
+      });
+    }
+
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -852,4 +1036,5 @@ router.get('/biometric-status', authMiddleware, async (req, res) => {
     });
   }
 });
+
 module.exports = router;

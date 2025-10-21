@@ -8,6 +8,8 @@ const { configureMiddleware } = require('./config/middleware');
 const { configureRoutes } = require('./config/routes');
 
 const app = express();
+app.set('trust proxy', true);
+
 const server = http.createServer(app);
 
 // ============================================

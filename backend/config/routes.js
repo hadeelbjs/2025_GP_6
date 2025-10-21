@@ -1,3 +1,4 @@
+// config/routes.js
 const authRoutes = require('../routes/auth');
 const contactsRoutes = require('../routes/contacts');
 const messagesRoutes = require('../routes/messages');

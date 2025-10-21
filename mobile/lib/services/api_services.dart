@@ -3,13 +3,26 @@ import 'dart:convert';
 import 'dart:io' show Platform, File; 
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
+import 'dart:async';
 class ApiService {
   // ============================
-  // Base URL 
+  // Base URL deployment
   // ============================
-    static const String baseUrl = 'https://waseed-team-production.up.railway.app/api';
-
+    //static const String baseUrl = 'https://waseed-team-production.up.railway.app/api';
+    // ============================
+  // Base URL بحسب المنصة
+  // ============================
+  static String get baseUrl {
+    if (Platform.isAndroid) {
+      // Android Emulator -> يصل للـ localhost على المضيف عبر 10.0.2.2
+      return 'http://10.0.2.2:3000/api';
+    } else if (Platform.isIOS) {
+      // iOS Simulator -> يتصل مباشرة على نفس الجهاز
+      return 'http://localhost:3000/api';
+    } else {
+      return 'http://localhost:3000/api';
+    }
+  }
   
   final _storage = const FlutterSecureStorage();
   
@@ -783,49 +796,112 @@ Future<Map<String, dynamic>> changePassword(String currentPassword, String newPa
 // طلب تفعيل البايومتركس
 Future<Map<String, dynamic>> requestBiometricEnable() async {
   try {
-    final headers = await _authHeaders(); // استخدم نفس الطريقة الموجودة
+    print('📱 Requesting biometric enable...');
     
+    final headers = await _authHeaders();
+    
+    // ✅ زيادة الـ timeout من 10 إلى 30 ثانية
     final response = await http.post(
       Uri.parse('$baseUrl/auth/request-biometric-enable'),
       headers: headers,
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(
+      const Duration(seconds: 30), // كان 10 ثواني
+      onTimeout: () {
+        throw TimeoutException('انتهى وقت الانتظار، حاول مرة أخرى');
+      },
+    );
 
-    return jsonDecode(response.body);
+    print('✅ Response received: ${response.statusCode}');
+    
+    final data = jsonDecode(response.body);
+    print('Response data: $data');
+    
+    return data;
+  } on TimeoutException catch (e) {
+    print('⏱️ Timeout: $e');
+    return {
+      'success': false,
+      'message': 'انتهى وقت الانتظار، تأكد من اتصالك بالإنترنت وحاول مرة أخرى'
+    };
   } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    print('❌ Error: $e');
+    return {
+      'success': false,
+      'message': 'خطأ في الاتصال: ${e.toString()}'
+    };
   }
 }
 
 // تأكيد تفعيل البايومتركس
 Future<Map<String, dynamic>> verifyBiometricEnable(String code) async {
   try {
+    print('🔐 Verifying biometric code: $code');
+    
     final headers = await _authHeaders();
     
+    // ✅ timeout معقول (15 ثانية)
     final response = await http.post(
       Uri.parse('$baseUrl/auth/verify-biometric-enable'),
       headers: headers,
       body: jsonEncode({'code': code}),
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw TimeoutException('انتهى وقت الانتظار');
+      },
+    );
 
+    print('✅ Verification response: ${response.statusCode}');
+    
     return jsonDecode(response.body);
+  } on TimeoutException catch (e) {
+    print('⏱️ Timeout: $e');
+    return {
+      'success': false,
+      'message': 'انتهى وقت الانتظار، حاول مرة أخرى'
+    };
   } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    print('❌ Error: $e');
+    return {
+      'success': false,
+      'message': 'خطأ في الاتصال: ${e.toString()}'
+    };
   }
 }
 
 // إلغاء البايومتركس
 Future<Map<String, dynamic>> disableBiometric() async {
   try {
+    print('🔓 Disabling biometric...');
+    
     final headers = await _authHeaders();
     
+    // ✅ timeout معقول (15 ثانية)
     final response = await http.post(
       Uri.parse('$baseUrl/auth/disable-biometric'),
       headers: headers,
-    ).timeout(const Duration(seconds: 10));
+    ).timeout(
+      const Duration(seconds: 15),
+      onTimeout: () {
+        throw TimeoutException('انتهى وقت الانتظار');
+      },
+    );
 
+    print('✅ Disable response: ${response.statusCode}');
+    
     return jsonDecode(response.body);
+  } on TimeoutException catch (e) {
+    print('⏱️ Timeout: $e');
+    return {
+      'success': false,
+      'message': 'انتهى وقت الانتظار، حاول مرة أخرى'
+    };
   } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال: $e'};
+    print('❌ Error: $e');
+    return {
+      'success': false,
+      'message': 'خطأ في الاتصال: ${e.toString()}'
+    };
   }
 }
 

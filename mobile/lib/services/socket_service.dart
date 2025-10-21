@@ -74,7 +74,21 @@ class SocketService {
       }
 
       String baseUrl;
-      baseUrl = 'https://waseed-team-production.up.railway.app';
+      //deplyment base url
+      //baseUrl = 'https://waseed-team-production.up.railway.app';
+
+      // ============================
+      // Base URL بحسب المنصة
+      // ============================
+      
+      if (Platform.isAndroid) {
+        baseUrl = 'http://10.0.2.2:3000';
+      } else if (Platform.isIOS) {
+        baseUrl = 'http://localhost:3000';
+      } else {
+        baseUrl = 'http://localhost:3000';
+      }
+
 
 
       print('🔌 Connecting to: $baseUrl');

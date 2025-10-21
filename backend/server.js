@@ -1,103 +1,146 @@
-require('dotenv').config();
+// backend/config/middleware.js
+
 const express = require('express');
-const http = require('http');
-const path = require('path');
-const mongoose = require('mongoose');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
+// ============================================
+// Helper: Get Real Client IP
+// ============================================
+const getClientIp = (req) => {
+  if (process.env.NODE_ENV === 'production') {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+      return forwarded.split(',')[0].trim();
+    }
+  }
+  return req.ip || req.connection.remoteAddress;
+};
 
-// Import configurations
-const { configureMiddleware } = require('./config/middleware');
-const { configureRoutes } = require('./config/routes');
-const { configureSocketIO } = require('./config/socket');
-const { connectDatabase } = require('./config/database');
+// ============================================
+// Rate Limiters
+// ============================================
 
-// Initialize Express App
-const app = express();
-const server = http.createServer(app);
-
-app.set('trust proxy', true);
-
-// Configure Socket.IO
-const io = configureSocketIO(server);
-app.set('io', io);
-
-// Configure Middleware (Security, CORS, Rate Limiting, etc.)
-configureMiddleware(app);
-
-// Connect to Database
-connectDatabase();
-
-// Configure Routes
-configureRoutes(app);
-
-// Health Check Endpoints
-app.get('/', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Waseed Backend API is running',
-    version: '1.0.0',
-    timestamp: new Date().toISOString(),
-    endpoints: {
-      auth: '/api/auth',
-      contacts: '/api/contacts',
-      messages: '/api/messages',
-      upload: '/api/upload',
-      prekeys: '/api/prekeys',
-      user: '/api/user',
-    },
-  });
-});
-
-app.get('/health', (req, res) => {
-  res.json({
-    success: true,
-    status: 'healthy',
-    uptime: process.uptime(),
-    mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-    timestamp: new Date().toISOString(),
-  });
-});
-
-// Global Error Handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'حدث خطأ في السيرفر',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
-});
-
-// 404 Handler
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'المسار غير موجود',
-    path: req.originalUrl,
-  });
-});
-
-// Start Server
-const PORT = process.env.PORT || 3000;
-const HOST = '0.0.0.0';
-
-server.listen(PORT, HOST, () => {
-  console.log(`Server running on ${HOST}:${PORT}`);
-  console.log(`Socket.IO ready`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`Started at: ${new Date().toISOString()}`);
-});
-
-// Graceful Shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Server closed');
-    mongoose.connection.close(false, () => {
-      console.log('MongoDB connection closed');
-      process.exit(0);
+// عام للـ API
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 100,
+  
+  validate: {
+    trustProxy: false, 
+  },
+  
+  keyGenerator: getClientIp,
+  
+  standardHeaders: true,
+  legacyHeaders: false,
+  
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      message: 'تم تجاوز الحد المسموح من الطلبات، حاول مرة أخرى بعد قليل',
     });
-  });
+  },
 });
 
-module.exports = { app, server, io };
+// للتسجيل والدخول
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  skipSuccessfulRequests: true,
+  
+  validate: {
+    trustProxy: false,
+  },
+  
+  keyGenerator: getClientIp,
+  
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      message: 'محاولات كثيرة جداً، حاول مرة أخرى بعد 15 دقيقة',
+    });
+  },
+});
+
+// لإرسال الإيميلات
+const emailLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // ساعة
+  max: 3,
+  
+  validate: {
+    trustProxy: false,
+  },
+  
+  keyGenerator: getClientIp,
+  
+  handler: (req, res) => {
+    res.status(429).json({
+      success: false,
+      message: 'تم إرسال عدد كبير من رسائل التحقق، حاول بعد ساعة',
+    });
+  },
+});
+
+// ============================================
+// Configure Middleware Function
+// ============================================
+const configureMiddleware = (app) => {
+  // Security Headers
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+  }));
+
+  // CORS Configuration
+  const corsOptions = {
+    origin: process.env.NODE_ENV === 'production'
+      ? [
+          'https://waseed-team-production.up.railway.app',
+          'https://www.waseed.app',
+          'https://waseed.app',
+        ]
+      : '*',
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  };
+  app.use(cors(corsOptions));
+
+  // Body Parsing
+  app.use(express.json({ limit: '10mb' }));
+  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+  // Static Files
+  app.use('/uploads', express.static('uploads'));
+
+  // Apply Rate Limiters
+  app.use('/api/', apiLimiter);
+  
+  // تطبيق rate limiters محددة
+  app.use('/api/auth/register', authLimiter);
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/verify-email', emailLimiter);
+  app.use('/api/auth/resend-verification-email', emailLimiter);
+  app.use('/api/auth/send-phone-verification', emailLimiter);
+  app.use('/api/auth/resend-2fa', emailLimiter);
+  app.use('/api/auth/forgot-password', emailLimiter);
+  app.use('/api/auth/request-biometric-enable', emailLimiter);
+  app.use('/api/user/request-email-change', emailLimiter);
+  app.use('/api/user/request-phone-change', emailLimiter);
+
+  // Request Logging (Development only)
+  if (process.env.NODE_ENV !== 'production') {
+    app.use((req, res, next) => {
+      console.log(`${req.method} ${req.path} - IP: ${getClientIp(req)}`);
+      next();
+    });
+  }
+};
+
+module.exports = { 
+  configureMiddleware,
+  authLimiter,
+  emailLimiter,
+  apiLimiter 
+};

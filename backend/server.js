@@ -1,64 +1,20 @@
-// backend/config/middleware.js
-
+// server.js
+require('dotenv').config();
 const express = require('express');
-const cors = require('cors');
-const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
+const mongoose = require('mongoose');
+const http = require('http');
+const socketIo = require('socket.io');
+const { configureMiddleware } = require('./config/middleware');
+const { configureRoutes } = require('./config/routes');
+
+const app = express();
+const server = http.createServer(app);
 
 // ============================================
-// Rate Limiters - FIXED (No Custom keyGenerator)
+// Socket.IO Configuration
 // ============================================
-
-// عام للـ API
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 100, // 100 طلب
-  standardHeaders: true,
-  legacyHeaders: false,
-  handler: (req, res) => {
-    res.status(429).json({
-      success: false,
-      message: 'تم تجاوز الحد المسموح من الطلبات، حاول مرة أخرى بعد قليل',
-    });
-  },
-});
-
-// للتسجيل والدخول (صارم أكثر)
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 5, // 5 محاولات فقط
-  skipSuccessfulRequests: true, // لا تحسب المحاولات الناجحة
-  handler: (req, res) => {
-    res.status(429).json({
-      success: false,
-      message: 'محاولات كثيرة جداً، حاول مرة أخرى بعد 15 دقيقة',
-    });
-  },
-});
-
-// لإرسال الإيميلات/SMS (صارم جداً)
-const emailLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // ساعة واحدة
-  max: 3, // 3 إيميلات فقط في الساعة
-  handler: (req, res) => {
-    res.status(429).json({
-      success: false,
-      message: 'تم إرسال عدد كبير من رسائل التحقق، حاول بعد ساعة',
-    });
-  },
-});
-
-// ============================================
-// Configure Middleware Function
-// ============================================
-const configureMiddleware = (app) => {
-  // Security Headers
-  app.use(helmet({
-    crossOriginResourcePolicy: { policy: 'cross-origin' },
-  }));
-
-  // CORS Configuration
-  const corsOptions = {
+const io = socketIo(server, {
+  cors: {
     origin: process.env.NODE_ENV === 'production'
       ? [
           'https://waseed-team-production.up.railway.app',
@@ -66,57 +22,277 @@ const configureMiddleware = (app) => {
           'https://waseed.app',
         ]
       : '*',
+    methods: ['GET', 'POST'],
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+  },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+});
+
+// Store online users
+const onlineUsers = new Map();
+
+io.on('connection', (socket) => {
+  console.log('🔌 New client connected:', socket.id);
+
+  // User comes online
+  socket.on('user_online', (userId) => {
+    onlineUsers.set(userId, socket.id);
+    console.log(`✅ User ${userId} is online`);
+    
+    // Broadcast to all clients that this user is online
+    socket.broadcast.emit('user_status', {
+      userId,
+      status: 'online',
+    });
+  });
+
+  // User sends a message
+  socket.on('send_message', (data) => {
+    const { recipientId, message } = data;
+    const recipientSocketId = onlineUsers.get(recipientId);
+
+    if (recipientSocketId) {
+      // Send to recipient if they're online
+      io.to(recipientSocketId).emit('receive_message', message);
+      console.log(`📨 Message sent to user ${recipientId}`);
+    } else {
+      console.log(`📭 User ${recipientId} is offline`);
+    }
+  });
+
+  // User is typing
+  socket.on('typing', (data) => {
+    const { recipientId, isTyping } = data;
+    const recipientSocketId = onlineUsers.get(recipientId);
+
+    if (recipientSocketId) {
+      io.to(recipientSocketId).emit('user_typing', {
+        userId: data.userId,
+        isTyping,
+      });
+    }
+  });
+
+  // User disconnects
+  socket.on('disconnect', () => {
+    console.log('❌ Client disconnected:', socket.id);
+    
+    // Find and remove user from online users
+    for (const [userId, socketId] of onlineUsers.entries()) {
+      if (socketId === socket.id) {
+        onlineUsers.delete(userId);
+        console.log(`👋 User ${userId} went offline`);
+        
+        // Broadcast to all clients that this user is offline
+        socket.broadcast.emit('user_status', {
+          userId,
+          status: 'offline',
+        });
+        break;
+      }
+    }
+  });
+});
+
+// Make io accessible to routes
+app.set('io', io);
+
+// ============================================
+// Redis Configuration (Optional)
+// ============================================
+let redisConnected = false;
+
+async function connectRedis() {
+  try {
+    const { connectRedis: redisConnect } = require('./config/redis');
+    await redisConnect();
+    redisConnected = true;
+    console.log('✅ Redis connected successfully');
+  } catch (err) {
+    console.log('⚠️ Redis not configured - using in-memory storage');
+    console.log('   To enable Redis, install: npm install redis');
+    console.log('   And set REDIS_URL in your .env file');
+    redisConnected = false;
+  }
+}
+
+// ============================================
+// MongoDB Connection
+// ============================================
+async function connectDatabase() {
+  try {
+    await mongoose.connect(process.env.MONGODB_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true,
+    });
+    console.log('✅ MongoDB connected successfully');
+  } catch (err) {
+    console.error('❌ MongoDB connection error:', err);
+    throw err;
+  }
+}
+
+// ============================================
+// Configure Middleware & Routes
+// ============================================
+configureMiddleware(app);
+configureRoutes(app);
+
+// ============================================
+// Health Check Endpoint
+// ============================================
+app.get('/health', (req, res) => {
+  const health = {
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development',
+    services: {
+      mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
+      redis: redisConnected ? 'connected' : 'not configured',
+      socketio: io.engine.clientsCount > 0 ? 'active' : 'idle',
+    },
   };
-  app.use(cors(corsOptions));
 
-  // Body Parsing
-  app.use(express.json({ limit: '10mb' }));
-  app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+  const statusCode = mongoose.connection.readyState === 1 ? 200 : 503;
+  res.status(statusCode).json(health);
+});
 
-  // Static Files
-  app.use('/uploads', express.static('uploads'));
+// ============================================
+// 404 Handler
+// ============================================
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'المسار غير موجود',
+    path: req.path,
+  });
+});
 
-  // ============================================
-  // Apply Rate Limiters
-  // ============================================
-  
-  // Rate limiter عام لكل الـ API
-  app.use('/api/', apiLimiter);
-  
-  // Rate limiters محددة لـ endpoints حساسة
-  app.use('/api/auth/register', authLimiter);
-  app.use('/api/auth/login', authLimiter);
-  app.use('/api/auth/verify-2fa', authLimiter);
-  app.use('/api/auth/biometric-login', authLimiter);
-  
-  // Rate limiters للإيميلات
-  app.use('/api/auth/verify-email', emailLimiter);
-  app.use('/api/auth/resend-verification-email', emailLimiter);
-  app.use('/api/auth/send-phone-verification', emailLimiter);
-  app.use('/api/auth/resend-verification-phone', emailLimiter);
-  app.use('/api/auth/resend-2fa', emailLimiter);
-  app.use('/api/auth/forgot-password', emailLimiter);
-  app.use('/api/auth/request-biometric-enable', emailLimiter);
-  app.use('/api/user/request-email-change', emailLimiter);
-  app.use('/api/user/request-phone-change', emailLimiter);
+// ============================================
+// Global Error Handler
+// ============================================
+app.use((err, req, res, next) => {
+  console.error('❌ Error:', err);
 
-  // Request Logging (Development only)
-  if (process.env.NODE_ENV !== 'production') {
-    app.use((req, res, next) => {
-      console.log(`${req.method} ${req.path} - IP: ${req.ip}`);
-      next();
+  // Timeout error
+  if (req.timedout) {
+    return res.status(408).json({
+      success: false,
+      message: 'انتهى وقت الطلب',
     });
   }
 
-  console.log('✅ Middleware configured successfully');
-};
+  // Mongoose validation error
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({
+      success: false,
+      message: 'خطأ في البيانات المدخلة',
+      errors: Object.values(err.errors).map(e => e.message),
+    });
+  }
 
-module.exports = { 
-  configureMiddleware,
-  authLimiter,
-  emailLimiter,
-  apiLimiter 
-};
+  // JWT errors
+  if (err.name === 'JsonWebTokenError') {
+    return res.status(401).json({
+      success: false,
+      message: 'توكن غير صالح',
+    });
+  }
+
+  if (err.name === 'TokenExpiredError') {
+    return res.status(401).json({
+      success: false,
+      message: 'انتهت صلاحية الجلسة',
+    });
+  }
+
+  // Default error
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'حدث خطأ في السيرفر',
+    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
+  });
+});
+
+// ============================================
+// Graceful Shutdown
+// ============================================
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully...');
+  
+  server.close(async () => {
+    console.log('🔌 HTTP server closed');
+    
+    try {
+      await mongoose.connection.close();
+      console.log('🗄️ MongoDB connection closed');
+    } catch (err) {
+      console.error('Error closing MongoDB:', err);
+    }
+    
+    process.exit(0);
+  });
+
+  // Force shutdown after 10 seconds
+  setTimeout(() => {
+    console.error('⚠️ Forced shutdown after timeout');
+    process.exit(1);
+  }, 10000);
+});
+
+// ============================================
+// Start Server
+// ============================================
+const PORT = process.env.PORT || 5000;
+
+async function startServer() {
+  try {
+    // 1. Connect to MongoDB
+    await connectDatabase();
+    
+    // 2. Try to connect to Redis (optional)
+    await connectRedis();
+    
+    // 3. Start HTTP server
+    server.listen(PORT, () => {
+      console.log('');
+      console.log('═══════════════════════════════════════════');
+      console.log('Waseed Server Started Successfully');
+      console.log('═══════════════════════════════════════════');
+      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`Port: ${PORT}`);
+      console.log(`URL: http://localhost:${PORT}`);
+      console.log(`Database: MongoDB ${mongoose.connection.readyState === 1 ? '✅' : '❌'}`);
+      console.log(`Redis: ${redisConnected ? '✅ Connected' : '⚠️ Not configured'}`);
+      console.log(`Socket.IO: ✅ Ready`);
+      console.log('═══════════════════════════════════════════');
+      console.log('');
+    });
+  } catch (err) {
+    console.error('❌ Failed to start server:', err);
+    process.exit(1);
+  }
+}
+
+// Handle unhandled rejections
+process.on('unhandledRejection', (err) => {
+  console.error('❌ Unhandled Rejection:', err);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('❌ Uncaught Exception:', err);
+  server.close(() => {
+    process.exit(1);
+  });
+});
+
+// Start the server
+startServer();
+
+module.exports = { app, server, io };

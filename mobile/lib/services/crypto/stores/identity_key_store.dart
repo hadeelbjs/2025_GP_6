@@ -139,4 +139,21 @@ Future<bool> isTrustedIdentity(
     if (data == null) return null;
     return IdentityKey.fromBytes(base64Decode(data), 0);
   }
+
+  Future<void> clearAll() async {
+    try {
+      await _storage.delete(key: 'identity_key_pair');
+      await _storage.delete(key: 'local_registration_id');
+      // حذف جميع Identity Keys المحفوظة
+      final allKeys = await _storage.readAll();
+      for (var key in allKeys.keys) {
+        if (key.startsWith('identity_')) {
+          await _storage.delete(key: key);
+        }
+      }
+      print('Identity Store cleared');
+    } catch (e) {
+      print('Error clearing Identity Store: $e');
+    }
+  }
 }

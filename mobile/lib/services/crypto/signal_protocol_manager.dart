@@ -281,6 +281,7 @@ class SignalProtocolManager {
     }
   }
 
+
   // توليد ورفع مفاتيح إضافية 
   Future<void> _generateAndUploadMorePreKeys() async {
     try {
@@ -314,6 +315,43 @@ class SignalProtocolManager {
       }
     } catch (e) {
       print('Error generating more PreKeys: $e');
+    }
+  }
+
+  Future<void> clearAllKeys() async {
+    try {
+      // 1. حذف جميع مفاتيح Identity
+      await _identityStore.clearAll();
+      
+      // 2. حذف جميع PreKeys
+      await _preKeyStore.clearAll();
+      
+      // 3. حذف جميع Signed PreKeys
+      await _signedPreKeyStore.clearAll();
+      
+      // 4. حذف جميع Sessions
+      await _sessionStore.clearAll();
+      
+      // 5. حذف Registration ID
+      await _storage.delete(key: 'registration_id');
+      
+      // 6. إعادة تعيين حالة التهيئة
+      _isInitialized = false;
+      
+      print('All Signal Protocol data cleared successfully');
+    } catch (e) {
+      print('Error clearing Signal data: $e');
+      rethrow;
+    }
+  }
+
+  // دالة للتحقق من وجود مفاتيح
+  Future<bool> hasKeys() async {
+    try {
+      final regId = await _storage.read(key: 'registration_id');
+      return regId != null;
+    } catch (e) {
+      return false;
     }
   }
 }

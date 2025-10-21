@@ -69,4 +69,18 @@ class MyPreKeyStore extends PreKeyStore {
     _preKeysCache.remove(preKeyId);
     await _storage.delete(key: 'prekey_$preKeyId');
   }
+
+  Future<void> clearAll() async {
+    try {
+      final allKeys = await _storage.readAll();
+      for (var key in allKeys.keys) {
+        if (key.startsWith('prekey_')) {
+          await _storage.delete(key: key);
+        }
+      }
+      print('PreKey Store cleared');
+    } catch (e) {
+      print('Error clearing PreKey Store: $e');
+    }
+  }
 }

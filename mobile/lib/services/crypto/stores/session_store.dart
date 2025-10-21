@@ -88,4 +88,17 @@ class MySessionStore extends SessionStore {
       await _storage.delete(key: 'session_$key');
     }
   }
+  Future<void> clearAll() async {
+    try {
+      final allKeys = await _storage.readAll();
+      for (var key in allKeys.keys) {
+        if (key.startsWith('session_')) {
+          await _storage.delete(key: key);
+        }
+      }
+      print('Session Store cleared');
+    } catch (e) {
+      print('Error clearing Session Store: $e');
+    }
+  }
 }

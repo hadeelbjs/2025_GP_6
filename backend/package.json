@@ -14,7 +14,12 @@
     "node": "18.x",
     "npm": "9.x"
   },
-  "keywords": ["messaging", "encryption", "secure-chat", "e2ee"],
+  "keywords": [
+    "messaging",
+    "encryption",
+    "secure-chat",
+    "e2ee"
+  ],
   "author": "Waseed Team",
   "license": "ISC",
   "dependencies": {
@@ -32,6 +37,7 @@
     "mongoose": "^8.19.0",
     "multer": "^2.0.2",
     "nodemailer": "^7.0.6",
+    "resend": "^6.2.1",
     "socket.io": "^4.8.1",
     "twilio": "^5.10.2",
     "uuid": "^13.0.0",

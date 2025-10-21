@@ -84,4 +84,18 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
     _signedPreKeys.remove(signedPreKeyId);
     await _storage.delete(key: 'signed_prekey_$signedPreKeyId');
   }
+
+  Future<void> clearAll() async {
+    try {
+      final allKeys = await _storage.readAll();
+      for (var key in allKeys.keys) {
+        if (key.startsWith('signed_prekey_')) {
+          await _storage.delete(key: key);
+        }
+      }
+      print('Signed PreKey Store cleared');
+    } catch (e) {
+      print('Error clearing Signed PreKey Store: $e');
+    }
+  }
 }

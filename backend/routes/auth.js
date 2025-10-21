@@ -736,7 +736,7 @@ router.post('/change-password', authMiddleware, validatePasswordMiddleware, asyn
   const { currentPassword, newPassword } = req.body;
 
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({
@@ -822,7 +822,7 @@ router.get('/generate-secure-password', (req, res) => {
 // التحقق من حالة الباسورد (متى يحتاج تغيير)
 router.get('/password-status', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user.id);
 
     if (!user) {
       return res.status(404).json({
@@ -858,7 +858,7 @@ router.get('/password-status', authMiddleware, async (req, res) => {
 
 router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user.id);
     
     if (!user) {
       return res.status(404).json({
@@ -893,7 +893,7 @@ router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
 
   try {
     const user = await User.findOne({
-      _id: req.userId,
+      _id: req.user.id,
       biometricVerificationCode: code,
       biometricVerificationExpires: { $gt: Date.now() }
     });
@@ -926,7 +926,7 @@ router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
 
 router.post('/disable-biometric', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user.id);
     
     if (!user) {
       return res.status(404).json({
@@ -1022,7 +1022,7 @@ router.post('/biometric-login', async (req, res) => {
 
 router.get('/biometric-status', authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId);
+    const user = await User.findById(req.user.id);
     
     res.json({
       success: true,

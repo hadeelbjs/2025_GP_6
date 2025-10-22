@@ -1256,6 +1256,40 @@ router.get('/biometric-status', authMiddleware, async (req, res) => {
   }
 });
 
+router.post('/resend-2fa', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const twoFACode = generateCode();
+    user.twoFACode = twoFACode;
+    user.twoFAExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendVerificationEmail(user.email, user.fullName, twoFACode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق مرة أخرى'
+    });
+
+  } catch (err) {
+    console.error('Resend 2FA Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
 
 
 module.exports = router;

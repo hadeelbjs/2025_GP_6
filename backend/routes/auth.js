@@ -1,3 +1,6 @@
+// routes/auth.js - FIXED REGISTRATION FLOW
+// البيانات لا تُحفظ إلا بعد التحقق من OTP
+
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -11,6 +14,22 @@ const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TO
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 const authMiddleware = require('../middleware/auth');
 
+// ============================================
+// تخزين مؤقت للبيانات قبل التحقق (في الذاكرة)
+// ============================================
+const pendingRegistrations = new Map();
+
+// تنظيف البيانات المنتهية كل 15 دقيقة
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, value] of pendingRegistrations.entries()) {
+    if (value.expiresAt < now) {
+      console.log(`🗑️ Cleaning expired registration: ${key}`);
+      pendingRegistrations.delete(key);
+    }
+  }
+}, 15 * 60 * 1000);
+
 function normalizePhone(rawPhone) {
   const phoneNumber = parsePhoneNumberFromString(rawPhone);
   if (!phoneNumber || !phoneNumber.isValid()) {
@@ -23,7 +42,40 @@ const generateCode = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
-// التسجيل - إرسال رمز تحقق للإيميل
+const sendEmailWithTimeout = async (emailFunc, timeoutMs = 10000) => {
+  return Promise.race([
+    emailFunc(),
+    new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('Email timeout')), timeoutMs)
+    )
+  ]);
+};
+
+const validatePasswordMiddleware = (req, res, next) => {
+  const { password } = req.body;
+  
+  if (!password) {
+    return res.status(400).json({
+      success: false,
+      message: 'الرجاء إدخال كلمة المرور'
+    });
+  }
+  
+  const errors = User.validatePasswordStrength(password);
+  
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: errors[0]
+    });
+  }
+  
+  next();
+};
+
+// ============================================
+// الخطوة 1: التسجيل - إرسال OTP (بدون حفظ البيانات)
+// ============================================
 router.post(
   '/register',
   [
@@ -37,8 +89,8 @@ router.post(
         if (!phone) throw new Error('رقم الجوال غير صالح');
         return true;
     }),
-    body('password').isLength({ min: 6 }).withMessage('يجب أن تكون كلمة المرور ٦ أحرف على الأقل')
   ],
+  validatePasswordMiddleware,
   async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -52,7 +104,8 @@ router.post(
     const normalizedPhone = normalizePhone(phone);
 
     try {
-      let user = await User.findOne({ 
+      // التحقق من أن البيانات غير مستخدمة
+      const existingUser = await User.findOne({ 
         $or: [
           { email: email.toLowerCase() }, 
           { username: username.toLowerCase() }, 
@@ -60,47 +113,62 @@ router.post(
         ] 
       });
 
-      if (user) {
+      if (existingUser) {
         let message = '';
-        if (user.email === email.toLowerCase()) {
+        if (existingUser.email === email.toLowerCase()) {
             message = 'البريد الإلكتروني مستخدم بالفعل';
-        } else if (user.username === username.toLowerCase()) {
+        } else if (existingUser.username === username.toLowerCase()) {
             message = 'اسم المستخدم مستخدم بالفعل';
-        } else if (user.phone === normalizedPhone) {
+        } else if (existingUser.phone === normalizedPhone) {
             message = 'رقم الجوال مستخدم بالفعل';
         }
         return res.status(400).json({ success: false, message });
       }
 
+      // إنشاء رمز التحقق
       const verificationCode = generateCode();
-      const verificationExpires = new Date(Date.now() + 10 * 60 * 1000);
+      const newRegistrationId = crypto.randomBytes(16).toString('hex');
 
+      // تشفير كلمة المرور
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
 
-      user = new User({
+      // حفظ البيانات مؤقتاً في الذاكرة
+      pendingRegistrations.set(newRegistrationId, {
         fullName,
         username: username.toLowerCase(),
         email: email.toLowerCase(),
         phone: normalizedPhone,
         password: hashedPassword,
-        isPhoneVerified: false,
-        emailVerificationCode: verificationCode,
-        emailVerificationExpires: verificationExpires,
-        isEmailVerified: false
-      });   
-      
-      await user.save();
-      await sendVerificationEmail(email, fullName, verificationCode);
+        verificationCode,
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 دقائق
+        createdAt: Date.now()
+      });
+
+      console.log(`✅ Registration pending for: ${email.toLowerCase()}`);
+      console.log(`   - ID: ${newRegistrationId}`);
+      console.log(`   - Code: ${verificationCode}`);
+      console.log(`   - Pending registrations count: ${pendingRegistrations.size}`);
+
+      // إرسال رمز التحقق
+      try {
+        await sendEmailWithTimeout(
+          () => sendVerificationEmail(email, fullName, verificationCode),
+          10000
+        );
+      } catch (emailError) {
+        console.error('Email sending failed:', emailError.message);
+      }
 
       res.json({
         success: true,
         message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
-        email: user.email
+        newRegistrationId,
+        email: email.toLowerCase()
       });
 
     } catch (err) {
-      console.error('Error:', err);
+      console.error('Register Error:', err);
       res.status(500).json({ 
         success: false, 
         message: 'حدث خطأ في السيرفر' 
@@ -109,45 +177,183 @@ router.post(
   }
 );
 
-// تأكيد البريد الإلكتروني (بدون توكن)
-router.post('/verify-email', async (req, res) => {
-  const { email, code } = req.body;
+// ============================================
+// الخطوة 2: التحقق من OTP وحفظ المستخدم
+// ============================================
+router.post('/verify-email-and-create', async (req, res) => {
+  console.log('📥 Received verify-email-and-create request:');
+  console.log('   - newRegistrationId:', req.body.newRegistrationId);
+  console.log('   - code:', req.body.code);
+  console.log('   - Pending registrations count:', pendingRegistrations.size);
+
+  const { newRegistrationId, code } = req.body;
+
+  // التحقق من وجود الرمز
+  if (!code) {
+    return res.status(400).json({
+      success: false,
+      message: 'الرجاء إدخال رمز التحقق'
+    });
+  }
+
+  // التحقق من وجود معرف التسجيل
+  if (!newRegistrationId) {
+    console.error('❌ Missing newRegistrationId in request');
+    return res.status(400).json({
+      success: false,
+      message: 'معرف التسجيل مطلوب - الرجاء إعادة التسجيل'
+    });
+  }
 
   try {
-    const user = await User.findOne({ 
-      email: email.toLowerCase(),
-      emailVerificationCode: code,
-      emailVerificationExpires: { $gt: Date.now() }
-    });
+    // البحث عن البيانات المؤقتة
+    const pendingData = pendingRegistrations.get(newRegistrationId);
 
-    if (!user) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'الرمز غير صحيح أو منتهي الصلاحية' 
+    if (!pendingData) {
+      console.error(`❌ No pending data found for ID: ${newRegistrationId}`);
+      return res.status(400).json({
+        success: false,
+        message: 'انتهت صلاحية الجلسة، الرجاء إعادة التسجيل'
       });
     }
 
-    user.isEmailVerified = true;
-    user.emailVerificationCode = undefined;
-    user.emailVerificationExpires = undefined;
+    console.log(`✅ Found pending data for: ${pendingData.email}`);
+    console.log(`   - Expected code: ${pendingData.verificationCode}`);
+    console.log(`   - Received code: ${code}`);
+
+    // التحقق من الرمز
+    if (pendingData.verificationCode !== code) {
+      console.log(`❌ Invalid code`);
+      return res.status(400).json({
+        success: false,
+        message: 'الرمز غير صحيح'
+      });
+    }
+
+    // التحقق من انتهاء الصلاحية
+    if (pendingData.expiresAt < Date.now()) {
+      pendingRegistrations.delete(newRegistrationId);
+      return res.status(400).json({
+        success: false,
+        message: 'انتهت صلاحية الرمز، الرجاء إعادة التسجيل'
+      });
+    }
+
+    // التحقق مرة أخرى أن البيانات غير مستخدمة
+    const existingUser = await User.findOne({ 
+      $or: [
+        { email: pendingData.email }, 
+        { username: pendingData.username }, 
+        { phone: pendingData.phone }
+      ] 
+    });
+
+    if (existingUser) {
+      pendingRegistrations.delete(newRegistrationId);
+      return res.status(400).json({
+        success: false,
+        message: 'البيانات مستخدمة بالفعل، الرجاء إعادة التسجيل ببيانات مختلفة'
+      });
+    }
+
+    // إنشاء المستخدم في قاعدة البيانات
+    const user = new User({
+      fullName: pendingData.fullName,
+      username: pendingData.username,
+      email: pendingData.email,
+      phone: pendingData.phone,
+      password: pendingData.password,
+      passwordChangedAt: new Date(),
+      passwordHistory: [{ hash: pendingData.password, changedAt: new Date() }],
+      isEmailVerified: true,
+      isPhoneVerified: false
+    });
+
     await user.save();
 
-    // لا نرسل توكن هنا - سيتم بعد التحقق من الجوال أو التخطي
+    // حذف البيانات المؤقتة
+    pendingRegistrations.delete(newRegistrationId);
+
+    console.log(`✅ User created successfully: ${user.email}`);
+
     res.json({
       success: true,
-      message: 'تم تأكيد البريد الإلكتروني بنجاح'
+      message: 'تم إنشاء الحساب بنجاح',
+      email: user.email,
+      phone: user.phone
     });
 
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ 
-      success: false, 
-      message: 'حدث خطأ في السيرفر' 
+    console.error('Verify and Create Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
     });
   }
 });
 
-//  إرسال رمز تحقق SMS للهاتف
+// ============================================
+// إعادة إرسال رمز التحقق (قبل إنشاء الحساب)
+// ============================================
+router.post('/resend-registration-code', async (req, res) => {
+  const { newRegistrationId } = req.body;
+
+  console.log('📥 Received resend-registration-code request:');
+  console.log('   - newRegistrationId:', newRegistrationId);
+
+  if (!newRegistrationId) {
+    return res.status(400).json({
+      success: false,
+      message: 'معرف التسجيل مطلوب'
+    });
+  }
+
+  try {
+    const pendingData = pendingRegistrations.get(newRegistrationId);
+
+    if (!pendingData) {
+      console.error(`❌ No pending data found for ID: ${newRegistrationId}`);
+      return res.status(400).json({
+        success: false,
+        message: 'انتهت صلاحية الجلسة، الرجاء إعادة التسجيل'
+      });
+    }
+
+    // إنشاء رمز جديد
+    const newCode = generateCode();
+    pendingData.verificationCode = newCode;
+    pendingData.expiresAt = Date.now() + 10 * 60 * 1000;
+
+    console.log(`🔄 Resending code for: ${pendingData.email}`);
+    console.log(`   - New code: ${newCode}`);
+
+    // إرسال الرمز الجديد
+    try {
+      await sendEmailWithTimeout(
+        () => sendVerificationEmail(pendingData.email, pendingData.fullName, newCode),
+        10000
+      );
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError.message);
+    }
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق مرة أخرى'
+    });
+
+  } catch (err) {
+    console.error('Resend Registration Code Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// ============================================
+// إرسال رمز تحقق SMS للهاتف (بعد إنشاء الحساب)
+// ============================================
 router.post('/send-phone-verification', async (req, res) => {
   const { phone } = req.body;
   const normalizedPhone = normalizePhone(phone);
@@ -173,7 +379,9 @@ router.post('/send-phone-verification', async (req, res) => {
   }
 });
 
-// تأكيد رمز OTP للهاتف (يرسل توكن)
+// ============================================
+// تأكيد رمز OTP للهاتف (بعد إنشاء الحساب)
+// ============================================
 router.post('/verify-phone', async (req, res) => {
   const { phone, code } = req.body;
   const normalizedPhone = normalizePhone(phone);
@@ -198,24 +406,32 @@ router.post('/verify-phone', async (req, res) => {
         user.isPhoneVerified = true;
         await user.save();
 
-        // إرسال التوكن بعد التحقق من الجوال
-        const token = jwt.sign(
+        const accessToken = jwt.sign(
           { user: { id: user.id, username: user.username } },
           process.env.JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        const refreshToken = jwt.sign(
+          { user: { id: user.id } },
+          process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
           { expiresIn: '30d' }
         );
 
         return res.json({
           success: true,
           message: 'تم تأكيد رقم الجوال بنجاح',
-          token,
+          accessToken,
+          refreshToken,
           user: {
             id: user.id,
             fullName: user.fullName,
             username: user.username,
             email: user.email,
             phone: user.phone,
-            isPhoneVerified: user.isPhoneVerified
+            memoji: user.memoji || '😊',
+            isPhoneVerified: user.isPhoneVerified,
+            isEmailVerified: user.isEmailVerified
           }
         });
       }
@@ -226,7 +442,7 @@ router.post('/verify-phone', async (req, res) => {
       message: 'رمز التحقق غير صحيح'
     });
   } catch (err) {
-    console.error('Verify Error:', err);
+    console.error('Verify Phone Error:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ أثناء التحقق من الرمز'
@@ -234,8 +450,10 @@ router.post('/verify-phone', async (req, res) => {
   }
 });
 
-// إعادة إرسال رمز 2FA
-router.post('/resend-2fa', async (req, res) => {
+// ============================================
+// تخطي التحقق من الجوال (بعد التحقق من الإيميل)
+// ============================================
+router.post('/skip-phone-verification', async (req, res) => {
   const { email } = req.body;
 
   try {
@@ -248,20 +466,44 @@ router.post('/resend-2fa', async (req, res) => {
       });
     }
 
-    const twoFACode = generateCode();
-    user.twoFACode = twoFACode;
-    user.twoFAExpires = new Date(Date.now() + 10 * 60 * 1000);
-    await user.save();
+    if (!user.isEmailVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرجاء تأكيد البريد الإلكتروني أولاً'
+      });
+    }
 
-    await sendVerificationEmail(user.email, user.fullName, twoFACode);
+    const accessToken = jwt.sign(
+      { user: { id: user.id, username: user.username } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const refreshToken = jwt.sign(
+      { user: { id: user.id } },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
 
     res.json({
       success: true,
-      message: 'تم إرسال رمز التحقق مرة أخرى'
+      message: 'تم تسجيل الدخول بنجاح',
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        memoji: user.memoji || '😊',
+        isPhoneVerified: user.isPhoneVerified,
+        isEmailVerified: user.isEmailVerified
+      }
     });
 
   } catch (err) {
-    console.error('Resend 2FA Error:', err);
+    console.error('Skip Phone Verification Error:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في السيرفر'
@@ -281,7 +523,6 @@ router.post('/refresh-token', async (req, res) => {
   }
 
   try {
-    // التحقق من صلاحية الـ refresh token
     const decoded = jwt.verify(
       refreshToken,
       process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
@@ -296,7 +537,6 @@ router.post('/refresh-token', async (req, res) => {
       });
     }
 
-    // إنشاء access token جديد
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -306,7 +546,7 @@ router.post('/refresh-token', async (req, res) => {
     res.json({
       success: true,
       accessToken,
-      refreshToken, // نفس الـ refresh token
+      refreshToken,
       user: {
         id: user.id,
         fullName: user.fullName,
@@ -348,7 +588,6 @@ router.post('/skip-phone-verification', async (req, res) => {
       });
     }
 
-    // إرسال التوكن حتى لو الجوال غير مؤكد
     const token = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -470,7 +709,7 @@ router.post('/resend-verification-phone', async (req, res) => {
   }
 });
 
-// تسجيل الدخول (إجباري التحقق الثنائي)
+// ✅ تسجيل الدخول مع التحقق من انتهاء صلاحية الباسورد
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -490,6 +729,19 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+      });
+    }
+
+    // ✅ التحقق من انتهاء صلاحية الباسورد (90 يوم)
+    if (user.isPasswordExpired()) {
+      user.passwordResetRequired = true;
+      await user.save();
+      
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_EXPIRED',
+        message: 'انتهت صلاحية كلمة المرور. يرجى تغييرها.',
+        email: user.email
       });
     }
 
@@ -516,7 +768,7 @@ router.post('/login', async (req, res) => {
   }
 });
 
-//  التحقق من رمز 2FA
+// التحقق من رمز 2FA
 router.post('/verify-2fa', async (req, res) => {
   const { email, code } = req.body;
 
@@ -534,12 +786,10 @@ router.post('/verify-2fa', async (req, res) => {
       });
     }
 
-    // مسح رمز 2FA
     user.twoFACode = undefined;
     user.twoFAExpires = undefined;
     await user.save();
 
-    // إنشاء التوكنات
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -593,7 +843,7 @@ router.post('/forgot-password', async (req, res) => {
 
     const resetCode = generateCode();
     user.passwordResetCode = resetCode;
-    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 دقائق
+    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
     await user.save();
 
     await sendVerificationEmail(user.email, user.fullName, resetCode);
@@ -644,8 +894,8 @@ router.post('/verify-reset-code', async (req, res) => {
   }
 });
 
-// إعادة تعيين كلمة المرور
-router.post('/reset-password', async (req, res) => {
+// إعادة تعيين كلمة المرور مع التحقق من القوة والتاريخ
+router.post('/reset-password', validatePasswordMiddleware, async (req, res) => {
   const { email, code, newPassword } = req.body;
 
   try {
@@ -662,11 +912,26 @@ router.post('/reset-password', async (req, res) => {
       });
     }
 
+    // التحقق من عدم تكرار آخر 12 باسورد
+    const isUnique = await user.checkPasswordHistory(newPassword);
+    
+    if (!isUnique) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام أحد آخر 12 كلمات مرور سابقة'
+      });
+    }
+
     // تشفير كلمة المرور الجديدة
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    // إضافة الباسورد الجديد للتاريخ
+    user.addToPasswordHistory(hashedPassword);
+    
     user.password = hashedPassword;
+    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordResetRequired = false; // إلغاء إجبار التغيير
     user.passwordResetCode = undefined;
     user.passwordResetExpires = undefined;
     await user.save();
@@ -678,6 +943,131 @@ router.post('/reset-password', async (req, res) => {
 
   } catch (err) {
     console.error('Reset Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// تغيير كلمة المرور (للمستخدم المسجل دخول)
+router.post('/change-password', authMiddleware, validatePasswordMiddleware, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    // التحقق من الباسورد الحالي
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'كلمة المرور الحالية غير صحيحة'
+      });
+    }
+
+    // التحقق من عدم تكرار آخر 12 باسورد
+    const isUnique = await user.checkPasswordHistory(newPassword);
+    
+    if (!isUnique) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام أحد آخر 12 كلمات مرور سابقة'
+      });
+    }
+
+    // تشفير كلمة المرور الجديدة
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // إضافة الباسورد الجديد للتاريخ
+    user.addToPasswordHistory(hashedPassword);
+    
+    user.password = hashedPassword;
+    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordResetRequired = false; // إلغاء إجبار التغيير
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Change Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// توليد باسورد عشوائي قوي
+router.get('/generate-secure-password', (req, res) => {
+  try {
+    const length = parseInt(req.query.length) || 12;
+    
+    if (length < 8 || length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'الطول يجب أن يكون بين 8 و 50 حرف'
+      });
+    }
+
+    const password = User.generateSecurePassword(length);
+
+    res.json({
+      success: true,
+      password
+    });
+
+  } catch (err) {
+    console.error('Generate Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// التحقق من حالة الباسورد (متى يحتاج تغيير)
+router.get('/password-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const daysSinceChange = user.passwordChangedAt 
+      ? Math.floor((Date.now() - user.passwordChangedAt.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    const daysUntilExpiry = 90 - daysSinceChange;
+    const isExpired = user.isPasswordExpired();
+
+    res.json({
+      success: true,
+      passwordChangedAt: user.passwordChangedAt,
+      daysSinceChange,
+      daysUntilExpiry: daysUntilExpiry > 0 ? daysUntilExpiry : 0,
+      isExpired,
+      passwordResetRequired: user.passwordResetRequired || false
+    });
+
+  } catch (err) {
+    console.error('Password Status Error:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في السيرفر'
@@ -797,6 +1187,19 @@ router.post('/biometric-login', async (req, res) => {
       });
     }
 
+    // التحقق من انتهاء صلاحية الباسورد حتى مع البايومتركس
+    if (user.isPasswordExpired()) {
+      user.passwordResetRequired = true;
+      await user.save();
+      
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_EXPIRED',
+        message: 'انتهت صلاحية كلمة المرور. يرجى تغييرها قبل تسجيل الدخول.',
+        email: user.email
+      });
+    }
+
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
       process.env.JWT_SECRET,
@@ -852,4 +1255,41 @@ router.get('/biometric-status', authMiddleware, async (req, res) => {
     });
   }
 });
+
+router.post('/resend-2fa', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const twoFACode = generateCode();
+    user.twoFACode = twoFACode;
+    user.twoFAExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendVerificationEmail(user.email, user.fullName, twoFACode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق مرة أخرى'
+    });
+
+  } catch (err) {
+    console.error('Resend 2FA Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+
+
 module.exports = router;

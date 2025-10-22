@@ -1,300 +1,133 @@
-// server.js
 require('dotenv').config();
 const express = require('express');
+const http = require('http'); 
+const socketIO = require('socket.io');
 const mongoose = require('mongoose');
-const http = require('http');
-const socketIo = require('socket.io');
-const { configureMiddleware } = require('./config/middleware');
-const { configureRoutes } = require('./config/routes');
+const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const path = require('path');
 
 const app = express();
-app.set('trust proxy', true);
+const server = http.createServer(app); 
 
-const server = http.createServer(app);
-
-// ============================================
-// Socket.IO Configuration
-// ============================================
-const io = socketIo(server, {
+const io = socketIO(server, {
   cors: {
-    origin: process.env.NODE_ENV === 'production'
-      ? [
-          'https://waseed-team-production.up.railway.app',
-          'https://www.waseed.app',
-          'https://waseed.app',
-        ]
-      : '*',
-    methods: ['GET', 'POST'],
+    origin: 'https://waseed-team-production.up.railway.app/api',
     credentials: true,
+    methods: ['GET', 'POST']
   },
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  transports: ['websocket', 'polling']
 });
 
-// Store online users
-const onlineUsers = new Map();
-
-io.on('connection', (socket) => {
-  console.log('🔌 New client connected:', socket.id);
-
-  // User comes online
-  socket.on('user_online', (userId) => {
-    onlineUsers.set(userId, socket.id);
-    console.log(`✅ User ${userId} is online`);
-    
-    // Broadcast to all clients that this user is online
-    socket.broadcast.emit('user_status', {
-      userId,
-      status: 'online',
-    });
-  });
-
-  // User sends a message
-  socket.on('send_message', (data) => {
-    const { recipientId, message } = data;
-    const recipientSocketId = onlineUsers.get(recipientId);
-
-    if (recipientSocketId) {
-      // Send to recipient if they're online
-      io.to(recipientSocketId).emit('receive_message', message);
-      console.log(`📨 Message sent to user ${recipientId}`);
-    } else {
-      console.log(`📭 User ${recipientId} is offline`);
-    }
-  });
-
-  // User is typing
-  socket.on('typing', (data) => {
-    const { recipientId, isTyping } = data;
-    const recipientSocketId = onlineUsers.get(recipientId);
-
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('user_typing', {
-        userId: data.userId,
-        isTyping,
-      });
-    }
-  });
-
-  // User disconnects
-  socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.id);
-    
-    // Find and remove user from online users
-    for (const [userId, socketId] of onlineUsers.entries()) {
-      if (socketId === socket.id) {
-        onlineUsers.delete(userId);
-        console.log(`👋 User ${userId} went offline`);
-        
-        // Broadcast to all clients that this user is offline
-        socket.broadcast.emit('user_status', {
-          userId,
-          status: 'offline',
-        });
-        break;
-      }
-    }
-  });
-});
-
-// Make io accessible to routes
 app.set('io', io);
 
-// ============================================
-// Redis Configuration (Optional)
-// ============================================
-let redisConnected = false;
+// Security Middleware
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: "cross-origin" } // ✅ للسماح بتحميل الصور
+}));
 
-async function connectRedis() {
-  try {
-    const { connectRedis: redisConnect } = require('./config/redis');
-    await redisConnect();
-    redisConnected = true;
-    console.log('✅ Redis connected successfully');
-  } catch (err) {
-    console.log('⚠️ Redis not configured - using in-memory storage');
-    console.log('   To enable Redis, install: npm install redis');
-    console.log('   And set REDIS_URL in your .env file');
-    redisConnected = false;
-  }
-}
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  credentials: true
+}));
 
-// ============================================
-// MongoDB Connection
-// ============================================
-async function connectDatabase() {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
-    });
-    console.log('✅ MongoDB connected successfully');
-  } catch (err) {
-    console.error('❌ MongoDB connection error:', err);
-    throw err;
-  }
-}
+app.use(express.json({ limit: '10kb' }));
 
-// ============================================
-// Configure Middleware & Routes
-// ============================================
-configureMiddleware(app);
-configureRoutes(app);
+// ✅ خدمة الملفات الثابتة (الصور والملفات المرفوعة)
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ============================================
-// Health Check Endpoint
-// ============================================
-app.get('/health', (req, res) => {
-  const health = {
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    environment: process.env.NODE_ENV || 'development',
-    services: {
-      mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
-      redis: redisConnected ? 'connected' : 'not configured',
-      socketio: io.engine.clientsCount > 0 ? 'active' : 'idle',
-    },
-  };
-
-  const statusCode = mongoose.connection.readyState === 1 ? 200 : 503;
-  res.status(statusCode).json(health);
-});
-
-// ============================================
-// 404 Handler
-// ============================================
-app.use((req, res) => {
-  res.status(404).json({
-    success: false,
-    message: 'المسار غير موجود',
-    path: req.path,
-  });
-});
-
-// ============================================
-// Global Error Handler
-// ============================================
-app.use((err, req, res, next) => {
-  console.error('❌ Error:', err);
-
-  // Timeout error
-  if (req.timedout) {
-    return res.status(408).json({
-      success: false,
-      message: 'انتهى وقت الطلب',
+// حماية من NoSQL Injection بإزالة أي $ من المدخلات 
+app.use((req, res, next) => {
+  if (req.query) {
+    Object.keys(req.query).forEach(key => {
+      const value = req.query[key];
+      if (typeof value === 'string') {
+        req.query[key] = value.replace(/\$/g, '');
+      }
     });
   }
-
-  // Mongoose validation error
-  if (err.name === 'ValidationError') {
-    return res.status(400).json({
-      success: false,
-      message: 'خطأ في البيانات المدخلة',
-      errors: Object.values(err.errors).map(e => e.message),
-    });
-  }
-
-  // JWT errors
-  if (err.name === 'JsonWebTokenError') {
-    return res.status(401).json({
-      success: false,
-      message: 'توكن غير صالح',
-    });
-  }
-
-  if (err.name === 'TokenExpiredError') {
-    return res.status(401).json({
-      success: false,
-      message: 'انتهت صلاحية الجلسة',
-    });
-  }
-
-  // Default error
-  res.status(err.status || 500).json({
-    success: false,
-    message: err.message || 'حدث خطأ في السيرفر',
-    ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-  });
-});
-
-// ============================================
-// Graceful Shutdown
-// ============================================
-process.on('SIGTERM', async () => {
-  console.log('🛑 SIGTERM received, shutting down gracefully...');
   
-  server.close(async () => {
-    console.log('🔌 HTTP server closed');
-    
-    try {
-      await mongoose.connection.close();
-      console.log('🗄️ MongoDB connection closed');
-    } catch (err) {
-      console.error('Error closing MongoDB:', err);
-    }
-    
-    process.exit(0);
-  });
-
-  // Force shutdown after 10 seconds
-  setTimeout(() => {
-    console.error('⚠️ Forced shutdown after timeout');
-    process.exit(1);
-  }, 10000);
-});
-
-// ============================================
-// Start Server
-// ============================================
-const PORT = process.env.PORT || 5000;
-
-async function startServer() {
-  try {
-    // 1. Connect to MongoDB
-    await connectDatabase();
-    
-    // 2. Try to connect to Redis (optional)
-    await connectRedis();
-    
-    // 3. Start HTTP server
-    server.listen(PORT, () => {
-      console.log('');
-      console.log('═══════════════════════════════════════════');
-      console.log('Waseed Server Started Successfully');
-      console.log('═══════════════════════════════════════════');
-      console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`Port: ${PORT}`);
-      console.log(`URL: http://localhost:${PORT}`);
-      console.log(`Database: MongoDB ${mongoose.connection.readyState === 1 ? '✅' : '❌'}`);
-      console.log(`Redis: ${redisConnected ? '✅ Connected' : '⚠️ Not configured'}`);
-      console.log(`Socket.IO: ✅ Ready`);
-      console.log('═══════════════════════════════════════════');
-      console.log('');
-    });
-  } catch (err) {
-    console.error('❌ Failed to start server:', err);
-    process.exit(1);
+  if (req.body) {
+    const sanitize = (obj) => {
+      Object.keys(obj).forEach(key => {
+        if (typeof obj[key] === 'string') {
+          obj[key] = obj[key].replace(/\$/g, '');
+        } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+          sanitize(obj[key]);
+        }
+      });
+    };
+    sanitize(req.body);
   }
-}
+  
+  next();
+});
 
-// Handle unhandled rejections
-process.on('unhandledRejection', (err) => {
-  console.error('❌ Unhandled Rejection:', err);
-  server.close(() => {
-    process.exit(1);
+// Rate Limiting
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { success: false, message: 'تم تجاوز عدد الطلبات' }
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'تجاوزت عدد محاولات تسجيل الدخول' },
+  skipSuccessfulRequests: true
+});
+
+// ✅ Rate Limiter خاص للرفع
+const uploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 دقيقة
+  max: 20, // 20 ملف كحد أقصى
+  message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/upload', uploadLimiter); // ✅ حماية endpoint الرفع
+
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log(' Connected to MongoDB'))
+  .catch(err => console.error('❌ DB connection error:', err));
+
+// Socket.IO
+require('./sockets/messageSocket')(io);
+
+// Routes
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/contacts', require('./routes/contacts'));
+app.use('/api/user', require('./routes/user')); 
+app.use('/api/prekeys', require('./routes/prekeys')); 
+app.use('/api/messages', require('./routes/messages'));
+app.use('/api/upload', require('./routes/upload')); // ✅ Route جديد للرفع
+
+app.get('/', (req, res) => {
+  res.json({ 
+    message: 'API is working',
+    endpoints: {
+      auth: '/api/auth',
+      contacts: '/api/contacts',
+      messages: '/api/messages',
+      upload: '/api/upload' // ✅
+    }
   });
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (err) => {
-  console.error('❌ Uncaught Exception:', err);
-  server.close(() => {
-    process.exit(1);
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ 
+    success: false, 
+    message: 'حدث خطأ في السيرفر' 
   });
 });
 
-// Start the server
-startServer();
+const PORT = process.env.PORT || 3000;
 
-module.exports = { app, server, io };
+server.listen(PORT, () => {
+  console.log(` Server running on port: ${PORT}`);
+  console.log(` Socket.IO ready`);
+});

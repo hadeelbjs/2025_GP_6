@@ -1,6 +1,7 @@
 // sockets/messageSocket.js
 
 const jwt = require('jsonwebtoken');
+const mongoose = require('mongoose');
 const Message = require('../models/Message');
 
 // تخزين المستخدمين المتصلين
@@ -22,7 +23,7 @@ module.exports = (io) => {
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.userId = decoded.id;
+      socket.userId = decoded.id; // String ID من JWT
       
       console.log(`✅ User authenticated: ${decoded.id}`);
       next();
@@ -103,11 +104,20 @@ module.exports = (io) => {
           });
         }
 
+        // ✅ تحويل IDs إلى ObjectId
+        const senderObjectId = mongoose.Types.ObjectId.isValid(userId) 
+          ? new mongoose.Types.ObjectId(userId) 
+          : userId;
+          
+        const recipientObjectId = mongoose.Types.ObjectId.isValid(recipientId)
+          ? new mongoose.Types.ObjectId(recipientId)
+          : recipientId;
+
         // ✅ حفظ في قاعدة البيانات
         const message = new Message({
           messageId,
-          senderId: userId,
-          recipientId,
+          senderId: senderObjectId,
+          recipientId: recipientObjectId,
           encryptedType,
           encryptedBody,
           attachmentData: attachmentData || null,
@@ -128,7 +138,7 @@ module.exports = (io) => {
         if (recipientSocketId) {
           io.to(recipientSocketId).emit('message:new', {
             messageId: message.messageId,
-            senderId: userId,
+            senderId: userId, // نرسل string ID للـ Flutter
             encryptedType: message.encryptedType,
             encryptedBody: message.encryptedBody,
             attachmentData: message.attachmentData,

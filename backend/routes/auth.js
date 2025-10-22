@@ -511,5 +511,751 @@ router.post('/skip-phone-verification', async (req, res) => {
   }
 });
 
+// تجديد التوكن باستخدام refresh token
+router.post('/refresh-token', async (req, res) => {
+  const { refreshToken } = req.body;
+
+  if (!refreshToken) {
+    return res.status(401).json({
+      success: false,
+      message: 'الرجاء تسجيل الدخول مرة أخرى'
+    });
+  }
+
+  try {
+    const decoded = jwt.verify(
+      refreshToken,
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET
+    );
+
+    const user = await User.findById(decoded.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const accessToken = jwt.sign(
+      { user: { id: user.id, username: user.username } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({
+      success: true,
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified
+      }
+    });
+
+  } catch (err) {
+    console.error('Refresh Token Error:', err);
+    res.status(401).json({
+      success: false,
+      message: 'انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى'
+    });
+  }
+});
+
+// تخطي التحقق من الجوال (يرسل توكن بعد تأكيد الإيميل)
+router.post('/skip-phone-verification', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    if (!user.isEmailVerified) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرجاء تأكيد البريد الإلكتروني أولاً'
+      });
+    }
+
+    const token = jwt.sign(
+      { user: { id: user.id, username: user.username } },
+      process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'تم تسجيل الدخول بنجاح',
+      token,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        isPhoneVerified: user.isPhoneVerified,
+        isEmailVerified: user.isEmailVerified
+      }
+    });
+
+  } catch (err) {
+    console.error('Skip Phone Verification Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// إعادة إرسال رمز التحقق بالإيميل
+router.post('/resend-verification-email', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'المستخدم غير موجود' 
+      });
+    }
+
+    if (user.isEmailVerified) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'البريد الإلكتروني مؤكد بالفعل' 
+      });
+    }
+
+    const verificationCode = generateCode();
+    user.emailVerificationCode = verificationCode;
+    user.emailVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendVerificationEmail(user.email, user.fullName, verificationCode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق مرة أخرى'
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'حدث خطأ في السيرفر' 
+    });
+  }
+});
+
+// إعادة إرسال رمز التحقق برقم الجوال
+router.post('/resend-verification-phone', async (req, res) => {
+  const { phone } = req.body;
+  const normalizedPhone = normalizePhone(phone);
+
+  if (!normalizedPhone) {
+    return res.status(400).json({ 
+      success: false, 
+      message: 'رقم الجوال غير صالح' 
+    });
+  }
+
+  try {
+    const user = await User.findOne({ phone: normalizedPhone });
+
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'المستخدم غير موجود' 
+      });
+    }
+
+    if (user.isPhoneVerified) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'رقم الجوال مؤكد بالفعل' 
+      });
+    }
+
+    const verification = await client.verify.v2
+      .services(process.env.TWILIO_VERIFY_SERVICE_SID)
+      .verifications
+      .create({ to: normalizedPhone, channel: 'sms' });
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق مرة أخرى',
+      status: verification.status
+    });
+
+  } catch (err) {
+    console.error('Twilio Error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'فشل إرسال رمز التحقق' 
+    });
+  }
+});
+
+// ✅ تسجيل الدخول مع التحقق من انتهاء صلاحية الباسورد
+router.post('/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+      });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+      });
+    }
+
+    // ✅ التحقق من انتهاء صلاحية الباسورد (90 يوم)
+    if (user.isPasswordExpired()) {
+      user.passwordResetRequired = true;
+      await user.save();
+      
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_EXPIRED',
+        message: 'انتهت صلاحية كلمة المرور. يرجى تغييرها.',
+        email: user.email
+      });
+    }
+
+    // إرسال رمز 2FA إجبارياً
+    const twoFACode = generateCode();
+    user.twoFACode = twoFACode;
+    user.twoFAExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendVerificationEmail(user.email, user.fullName, twoFACode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
+      email: user.email
+    });
+
+  } catch (err) {
+    console.error('Login Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// التحقق من رمز 2FA
+router.post('/verify-2fa', async (req, res) => {
+  const { email, code } = req.body;
+
+  try {
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      twoFACode: code,
+      twoFAExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرمز غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
+    user.twoFACode = undefined;
+    user.twoFAExpires = undefined;
+    await user.save();
+
+    const accessToken = jwt.sign(
+      { user: { id: user.id, username: user.username } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const refreshToken = jwt.sign(
+      { user: { id: user.id } },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'تم تسجيل الدخول بنجاح',
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified
+      }
+    });
+
+  } catch (err) {
+    console.error('2FA Verify Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// طلب إعادة تعيين كلمة المرور (إرسال رمز)
+router.post('/forgot-password', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ email: email.toLowerCase() });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'لا يوجد حساب مرتبط بهذا البريد الإلكتروني'
+      });
+    }
+
+    const resetCode = generateCode();
+    user.passwordResetCode = resetCode;
+    user.passwordResetExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendVerificationEmail(user.email, user.fullName, resetCode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني'
+    });
+
+  } catch (err) {
+    console.error('Forgot Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// التحقق من رمز إعادة التعيين
+router.post('/verify-reset-code', async (req, res) => {
+  const { email, code } = req.body;
+
+  try {
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      passwordResetCode: code,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرمز غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'تم التحقق من الرمز بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Verify Reset Code Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// إعادة تعيين كلمة المرور مع التحقق من القوة والتاريخ
+router.post('/reset-password', validatePasswordMiddleware, async (req, res) => {
+  const { email, code, newPassword } = req.body;
+
+  try {
+    const user = await User.findOne({
+      email: email.toLowerCase(),
+      passwordResetCode: code,
+      passwordResetExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرمز غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
+    // التحقق من عدم تكرار آخر 12 باسورد
+    const isUnique = await user.checkPasswordHistory(newPassword);
+    
+    if (!isUnique) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام أحد آخر 12 كلمات مرور سابقة'
+      });
+    }
+
+    // تشفير كلمة المرور الجديدة
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // إضافة الباسورد الجديد للتاريخ
+    user.addToPasswordHistory(hashedPassword);
+    
+    user.password = hashedPassword;
+    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordResetRequired = false; // إلغاء إجبار التغيير
+    user.passwordResetCode = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Reset Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// تغيير كلمة المرور (للمستخدم المسجل دخول)
+router.post('/change-password', authMiddleware, validatePasswordMiddleware, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    // التحقق من الباسورد الحالي
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: 'كلمة المرور الحالية غير صحيحة'
+      });
+    }
+
+    // التحقق من عدم تكرار آخر 12 باسورد
+    const isUnique = await user.checkPasswordHistory(newPassword);
+    
+    if (!isUnique) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يمكن استخدام أحد آخر 12 كلمات مرور سابقة'
+      });
+    }
+
+    // تشفير كلمة المرور الجديدة
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    // إضافة الباسورد الجديد للتاريخ
+    user.addToPasswordHistory(hashedPassword);
+    
+    user.password = hashedPassword;
+    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordResetRequired = false; // إلغاء إجبار التغيير
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم تغيير كلمة المرور بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Change Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// توليد باسورد عشوائي قوي
+router.get('/generate-secure-password', (req, res) => {
+  try {
+    const length = parseInt(req.query.length) || 12;
+    
+    if (length < 8 || length > 50) {
+      return res.status(400).json({
+        success: false,
+        message: 'الطول يجب أن يكون بين 8 و 50 حرف'
+      });
+    }
+
+    const password = User.generateSecurePassword(length);
+
+    res.json({
+      success: true,
+      password
+    });
+
+  } catch (err) {
+    console.error('Generate Password Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+// التحقق من حالة الباسورد (متى يحتاج تغيير)
+router.get('/password-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const daysSinceChange = user.passwordChangedAt 
+      ? Math.floor((Date.now() - user.passwordChangedAt.getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
+
+    const daysUntilExpiry = 90 - daysSinceChange;
+    const isExpired = user.isPasswordExpired();
+
+    res.json({
+      success: true,
+      passwordChangedAt: user.passwordChangedAt,
+      daysSinceChange,
+      daysUntilExpiry: daysUntilExpiry > 0 ? daysUntilExpiry : 0,
+      isExpired,
+      passwordResetRequired: user.passwordResetRequired || false
+    });
+
+  } catch (err) {
+    console.error('Password Status Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+router.post('/request-biometric-enable', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const verificationCode = generateCode();
+    user.biometricVerificationCode = verificationCode;
+    user.biometricVerificationExpires = new Date(Date.now() + 10 * 60 * 1000);
+    await user.save();
+
+    await sendBiometricVerificationEmail(user.email, user.fullName, verificationCode);
+
+    res.json({
+      success: true,
+      message: 'تم إرسال رمز التحقق إلى بريدك الإلكتروني'
+    });
+
+  } catch (err) {
+    console.error('Request Biometric Enable Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+router.post('/verify-biometric-enable', authMiddleware, async (req, res) => {
+  const { code } = req.body;
+
+  try {
+    const user = await User.findOne({
+      _id: req.userId,
+      biometricVerificationCode: code,
+      biometricVerificationExpires: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'الرمز غير صحيح أو منتهي الصلاحية'
+      });
+    }
+
+    user.biometricEnabled = true;
+    user.biometricVerificationCode = undefined;
+    user.biometricVerificationExpires = undefined;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم تفعيل المصادقة الحيوية بنجاح'
+    });
+
+  } catch (err) {
+    console.error('Verify Biometric Enable Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+router.post('/disable-biometric', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    user.biometricEnabled = false;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'تم إلغاء المصادقة الحيوية'
+    });
+
+  } catch (err) {
+    console.error('Disable Biometric Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+router.post('/biometric-login', async (req, res) => {
+  const { email } = req.body;
+
+  try {
+    const user = await User.findOne({ 
+      email: email.toLowerCase(),
+      biometricEnabled: true 
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المصادقة الحيوية غير مفعلة لهذا الحساب'
+      });
+    }
+
+    // التحقق من انتهاء صلاحية الباسورد حتى مع البايومتركس
+    if (user.isPasswordExpired()) {
+      user.passwordResetRequired = true;
+      await user.save();
+      
+      return res.status(403).json({
+        success: false,
+        code: 'PASSWORD_EXPIRED',
+        message: 'انتهت صلاحية كلمة المرور. يرجى تغييرها قبل تسجيل الدخول.',
+        email: user.email
+      });
+    }
+
+    const accessToken = jwt.sign(
+      { user: { id: user.id, username: user.username } },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    const refreshToken = jwt.sign(
+      { user: { id: user.id } },
+      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
+    res.json({
+      success: true,
+      message: 'تم تسجيل الدخول بالبايومتريكس بنجاح',
+      accessToken,
+      refreshToken,
+      user: {
+        id: user.id,
+        fullName: user.fullName,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        memoji: user.memoji || '😊',
+        isEmailVerified: user.isEmailVerified,
+        isPhoneVerified: user.isPhoneVerified,
+        biometricEnabled: user.biometricEnabled
+      }
+    });
+
+  } catch (err) {
+    console.error('Biometric Login Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في السيرفر'
+    });
+  }
+});
+
+router.get('/biometric-status', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    res.json({
+      success: true,
+      biometricEnabled: user?.biometricEnabled || false
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ'
+    });
+  }
+});
+
+
 
 module.exports = router;

@@ -7,7 +7,7 @@ import 'verify_phone_number.dart';
 import 'login_screen.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
-
+import '../widgets/MessageDialog.dart';
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -39,97 +39,67 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // معالجة التسجيل
   Future<void> _handleRegister() async {
-    bool isValid = _formKey.currentState!.validate();
+  bool isValid = _formKey.currentState!.validate();
+  
+  if (!isValid) {
+    return;
+  }
+  
+  setState(() => _isLoading = true);
+
+  final result = await _apiService.register(
+    fullName: _fullNameController.text.trim(),
+    username: _usernameController.text.trim(),
+    email: _emailController.text.trim(),
+    phone: _phoneController.text.trim(),
+    password: _passwordController.text,
+  );
+
+  setState(() => _isLoading = false);
+
+  if (!mounted) return;
+
+  if (result['success']) {
+    _showMessage(result['message'] ?? 'تم إرسال رمز التحقق', isError: false);
+
+    //  حفظ newRegistrationId
+    final String? newRegistrationId = result['newRegistrationId'];
     
-    if (!isValid) {
+    if (newRegistrationId == null) {
+      _showMessage('حدث خطأ: لم يتم استلام معرف التسجيل', isError: true);
       return;
     }
-    
-    setState(() => _isLoading = true);
 
-    final result = await _apiService.register(
-      fullName: _fullNameController.text.trim(),
-      username: _usernameController.text.trim(),
-      email: _emailController.text.trim(),
-      phone: _phoneController.text.trim(),
-      password: _passwordController.text,
+    // الانتقال لصفحة التحقق من الإيميل
+    final emailVerified = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VerifyEmailScreen(
+          email: _emailController.text.trim(),
+          phone: _phoneController.text.trim(),
+          fullName: _fullNameController.text.trim(),
+          newRegistrationId: newRegistrationId, 
+        ),
+      ),
     );
 
-    setState(() => _isLoading = false);
-
-    if (!mounted) return;
-
-    if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'تم إرسال رمز التحقق'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-
-      // الانتقال لصفحة التحقق من الإيميل
-      final emailVerified = await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VerifyEmailScreen(
-            email: _emailController.text.trim(),
-            phone: _phoneController.text.trim(),
-            fullName: _fullNameController.text.trim(),
-          ),
-        ),
-      );
-
-      // إذا تم التحقق من الإيميل بنجاح
-      if (emailVerified == true && mounted) {
-        // فقط اعرض خيارات التحقق (المفاتيح تولد بعد الحصول على Token)
-        _showPhoneVerificationOptions();
-      }
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'حدث خطأ'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+    if (emailVerified == true && mounted) {
+      _showPhoneVerificationOptions();
     }
+  } else {
+    _showMessage(result['message'] ?? 'حدث خطأ', isError: true);
   }
+}
   // عرض رسالة  
   void _showMessage(String message, {required bool isError}) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                isError ? Icons.error_outline : Icons.check_circle_outline,
-                color: Colors.white,
-              ),
-              const SizedBox(width: 8),
-              Text(
-                isError ? 'خطأ' : 'نجاح',
-                style: const TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            message,
-            style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          ),
-        ],
-      ),
-      backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
-      duration: const Duration(seconds: 3),
-    ),
+  showDialog(
+    context: context,
+    builder: (BuildContext context) {
+      return MessageDialog(
+        message: message,
+        isError: isError,
+      );
+    },
   );
 }
 
@@ -290,7 +260,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
 
     if (result['success']) {
-      // 2. ✅ الآن عندك Token - ولّد ورفع المفاتيح
+      // 2. Token is there so generate and upload keys
       await _generateAndUploadKeys();
       
       setState(() => _isLoading = false);
@@ -304,12 +274,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     } else {
       setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'حدث خطأ'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showMessage(result['message'], isError: true);
     }
   }
 
@@ -405,7 +370,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                           final email = value.trim();
                           final emailRegex = RegExp(
-                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                            r'^[a-zA-Z0-9._]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
                           );
                           if (!emailRegex.hasMatch(email)) {
                             return 'الرجاء إدخال بريد إلكتروني صالح';

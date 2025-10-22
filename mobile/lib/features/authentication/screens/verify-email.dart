@@ -11,6 +11,7 @@ class VerifyEmailScreen extends StatefulWidget {
   final String? fullName;
   final String? phone;
   final bool is2FA;
+  final String? newRegistrationId;
 
   const VerifyEmailScreen({
     super.key,
@@ -18,6 +19,7 @@ class VerifyEmailScreen extends StatefulWidget {
     this.fullName,
     this.phone,
     this.is2FA = false,
+    this.newRegistrationId,
   });
 
   @override
@@ -84,7 +86,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     });
   }
 
-  // ✅ التحقق من الرمز
+  // التحقق من الرمز
   Future<void> _verifyCodeAndReturn() async {
     final code = _codeControllers.map((c) => c.text).join();
 
@@ -101,10 +103,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
               email: widget.email,
               code: code,
             )
-          : await _apiService.verifyEmail(
-              email: widget.email,
-              code: code,
-            );
+          : await _apiService.verifyEmailAndCreate(code: code, newRegistrationId: widget.newRegistrationId!,);
+
 
       if (!mounted) return;
 
@@ -148,7 +148,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
   }
 
-  // ✅ تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
+  // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
   Future<void> _initializeEncryption() async {
     try {
       print('🔐 جاري التحقق من مفاتيح التشفير...');
@@ -187,7 +187,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     try {
       final result = widget.is2FA
           ? await _apiService.resend2FACode(widget.email) 
-          : await _apiService.resendVerificationEmail(widget.email);
+          : await _apiService.resendRegistrationCode(newRegistrationId: widget.newRegistrationId!);
+;
 
       setState(() => _isResending = false);
 

@@ -1,6 +1,6 @@
 // backend/utils/emailService.js
 
-/*
+
 const { Resend } = require('resend');
 
 // إنشاء instance من Resend
@@ -12,7 +12,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 const sendVerificationEmail = async (email, fullName, verificationCode) => {
   try {
     const data = await resend.emails.send({
-      from: `وصـيد <${process.env.EMAIL_FROM || 'onboarding@resend.dev'}>`,
+      from: `وصـيد <${process.env.EMAIL_FROM }>`,
       to: email,
       subject: 'تأكيد البريد الإلكتروني',
       html: `
@@ -63,7 +63,7 @@ const sendVerificationEmail = async (email, fullName, verificationCode) => {
 const sendBiometricVerificationEmail = async (email, fullName, verificationCode) => {
   try {
     const data = await resend.emails.send({
-      from: `وصـيد <${process.env.EMAIL_FROM || 'onboarding@resend.dev'}>`,
+      from: `وصـيد <${process.env.EMAIL_FROM}>`,
       to: email,
       subject: 'تفعيل المصادقة الحيوية',
       html: `
@@ -118,8 +118,8 @@ module.exports = {
   sendVerificationEmail,
   sendBiometricVerificationEmail  
 };
-*/
 
+/*
 const nodemailer = require('nodemailer');
 
 const transporter = nodemailer.createTransport({
@@ -231,3 +231,4 @@ module.exports = {
   sendVerificationEmail,
   sendBiometricVerificationEmail  
 };
+*/

@@ -91,6 +91,9 @@ class ApiService {
   static const String _refreshTokenKey = 'refresh_token';
 
   //  التسجيل (يرسل رمز التحقق للإيميل)
+  // ============================================
+  // التسجيل - الخطوة 1
+  // ============================================
   Future<Map<String, dynamic>> register({
     required String fullName,
     required String username,
@@ -99,12 +102,10 @@ class ApiService {
     required String password,
   }) async {
     try {
+      
       final response = await http.post(
         Uri.parse('$baseUrl/auth/register'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
+        headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'fullName': fullName,
           'username': username,
@@ -112,44 +113,67 @@ class ApiService {
           'phone': phone,
           'password': password,
         }),
-      ).timeout(const Duration(seconds: 10));
+      );
 
-      return jsonDecode(response.body);
+      final data = jsonDecode(response.body);
+      return data;
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
+      print('❌ Registration error: $e');
+      return {'success': false, 'message': 'حدث خطأ في الاتصال'};
     }
   }
 
-  //  تأكيد البريد الإلكتروني (بدون حفظ توكن)
-  Future<Map<String, dynamic>> verifyEmail({
-    required String email,
+  // ============================================
+  // التحقق من الإيميل وإنشاء الحساب - الخطوة 2
+  // ============================================
+  Future<Map<String, dynamic>> verifyEmailAndCreate({
     required String code,
+    required String newRegistrationId,
   }) async {
     try {
+      
+      final requestBody = {
+        'code': code,
+        'newRegistrationId': newRegistrationId,
+      };
+
+     
       final response = await http.post(
-        Uri.parse('$baseUrl/auth/verify-email'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({
-          'email': email,
-          'code': code,
-        }),
-      ).timeout(const Duration(seconds: 10));
+        Uri.parse('$baseUrl/auth/verify-email-and-create'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(requestBody),
+      );
 
       final data = jsonDecode(response.body);
-
-      // لا نحفظ التوكن هنا - سيتم بعد التحقق من الجوال أو التخطي
       return data;
     } catch (e) {
-      return {
-        'success': false,
-        'message': 'فشل الاتصال بالسيرفر: $e'
-      };
+      print('❌ Verify email error: $e');
+      return {'success': false, 'message': 'حدث خطأ في الاتصال'};
+    }
+  }
+
+  // ============================================
+  // إعادة إرسال رمز التحقق (قبل إنشاء الحساب)
+  // ============================================
+  Future<Map<String, dynamic>> resendRegistrationCode({
+    required String newRegistrationId,
+  }) async {
+    try {
+      
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/resend-registration-code'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'newRegistrationId': newRegistrationId,
+        }),
+      );
+
+     
+      final data = jsonDecode(response.body);
+      return data;
+    } catch (e) {
+      print('❌ Resend registration code error: $e');
+      return {'success': false, 'message': 'حدث خطأ في الاتصال'};
     }
   }
 
@@ -321,8 +345,9 @@ Future<Map<String, dynamic>> skipPhoneVerification({
 
     // حفظ التوكن إذا نجحت العملية
     if (response.statusCode == 200 && data['success']) {
-      await _storage.write(key: 'access_token', value: data['token']);
-      await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
+      await _storage.write(key: 'access_token', value: data['accessToken']);
+      await _storage.write(key: 'refresh_token', value: data['refreshToken']);
+      await _storage.write(key: 'refresh_data', value: jsonEncode(data['user']));
     }
 
     return data;
@@ -476,6 +501,7 @@ Future<Map<String, dynamic>> skipPhoneVerification({
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'user_data');
+    await _storage.deleteAll();
   }
 
   // ================================

@@ -18,11 +18,7 @@ const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
     origin: process.env.NODE_ENV === 'production'
-      ? [
-          'https://waseed-team-production.up.railway.app',
-          'https://www.waseed.app',
-          'https://waseed.app',
-        ]
+      ? 'https://waseed-team-production.up.railway.app'
       : '*',
     methods: ['GET', 'POST'],
     credentials: true,

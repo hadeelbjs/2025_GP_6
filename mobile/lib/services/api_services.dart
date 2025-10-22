@@ -8,11 +8,11 @@ class ApiService {
   // ============================
   // Base URL deployment
   // ============================
-    //static const String baseUrl = 'https://waseed-team-production.up.railway.app/api';
+    static const String baseUrl = 'https://waseed-team-production.up.railway.app/api';
     // ============================
   // Base URL بحسب المنصة
   // ============================
-  static String get baseUrl {
+  /*static String get baseUrl {
     if (Platform.isAndroid) {
       // Android Emulator -> يصل للـ localhost على المضيف عبر 10.0.2.2
       return 'http://10.0.2.2:3000/api';
@@ -23,7 +23,7 @@ class ApiService {
       return 'http://localhost:3000/api';
     }
   }
-  
+  */
   final _storage = const FlutterSecureStorage();
   
   // ============================================

@@ -3,9 +3,9 @@ require('dotenv').config();
 const express = require('express');
 const mongoose = require('mongoose');
 const http = require('http');
-const socketIo = require('socket.io');
 const { configureMiddleware } = require('./config/middleware');
 const { configureRoutes } = require('./config/routes');
+const { configureSocketIO } = require('./config/socket');
 
 const app = express();
 app.set('trust proxy', true);
@@ -15,83 +15,7 @@ const server = http.createServer(app);
 // ============================================
 // Socket.IO Configuration
 // ============================================
-const io = socketIo(server, {
-  cors: {
-    origin: process.env.NODE_ENV === 'production'
-      ? 'https://waseed-team-production.up.railway.app'
-      : '*',
-    methods: ['GET', 'POST'],
-    credentials: true,
-  },
-  pingTimeout: 60000,
-  pingInterval: 25000,
-});
-
-// Store online users
-const onlineUsers = new Map();
-
-io.on('connection', (socket) => {
-  console.log('🔌 New client connected:', socket.id);
-
-  // User comes online
-  socket.on('user_online', (userId) => {
-    onlineUsers.set(userId, socket.id);
-    console.log(`✅ User ${userId} is online`);
-    
-    // Broadcast to all clients that this user is online
-    socket.broadcast.emit('user_status', {
-      userId,
-      status: 'online',
-    });
-  });
-
-  // User sends a message
-  socket.on('send_message', (data) => {
-    const { recipientId, message } = data;
-    const recipientSocketId = onlineUsers.get(recipientId);
-
-    if (recipientSocketId) {
-      // Send to recipient if they're online
-      io.to(recipientSocketId).emit('receive_message', message);
-      console.log(`📨 Message sent to user ${recipientId}`);
-    } else {
-      console.log(`📭 User ${recipientId} is offline`);
-    }
-  });
-
-  // User is typing
-  socket.on('typing', (data) => {
-    const { recipientId, isTyping } = data;
-    const recipientSocketId = onlineUsers.get(recipientId);
-
-    if (recipientSocketId) {
-      io.to(recipientSocketId).emit('user_typing', {
-        userId: data.userId,
-        isTyping,
-      });
-    }
-  });
-
-  // User disconnects
-  socket.on('disconnect', () => {
-    console.log('❌ Client disconnected:', socket.id);
-    
-    // Find and remove user from online users
-    for (const [userId, socketId] of onlineUsers.entries()) {
-      if (socketId === socket.id) {
-        onlineUsers.delete(userId);
-        console.log(`👋 User ${userId} went offline`);
-        
-        // Broadcast to all clients that this user is offline
-        socket.broadcast.emit('user_status', {
-          userId,
-          status: 'offline',
-        });
-        break;
-      }
-    }
-  });
-});
+const io = configureSocketIO(server);
 
 // Make io accessible to routes
 app.set('io', io);
@@ -109,8 +33,6 @@ async function connectRedis() {
     console.log('✅ Redis connected successfully');
   } catch (err) {
     console.log('⚠️ Redis not configured - using in-memory storage');
-    console.log('   To enable Redis, install: npm install redis');
-    console.log('   And set REDIS_URL in your .env file');
     redisConnected = false;
   }
 }
@@ -150,6 +72,7 @@ app.get('/health', (req, res) => {
       mongodb: mongoose.connection.readyState === 1 ? 'connected' : 'disconnected',
       redis: redisConnected ? 'connected' : 'not configured',
       socketio: io.engine.clientsCount > 0 ? 'active' : 'idle',
+      connectedClients: io.engine.clientsCount,
     },
   };
 
@@ -257,7 +180,7 @@ async function startServer() {
     server.listen(PORT, () => {
       console.log('');
       console.log('═══════════════════════════════════════════');
-      console.log('Waseed Server Started Successfully');
+      console.log('🚀 Waseed Server Started Successfully');
       console.log('═══════════════════════════════════════════');
       console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`Port: ${PORT}`);

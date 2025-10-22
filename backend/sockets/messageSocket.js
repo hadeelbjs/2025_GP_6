@@ -1,392 +1,403 @@
-// backend/sockets/messageSocket.js
+// sockets/messageSocket.js
+
 const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
 
-const userSockets = new Map();
-const onlineUsers = new Set(); 
-
-async function broadcastStatusToContacts(userId, isOnline, io) {
-  try {
-    const Contact = require('../models/Contact');
-    
-    console.log(`🔔 Broadcasting ${userId} status: ${isOnline ? 'online' : 'offline'}`);
-    
-    // ✅ البحث باستخدام requester و recipient (مو userId و contactId)
-    const contacts = await Contact.find({
-      $or: [
-        { requester: userId, status: 'accepted' },
-        { recipient: userId, status: 'accepted' }
-      ]
-    });
-    
-    console.log(`📋 Found ${contacts.length} contacts for user ${userId}`);
-    
-    // إرسال الحالة لكل جهة اتصال
-    contacts.forEach(contact => {
-      // ✅ تحديد الطرف الآخر
-      const contactUserId = contact.requester.toString() === userId.toString() 
-        ? contact.recipient.toString() 
-        : contact.requester.toString();
-      
-      console.log(`   Sending to contact: ${contactUserId}`);
-      
-      // إرسال الحالة الجديدة
-      const sent = io.sendToUser(contactUserId, 'user:status', {
-        userId: userId,
-        isOnline: isOnline
-      });
-      
-      console.log(`📡 ${sent ? '✅' : '❌'} Sent status to ${contactUserId}: ${userId} is ${isOnline ? 'online' : 'offline'}`);
-    });
-    
-  } catch (err) {
-    console.error('❌ Error broadcasting status:', err);
-    console.error('Full error:', err.stack);
-  }
-}
-
-
+// تخزين المستخدمين المتصلين
+const onlineUsers = new Map(); // userId -> socketId
+const userSockets = new Map(); // socketId -> userId
 
 module.exports = (io) => {
-
-  // ✅ التحقق من التوكن
+  
+  // ============================================
+  // Middleware للتحقق من الـ Token
+  // ============================================
   io.use(async (socket, next) => {
     try {
-      const token = socket.handshake.auth.token;
+      const token = socket.handshake.auth?.token;
       
       if (!token) {
+        console.log('❌ No token provided');
         return next(new Error('Authentication error: No token provided'));
       }
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      socket.userId = decoded.user?.id || decoded.id || decoded.userId;
+      socket.userId = decoded.id;
       
-      if (!socket.userId) {
-        return next(new Error('Invalid token structure'));
-      }
-      
-      console.log('✅ Authenticated:', socket.userId);
+      console.log(`✅ User authenticated: ${decoded.id}`);
       next();
-      
     } catch (err) {
-      console.error('❌ Socket authentication error:', err.message);
-      next(new Error('Authentication error: Invalid token'));
+      console.error('❌ Socket auth error:', err.message);
+      next(new Error('Authentication error'));
     }
   });
 
+  // ============================================
+  // Helper Function: إرسال رسالة لمستخدم محدد
+  // ============================================
+  io.sendToUser = (userId, event, data) => {
+    const socketId = onlineUsers.get(userId);
+    if (socketId) {
+      io.to(socketId).emit(event, data);
+      return true;
+    }
+    return false;
+  };
+
+  // ============================================
+  // Connection Handler
+  // ============================================
   io.on('connection', (socket) => {
     const userId = socket.userId;
-    console.log(`✅ User connected: ${userId} (Socket: ${socket.id})`);
+    console.log(`🔌 User connected: ${userId} (Socket: ${socket.id})`);
 
-    userSockets.set(userId.toString(), socket.id);
-      onlineUsers.add(userId.toString());
+    // ✅ تسجيل المستخدم كـ Online
+    onlineUsers.set(userId, socket.id);
+    userSockets.set(socket.id, userId);
 
- socket.emit('connected', {
-  userId,
-  message: 'Connected to messaging server'
-});
+    // ✅ إخبار الجميع أن هذا المستخدم Online
+    socket.broadcast.emit('user:status', {
+      userId: userId,
+      status: 'online',
+      lastSeen: null,
+    });
 
-// ✅ إرسال الرسائل المعلقة فوراً
-(async () => {
-  try {
-    const pendingMessages = await Message.find({
-      recipientId: userId,
-      status: { $in: ['sent', 'pending'] }
-    }).sort({ createdAt: 1 }).limit(50);
+    // ✅ إرسال تأكيد الاتصال للمستخدم نفسه
+    socket.emit('connected', {
+      userId: userId,
+      message: 'Connected successfully',
+      timestamp: new Date().toISOString(),
+    });
 
-    if (pendingMessages.length > 0) {
-      console.log(`📬 Sending ${pendingMessages.length} pending messages to user ${userId}`);
+    console.log(`✅ Online users count: ${onlineUsers.size}`);
 
-      for (const msg of pendingMessages) {
-        socket.emit('message:new', {
-          messageId: msg.messageId,
-          senderId: msg.senderId.toString(),
-          recipientId: msg.recipientId.toString(),
-          encryptedType: msg.encryptedType,
-          encryptedBody: msg.encryptedBody,
-          attachmentData: msg.attachmentData || null,
-          attachmentType: msg.attachmentType || null,
-          attachmentName: msg.attachmentName || null,
-          attachmentMimeType: msg.attachmentMimeType || null,
-          createdAt: msg.createdAt ? msg.createdAt.toISOString() : new Date().toISOString(),
-        });
-
-        console.log(`📨 Delivered pending message: ${msg.messageId}`);
-      }
-    } else {
-      console.log(`📭 No pending messages for user ${userId}`);
-    }
-  } catch (err) {
-    console.error('❌ Failed to send pending messages:', err);
-  }
-})();
-
-setTimeout(() => {
-  console.log(`🔔 About to broadcast ${userId} as online`);
-  broadcastStatusToContacts(userId.toString(), true, io);
-}, 500);
-
-    // ✅ إرسال رسالة مع مرفقات
+    // ============================================
+    // 📨 إرسال رسالة
+    // ============================================
     socket.on('message:send', async (data) => {
       try {
-        const { 
-          messageId, 
-          recipientId, 
-          encryptedType, 
-          encryptedBody,
-          attachmentData,
-          attachmentType,
-          attachmentName,
-          attachmentMimeType
-        } = data;
-        
-        const senderId = userId;
-        
-        console.log(`📤 Sending message: ${messageId} from ${senderId} → ${recipientId}`);
+        console.log('📨 Message:send received:', {
+          from: userId,
+          to: data.recipientId,
+          messageId: data.messageId,
+          hasAttachment: !!data.attachmentData,
+        });
 
-        // ✅ إرسال للمستقبل
-        const delivered = io.sendToUser(recipientId, 'message:new', {
+        const {
           messageId,
-          senderId,
+          recipientId,
           encryptedType,
           encryptedBody,
           attachmentData,
           attachmentType,
           attachmentName,
           attachmentMimeType,
-          createdAt: new Date().toISOString(),
+          createdAt,
+        } = data;
+
+        // ✅ التحقق من البيانات المطلوبة
+        if (!messageId || !recipientId || !encryptedBody || encryptedType === undefined) {
+          console.error('❌ Missing required fields');
+          return socket.emit('error', {
+            message: 'Missing required fields',
+          });
+        }
+
+        // ✅ حفظ في قاعدة البيانات
+        const message = new Message({
+          messageId,
+          senderId: userId,
+          recipientId,
+          encryptedType,
+          encryptedBody,
+          attachmentData: attachmentData || null,
+          attachmentType: attachmentType || null,
+          attachmentName: attachmentName || null,
+          attachmentMimeType: attachmentMimeType || null,
+          status: 'sent',
+          createdAt: createdAt ? new Date(createdAt) : new Date(),
         });
+
+        await message.save();
+        console.log(`✅ Message saved to DB: ${messageId}`);
+
+        // ✅ إرسال للمستقبل
+        const recipientSocketId = onlineUsers.get(recipientId);
+        let delivered = false;
+
+        if (recipientSocketId) {
+          io.to(recipientSocketId).emit('message:new', {
+            messageId: message.messageId,
+            senderId: userId,
+            encryptedType: message.encryptedType,
+            encryptedBody: message.encryptedBody,
+            attachmentData: message.attachmentData,
+            attachmentType: message.attachmentType,
+            attachmentName: message.attachmentName,
+            attachmentMimeType: message.attachmentMimeType,
+            createdAt: message.createdAt.toISOString(),
+          });
+
+          delivered = true;
+          console.log(`✅ Message delivered to recipient: ${recipientId}`);
+        } else {
+          console.log(`📭 Recipient offline, message saved for later: ${recipientId}`);
+        }
 
         // ✅ تأكيد للمرسل
         socket.emit('message:sent', {
-          messageId,
-          delivered,
-          timestamp: Date.now(),
+          messageId: message.messageId,
+          status: 'sent',
+          delivered: delivered,
+          timestamp: message.createdAt.toISOString(),
         });
 
-        // ✅ حفظ في DB إذا offline
-        if (!delivered) {
-          await Message.create({
-            messageId,
-            senderId,
-            recipientId,
-            encryptedType,
-            encryptedBody,
-            attachmentData,
-            attachmentType,
-            attachmentName,
-            attachmentMimeType,
-            status: 'sent',
-            createdAt: new Date(),
-          });
-          console.log(`💾 Message saved (offline): ${messageId}`);
-        }
-
       } catch (err) {
-        console.error('❌ Send message error:', err);
-        socket.emit('error', { message: 'Failed to send message' });
+        console.error('❌ Error sending message:', err);
+        socket.emit('error', {
+          message: 'Failed to send message',
+          error: err.message,
+        });
       }
     });
 
-    // ✅ تأكيد الاستلام
+    // ============================================
+    // ✅ تحديث حالة الرسالة - delivered
+    // ============================================
     socket.on('message:delivered', async (data) => {
       try {
-        const { messageId, senderId, encryptedType, encryptedBody, attachmentData, attachmentType, attachmentName, createdAt } = data;
-        const receiverId = userId;
+        const { messageId, senderId } = data;
 
-        console.log(`📨 Message delivered confirmation: ${messageId}`);
+        console.log(`📬 Message delivered acknowledgment: ${messageId}`);
 
         await Message.findOneAndUpdate(
           { messageId },
-          {
-            messageId,
-            senderId,
-            recipientId: receiverId,
-            encryptedType,
-            encryptedBody,
-            attachmentData,
-            attachmentType,
-            attachmentName,
+          { 
             status: 'delivered',
             deliveredAt: new Date(),
-            createdAt: createdAt ? new Date(createdAt) : new Date(),
-          },
-          { upsert: true, new: true }
+          }
         );
 
-        // ✅ إشعار المرسل بالاستلام
-        io.sendToUser(senderId, 'message:status_update', {
-          messageId,
-          status: 'delivered',
-          timestamp: Date.now(),
-        });
-
-        console.log(`✅ Message ${messageId} marked as delivered`);
+        // ✅ إخبار المرسل
+        const senderSocketId = onlineUsers.get(senderId);
+        if (senderSocketId) {
+          io.to(senderSocketId).emit('message:status_update', {
+            messageId,
+            status: 'delivered',
+            timestamp: new Date().toISOString(),
+          });
+          console.log(`✅ Delivery status sent to sender: ${senderId}`);
+        }
 
       } catch (err) {
-        console.error('❌ Delivered confirmation error:', err);
+        console.error('❌ Error updating delivered status:', err);
       }
     });
 
-    // ✅ تحديث الحالة
+    // ============================================
+    // ✅ تحديث حالة الرسالة - verified/read
+    // ============================================
     socket.on('message:status', async (data) => {
       try {
         const { messageId, status, recipientId } = data;
-        console.log(`📊 Status update: ${messageId} → ${status}`);
+
+        console.log(`📊 Message status update: ${messageId} -> ${status}`);
 
         await Message.findOneAndUpdate(
           { messageId },
-          { status, [`${status}At`]: new Date() }
+          { 
+            status: status,
+            ...(status === 'verified' && { readAt: new Date() }),
+          }
         );
 
-        io.sendToUser(recipientId, 'message:status_update', {
-          messageId,
-          status,
-          timestamp: Date.now(),
-        });
+        // ✅ إخبار المستقبل/المرسل
+        const targetSocketId = onlineUsers.get(recipientId);
+        if (targetSocketId) {
+          io.to(targetSocketId).emit('message:status_update', {
+            messageId,
+            status,
+            timestamp: new Date().toISOString(),
+          });
+          console.log(`✅ Status update sent to: ${recipientId}`);
+        }
 
       } catch (err) {
-        console.error('❌ Status update error:', err);
+        console.error('❌ Error updating message status:', err);
       }
     });
 
-    // ✅ حذف رسالة - مُصلح بالكامل
+    // ============================================
+    // 🗑️ حذف رسالة
+    // ============================================
     socket.on('message:delete', async (data) => {
-  try {
-    const { messageId, deleteFor } = data;
-    const senderId = userId;
+      try {
+        const { messageId, deleteFor } = data;
 
-    console.log(`🗑️ Delete request: ${messageId} (deleteFor: ${deleteFor})`);
+        console.log(`🗑️ Delete request: ${messageId} (${deleteFor})`);
 
-    const message = await Message.findOne({ messageId });
-    
-    if (!message) {
-      socket.emit('error', { message: 'الرسالة غير موجودة' });
-      return;
-    }
+        const message = await Message.findOne({ messageId });
 
-    if (deleteFor === 'everyone') {
-      // ✅ حذف للجميع
-      if (message.senderId.toString() !== senderId) {
-        socket.emit('error', { message: 'فقط المرسل يمكنه الحذف للجميع' });
-        return;
-      }
-
-      message.deletedForEveryone = true;
-      message.deletedForEveryoneAt = new Date();
-      message.status = 'deleted';
-      await message.save();
-
-      const recipientId = message.recipientId.toString();
-      
-      // ✅ إرسال للمستقبل أولاً
-      const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
-        messageId,
-        deletedFor: 'everyone',
-      });
-      
-      console.log(`${sentToRecipient ? '✅' : '⚠️'} Sent delete to recipient ${recipientId}`);
-
-      // ✅ ثم إرسال للمرسل (تأكيد)
-      socket.emit('message:deleted', {
-        messageId,
-        deletedFor: 'everyone',
-      });
-      
-      console.log(`✅ Delete confirmed to sender ${senderId}`);
-
-    } else if (deleteFor === 'recipient') {
-      // ✅ حذف من عند المستقبل فقط
-      if (message.senderId.toString() !== senderId) {
-        socket.emit('error', { message: 'ليس لديك صلاحية' });
-        return;
-      }
-
-      const recipientId = message.recipientId.toString();
-      
-      // ✅ تحديث قاعدة البيانات
-      if (!message.deletedFor.includes(recipientId)) {
-        message.deletedFor.push(message.recipientId);
-        message.deletedForRecipient = true;
-        await message.save();
-      }
-
-      // ✅ إرسال فوري للمستقبل فقط
-      const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
-        messageId,
-        deletedFor: 'recipient',
-      });
-
-      console.log(`${sentToRecipient ? '✅' : '⚠️'} Delete sent to recipient ${recipientId}`);
-      
-      // ✅ لا نرسل للمرسل هنا (هو حذفها من عنده فقط محلياً)
-    }
-
-  } catch (err) {
-    console.error('❌ Delete message error:', err);
-    socket.emit('error', { message: 'فشل الحذف' });
-  }
-});
-
-    // ✅ حالة الكتابة
-    socket.on('typing', (data) => {
-      const { recipientId, isTyping } = data;
-      io.sendToUser(recipientId, 'typing', {
-        senderId: userId,
-        isTyping
-      });
-    });
-
-    socket.on('request:user_status', (data) => {
-      const { targetUserId } = data;
-      const isOnline = onlineUsers.has(targetUserId.toString());
-      
-      socket.emit('user:status', {
-        userId: targetUserId,
-        isOnline: isOnline
-      });
-      
-      console.log(`📡 Status request for ${targetUserId}: ${isOnline ? 'online' : 'offline'}`);
-    });
-
-  socket.on('disconnect', () => {
-      console.log(`❌ User disconnected: ${userId}`);
-      
-      userSockets.delete(userId.toString());
-      onlineUsers.delete(userId.toString());
-      
-      setTimeout(() => {
-        if (!onlineUsers.has(userId.toString())) {
-          console.log(`🔔 About to broadcast ${userId} as offline`);
-          broadcastStatusToContacts(userId.toString(), false, io);
-        } else {
-          console.log(`⚠️ User ${userId} reconnected quickly`);
+        if (!message) {
+          console.error('❌ Message not found:', messageId);
+          return socket.emit('error', { message: 'Message not found' });
         }
-      }, 1000);
+
+        // ✅ التحقق من الصلاحيات
+        if (message.senderId.toString() !== userId) {
+          console.error('❌ Unauthorized delete attempt');
+          return socket.emit('error', { message: 'Unauthorized' });
+        }
+
+        if (deleteFor === 'everyone') {
+          // ✅ حذف للجميع
+          message.deletedForEveryone = true;
+          message.deletedForEveryoneAt = new Date();
+          message.status = 'deleted';
+          await message.save();
+
+          const recipientId = message.recipientId.toString();
+          const recipientSocketId = onlineUsers.get(recipientId);
+
+          // ✅ إخبار المستقبل
+          if (recipientSocketId) {
+            io.to(recipientSocketId).emit('message:deleted', {
+              messageId,
+              deletedFor: 'everyone',
+            });
+            console.log(`✅ Delete notification sent to recipient: ${recipientId}`);
+          }
+
+          // ✅ تأكيد للمرسل
+          socket.emit('message:deleted', {
+            messageId,
+            deletedFor: 'everyone',
+          });
+
+          console.log(`✅ Message deleted for everyone: ${messageId}`);
+
+        } else if (deleteFor === 'recipient') {
+          // ✅ حذف من عند المستقبل فقط
+          const recipientId = message.recipientId.toString();
+          
+          if (!message.deletedFor.some(id => id.toString() === recipientId)) {
+            message.deletedFor.push(message.recipientId);
+            message.deletedForRecipient = true;
+            await message.save();
+          }
+
+          const recipientSocketId = onlineUsers.get(recipientId);
+
+          // ✅ إخبار المستقبل فوراً
+          if (recipientSocketId) {
+            io.to(recipientSocketId).emit('message:deleted', {
+              messageId,
+              deletedFor: 'recipient',
+            });
+            console.log(`✅ Delete notification sent to recipient: ${recipientId}`);
+          } else {
+            console.log(`📭 Recipient offline, delete will sync later`);
+          }
+
+          console.log(`✅ Message deleted for recipient: ${messageId}`);
+        }
+
+      } catch (err) {
+        console.error('❌ Error deleting message:', err);
+        socket.emit('error', { 
+          message: 'Failed to delete message',
+          error: err.message,
+        });
+      }
     });
+
+    // ============================================
+    // 📊 طلب حالة مستخدم
+    // ============================================
+    socket.on('request:user_status', (data) => {
+      try {
+        const { targetUserId } = data;
+        
+        console.log(`📊 Status request for user: ${targetUserId}`);
+        
+        const isOnline = onlineUsers.has(targetUserId);
+        
+        socket.emit('user:status', {
+          userId: targetUserId,
+          status: isOnline ? 'online' : 'offline',
+          lastSeen: isOnline ? null : new Date().toISOString(),
+        });
+
+        console.log(`✅ Status sent: ${targetUserId} -> ${isOnline ? 'online' : 'offline'}`);
+      } catch (err) {
+        console.error('❌ Error getting user status:', err);
+      }
+    });
+
+    // ============================================
+    // ⌨️ المستخدم يكتب
+    // ============================================
+    socket.on('typing:start', (data) => {
+      try {
+        const { recipientId } = data;
+        const recipientSocketId = onlineUsers.get(recipientId);
+
+        if (recipientSocketId) {
+          io.to(recipientSocketId).emit('user:typing', {
+            userId: userId,
+            isTyping: true,
+          });
+          console.log(`⌨️ Typing indicator sent: ${userId} -> ${recipientId}`);
+        }
+      } catch (err) {
+        console.error('❌ Error in typing:start:', err);
+      }
+    });
+
+    socket.on('typing:stop', (data) => {
+      try {
+        const { recipientId } = data;
+        const recipientSocketId = onlineUsers.get(recipientId);
+
+        if (recipientSocketId) {
+          io.to(recipientSocketId).emit('user:typing', {
+            userId: userId,
+            isTyping: false,
+          });
+        }
+      } catch (err) {
+        console.error('❌ Error in typing:stop:', err);
+      }
+    });
+
+    // ============================================
+    // ❌ Disconnect Handler
+    // ============================================
+    socket.on('disconnect', (reason) => {
+      console.log(`❌ User disconnected: ${userId} (Reason: ${reason})`);
+      
+      // ✅ إزالة من القوائم
+      onlineUsers.delete(userId);
+      userSockets.delete(socket.id);
+
+      // ✅ إخبار الجميع أن المستخدم Offline
+      socket.broadcast.emit('user:status', {
+        userId: userId,
+        status: 'offline',
+        lastSeen: new Date().toISOString(),
+      });
+
+      console.log(`✅ Online users count: ${onlineUsers.size}`);
+    });
+
+    // ============================================
+    // ❌ Error Handler
+    // ============================================
+    socket.on('error', (error) => {
+      console.error(`❌ Socket error for user ${userId}:`, error);
+    });
+
   });
 
-  // ✅ دالة إرسال محسّنة
-  io.sendToUser = (userId, event, data) => {
-    const socketId = userSockets.get(userId.toString());
-    
-    if (!socketId) {
-      console.warn(`⚠️ User ${userId} not connected (no socket)`);
-      return false;
-    }
-    
-    const socket = io.sockets.sockets.get(socketId);
-    
-    if (!socket || !socket.connected) {
-      console.warn(`⚠️ Socket ${socketId} not connected`);
-      userSockets.delete(userId.toString());
-      return false;
-    }
-    
-    socket.emit(event, data);
-    console.log(`📨 Sent '${event}' to user ${userId}`);
-    return true;
-  };
-
-  console.log('✅ Socket.IO messaging system initialized');
+  console.log('✅ Message socket handlers initialized');
 };

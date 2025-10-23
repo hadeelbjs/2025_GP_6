@@ -21,45 +21,77 @@ router.post('/upload', auth, async (req, res) => {
     let bundle = await PreKeyBundle.findOne({ userId: req.user.id });
 
     if (bundle) {
-      // تحديث Bundle موجود (إضافة مفاتيح جديدة)
-      console.log(`Updating existing bundle for user ${req.user.id}`);
-      console.log(`Current PreKeys count: ${bundle.preKeys.length}`);
-      console.log(`Adding ${preKeys.length} new PreKeys`);
+      // ✅ CHECK: هل هذا تحديث كامل (Full Bundle Update) أم إضافة PreKeys فقط؟
+      const isFullBundleUpdate = registrationId && identityKey && signedPreKey;
       
-      const newPreKeys = preKeys.map(pk => ({
-        keyId: pk.keyId,
-        publicKey: pk.publicKey,
-        used: false,
-        usedAt: null,
-        createdAt: new Date()
-      }));
-
-      // إضافة المفاتيح الجديدة
-      bundle.preKeys.push(...newPreKeys);
-      bundle.lastKeyRotation = Date.now();
-      bundle.updatedAt = Date.now();
-      
-      // تحديث SignedPreKey إذا تم إرساله
-      if (signedPreKey) {
+      if (isFullBundleUpdate) {
+        // ⚠️ تحديث كامل - استبدال كل شيء
+        console.log(`🔄 FULL BUNDLE UPDATE for user ${req.user.id}`);
+        console.log(`  Old registrationId: ${bundle.registrationId}`);
+        console.log(`  New registrationId: ${registrationId}`);
+        
+        // ✅ تحذير إذا كان registrationId مختلف (يعني مفاتيح جديدة تماماً)
+        if (bundle.registrationId !== registrationId) {
+          console.warn('⚠️ WARNING: RegistrationId changed! Replacing entire bundle.');
+        }
+        
+        // استبدال كل شيء
+        bundle.registrationId = registrationId;
+        bundle.identityKey = identityKey;
         bundle.signedPreKey = signedPreKey;
-        console.log('Updated SignedPreKey');
+        bundle.preKeys = preKeys.map(pk => ({
+          keyId: pk.keyId,
+          publicKey: pk.publicKey,
+          used: false,
+          usedAt: null,
+          createdAt: new Date()
+        }));
+        bundle.lastKeyRotation = Date.now();
+        bundle.updatedAt = Date.now();
+        
+        await bundle.save();
+        
+        return res.json({
+          success: true,
+          message: 'تم تحديث Bundle بالكامل',
+          totalKeys: bundle.preKeys.length,
+          availableKeys: bundle.getAvailablePreKeysCount()
+        });
+      } else {
+        // ✅ إضافة PreKeys فقط (بدون تغيير IdentityKey أو SignedPreKey)
+        console.log(`➕ ADDING PreKeys ONLY for user ${req.user.id}`);
+        console.log(`  Current PreKeys count: ${bundle.preKeys.length}`);
+        console.log(`  Adding ${preKeys.length} new PreKeys`);
+        
+        const newPreKeys = preKeys.map(pk => ({
+          keyId: pk.keyId,
+          publicKey: pk.publicKey,
+          used: false,
+          usedAt: null,
+          createdAt: new Date()
+        }));
+
+        // إضافة المفاتيح الجديدة
+        bundle.preKeys.push(...newPreKeys);
+        bundle.lastKeyRotation = Date.now();
+        bundle.updatedAt = Date.now();
+
+        await bundle.save();
+
+        console.log(`  Total PreKeys after update: ${bundle.preKeys.length}`);
+        console.log(`  Available PreKeys: ${bundle.getAvailablePreKeysCount()}`);
+
+        return res.json({
+          success: true,
+          message: `تم إضافة ${newPreKeys.length} مفتاح جديد`,
+          totalKeys: bundle.preKeys.length,
+          availableKeys: bundle.getAvailablePreKeysCount()
+        });
       }
-
-      await bundle.save();
-
-      console.log(`Total PreKeys after update: ${bundle.preKeys.length}`);
-      console.log(`Available PreKeys: ${bundle.getAvailablePreKeysCount()}`);
-
-      return res.json({
-        success: true,
-        message: `تم إضافة ${newPreKeys.length} مفتاح جديد`,
-        totalKeys: bundle.preKeys.length,
-        availableKeys: bundle.getAvailablePreKeysCount()
-      });
     }
 
-    // إنشاء Bundle جديد (أول مرة)
-    console.log(`Creating new bundle for user ${req.user.id}`);
+    // ✅ إنشاء Bundle جديد (أول مرة)
+    console.log(`🆕 Creating NEW bundle for user ${req.user.id}`);
     
     if (!registrationId || !identityKey || !signedPreKey) {
       return res.status(400).json({
@@ -84,7 +116,7 @@ router.post('/upload', auth, async (req, res) => {
 
     await bundle.save();
 
-    console.log(`Bundle created with ${bundle.preKeys.length} PreKeys`);
+    console.log(`✅ Bundle created with ${bundle.preKeys.length} PreKeys`);
 
     res.json({
       success: true,
@@ -94,7 +126,7 @@ router.post('/upload', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('Upload PreKey Bundle Error:', err);
+    console.error('❌ Upload PreKey Bundle Error:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في رفع المفاتيح',
@@ -102,7 +134,6 @@ router.post('/upload', auth, async (req, res) => {
     });
   }
 });
-
 // جلب PreKey Bundle لمستخدم معين
 router.get('/:userId', auth, async (req, res) => {
   try {

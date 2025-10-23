@@ -128,7 +128,6 @@ class SignalProtocolManager {
     }
 
     final bundleData = response['bundle'];
-      
       // بناء SignalProtocolAddress
       final recipientAddress = SignalProtocolAddress(recipientId, 1);
       
@@ -173,7 +172,7 @@ class SignalProtocolManager {
         _identityStore,
         recipientAddress,
       );
-      
+
       // معالجة Bundle وإنشاء Session
       await sessionBuilder.processPreKeyBundle(bundle);
       
@@ -183,7 +182,6 @@ class SignalProtocolManager {
     } catch (e) {
       if (e.toString().contains('InvalidKeyException')) {
         // إعادة تهيئة Signal Protocol
-        await SignalProtocolManager().clearAllKeys();
         await SignalProtocolManager().initialize();
       }
     
@@ -356,13 +354,15 @@ class SignalProtocolManager {
 
   // دالة للتحقق من وجود مفاتيح
   Future<bool> hasKeys() async {
-    try {
-      final regId = await _storage.read(key: 'registration_id');
-      return regId != null;
-    } catch (e) {
-      return false;
-    }
+  try {
+    await initialize();
+    final identityKeyPair = await _identityStore.getIdentityKeyPair();
+    final regId = await _identityStore.getLocalRegistrationId();
+    return identityKeyPair != null && regId != null;
+  } catch (e) {
+    return false;
   }
+}
 
   Future<void> uploadAdditionalPreKeysOnly() async {
   try {

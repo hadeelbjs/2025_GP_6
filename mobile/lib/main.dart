@@ -159,69 +159,18 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   /// تهيئة التشفير للمستخدم المسجل دخول
   Future<void> _initializeEncryption() async {
-    try {
-      final storage = const FlutterSecureStorage();
-      
-      print('User logged in - checking keys...');
-      
-      // التحقق الصحيح من وجود المفاتيح
-      final identityKey = await storage.read(key: 'identity_key');
-      final registrationId = await storage.read(key: 'registration_id');
-      
-      if (identityKey != null && registrationId != null) {
-        print('Keys exist locally - checking server...');
-        
-        // تهيئة SignalProtocolManager
-        final signalManager = SignalProtocolManager();
-        await signalManager.initialize();
-        
-        // التحقق من عدد PreKeys على السيرفر
-        final apiService = ApiService();
-        final result = await apiService.checkPreKeysCount();
-        
-        if (result['success']) {
-          final count = result['count'] ?? 0;
-          print('Server PreKeys count: $count');
-          
-          if (count == 0) {
-            // المفاتيح موجودة محلياً لكن السيرفر فاضي
-            // نرفع Bundle كامل للسيرفر
-            print('Server has no keys - uploading full bundle...');
-            final success = await signalManager.generateAndUploadKeys();
-            
-            if (success) {
-              print('Full bundle uploaded successfully');
-            } else {
-              print('Failed to upload full bundle');
-            }
-          } else if (count < 20) {
-            // السيرفر عنده مفاتيح لكن قليلة
-            print('Low on PreKeys - refreshing...');
-            await signalManager.checkAndRefreshPreKeys();
-          } else {
-            print('Keys are sufficient');
-          }
-        }
-        return;
-      }
-      
-      // المفاتيح غير موجودة - توليد جديدة
-      print('No keys found - generating...');
-      
-      final signalManager = SignalProtocolManager();
-      final success = await signalManager.generateAndUploadKeys();
-      
-      if (success) {
-        print('Keys generated and uploaded successfully');
-      } else {
-        print('Failed to generate/upload keys - will retry later');
-      }
-      
-    } catch (e) {
-      print('Error initializing encryption: $e');
-      // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
-    }
+  final signalManager = SignalProtocolManager();
+  await signalManager.initialize();
+  
+  // ✅ الفحص الصحيح
+  if (await signalManager.hasKeys()) {
+    print('✅ Keys exist - only refreshing PreKeys');
+    await signalManager.checkAndRefreshPreKeys();
+  } else {
+    print('🆕 Generating new keys');
+    await signalManager.generateAndUploadKeys();
   }
+}
 
   @override
   Widget build(BuildContext context) {

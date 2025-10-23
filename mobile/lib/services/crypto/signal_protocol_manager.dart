@@ -25,7 +25,9 @@ class SignalProtocolManager {
   bool _isInitialized = false;
 
   Future<void> initialize() async {
-    if (_isInitialized) return;
+    if (_isInitialized){
+      print("is initialized");
+      return;} 
 
     _identityStore = MyIdentityKeyStore(_storage);
     _preKeyStore = MyPreKeyStore(_storage);
@@ -179,6 +181,12 @@ class SignalProtocolManager {
       return true;
       
     } catch (e) {
+      if (e.toString().contains('InvalidKeyException')) {
+        // إعادة تهيئة Signal Protocol
+        await SignalProtocolManager().clearAllKeys();
+        await SignalProtocolManager().initialize();
+      }
+    
       print('Error creating session: $e');
       return false;
     }
@@ -320,6 +328,7 @@ class SignalProtocolManager {
 
   Future<void> clearAllKeys() async {
     try {
+      _isInitialized = false;
       // 1. حذف جميع مفاتيح Identity
       await _identityStore.clearAll();
       
@@ -354,4 +363,46 @@ class SignalProtocolManager {
       return false;
     }
   }
+
+  Future<void> uploadAdditionalPreKeysOnly() async {
+  try {
+    await initialize();
+    
+    // ✅ Use EXISTING identity key pair
+    final identityKeyPair = await _identityStore.getIdentityKeyPair();
+    final registrationId = await _identityStore.getLocalRegistrationId();
+    
+    // Generate new PreKeys
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final startId = timestamp % 100000;
+    final newPreKeys = generatePreKeys(startId, 100);
+    
+    // Store locally
+    for (var preKey in newPreKeys) {
+      await _preKeyStore.storePreKey(preKey.id, preKey);
+    }
+    
+    // Upload to server (without IdentityKey or SignedPreKey)
+    final bundle = {
+      'preKeys': newPreKeys.map((pk) => {
+        'keyId': pk.id,
+        'publicKey': base64Encode(
+          pk.getKeyPair().publicKey.serialize()
+        ),
+      }).toList(),
+    };
+    
+    final result = await _apiService.uploadPreKeyBundle(bundle);
+    
+    if (result['success']) {
+      print('✅ Uploaded ${newPreKeys.length} additional PreKeys');
+    } else {
+      print('❌ Failed to upload additional PreKeys: ${result['message']}');
+    }
+    
+  } catch (e) {
+    print('❌ Error uploading additional PreKeys: $e');
+    rethrow;
+  }
+}
 }

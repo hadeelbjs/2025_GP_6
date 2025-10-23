@@ -443,5 +443,65 @@ router.post('/change-password', [
     });
   }
 });
+// ============================================
+// حذف الحساب نهائياً
+// ============================================
+router.delete('/delete-account', auth, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { password } = req.body;
+
+
+    // 1. التحقق من كلمة المرور
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'المستخدم غير موجود'
+      });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'كلمة المرور غير صحيحة'
+      });
+    }
+
+    // 2. حذف كل شي بالترتيب
+    const PreKeyBundle = require('../models/PreKeyBundle');
+    const Message = require('../models/Message');
+    const Contact = require('../models/Contact');
+
+    // حذف المفاتيح
+    await PreKeyBundle.deleteMany({ userId: userId });
+
+    // حذف الرسائل
+    await Message.deleteMany({
+      $or: [{ senderId: userId }, { recipientId: userId }]
+    });
+
+    // حذف جهات الاتصال
+    await Contact.deleteMany({
+      $or: [{ requester: userId }, { recipient: userId }]
+    });
+
+    // حذف المستخدم
+    await User.findByIdAndDelete(userId);
+
+    res.json({
+      success: true,
+      message: 'تم حذف حسابك نهائياً'
+    });
+
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في حذف الحساب'
+    });
+  }
+});
 
 module.exports = router;

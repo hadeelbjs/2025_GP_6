@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:io';
 import 'dart:convert';
@@ -12,6 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/messaging_service.dart';
+import '../../../services/biometric_service.dart'; 
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -39,6 +39,11 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   String? _conversationId;
   
+  // ✅ متغيرات جديدة للتحقق البيومتري
+  bool _isBiometricChecking = true;
+  bool _biometricCheckFailed = false;
+  bool _isDecryptingMessages = false;
+  
   File? _pendingImageFile;
   PlatformFile? _pendingFile;
   
@@ -52,10 +57,9 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeChat();
+    _checkBiometricAndInitialize(); // ✅ تعديل: البدء بالتحقق البيومتري
     _listenToUserStatus(); 
-      _messagingService.setCurrentOpenChat(widget.userId);
-
+    _messagingService.setCurrentOpenChat(widget.userId);
   }
 
   @override
@@ -66,9 +70,136 @@ class _ChatScreenState extends State<ChatScreen> {
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
     _userStatusSubscription?.cancel(); 
-      _messagingService.setCurrentOpenChat(null);
-
+    _messagingService.setCurrentOpenChat(null);
     super.dispose();
+  }
+
+  // ✅ دالة جديدة: التحقق من البايومتركس قبل تهيئة المحادثة
+  Future<void> _checkBiometricAndInitialize() async {
+    try {
+      final canUseBiometric = await BiometricService.canCheckBiometrics();
+      
+      if (!canUseBiometric) {
+        setState(() {
+          _isBiometricChecking = false;
+        });
+        _showMessage('هذا الجهاز لا يدعم البصمة', false);
+        await _initializeChat();
+        return;
+      }
+
+        // ✅ تحقق جديد: هل المستخدم سجّل بصمة؟
+      final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+      
+      if (!hasEnrolled) {
+        setState(() {
+          _isBiometricChecking = false;
+        //  _biometricCheckFailed = true;
+        });
+        _showBiometricNotEnrolledDialog();
+        return;
+      }
+      
+      final verified = await BiometricService.authenticateWithBiometrics(
+        reason: 'تحقق من هويتك لفتح المحادثة',
+      );
+      
+      setState(() {
+        _isBiometricChecking = false;
+      });
+      
+      if (!verified) {
+        setState(() {
+          _biometricCheckFailed = true;
+        });
+        _showMessage('فشل التحقق البيومتري', false);
+        return;
+      }
+      
+      await _initializeChat();
+      
+      if (_conversationId != null) {
+        setState(() {
+          _isDecryptingMessages = true;
+        });
+        
+        await _decryptAllMessages();
+        
+        setState(() {
+          _isDecryptingMessages = false;
+        });
+      }
+      
+    } catch (e) {
+      setState(() {
+        _isBiometricChecking = false;
+      });
+      _showMessage('حدث خطأ في التحقق', false);
+    }
+  }
+
+
+
+  /// ✅ دالة جديدة: عرض نافذة تنبيه عند عدم وجود بصمة أو Face ID مسجلة
+  void _showBiometricNotEnrolledDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.fingerprint_outlined, color: AppColors.primary, size: 28),
+              SizedBox(width: 12),
+              Text('البصمة / Face ID غير مسجلة', style: AppTextStyles.h3),
+            ],
+          ),
+          content: Text(
+            'لم يتم العثور على بصمة أو Face ID مسجلة في جهازك.\n\nيرجى إضافة إحداها من إعدادات الجهاز للمتابعة.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pop(context); // الخروج من شاشة المحادثة
+              },
+              child: Text('إلغاء', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                BiometricService.openBiometricSettings();
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              icon: Icon(Icons.settings),
+              label: Text('فتح الإعدادات'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  
+  // ✅ دالة جديدة: فك تشفير جميع الرسائل دفعة واحدة
+  Future<void> _decryptAllMessages() async {
+    try {
+      if (_conversationId == null) return;
+      
+      final result = await _messagingService.decryptAllConversationMessages(_conversationId!);
+      
+      if (result['success'] == true && result['count'] > 0) {
+        await _loadMessagesFromDatabase();
+        _showMessage('تم فك تشفير الرسائل بنجاح', true);
+      }
+    } catch (e) {
+      _showMessage('فشل فك تشفير الرسائل', false);
+    }
   }
 
   Future<void> _initializeChat() async {
@@ -122,57 +253,61 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _subscribeToRealtimeUpdates() {
-  _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
-    if (data['conversationId'] == _conversationId) {
-      _loadMessagesFromDatabase();
-    }
-  });
-
-  _deleteSubscription = _messagingService.onMessageDeleted.listen((data) async {
-    if (!mounted) return;
-    final deletedMessageId = data['messageId'];
-    setState(() {
-    _messages.removeWhere((m) => m['id'] == deletedMessageId);
-  });
-  });
-
-  _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
-    final messageId = data['messageId'];
-    final newStatus = data['status'];
-    
-    if (mounted) {
-      setState(() {
-        final index = _messages.indexWhere((m) => m['id'] == messageId);
-        if (index != -1) {
-          final updatedMessage = Map<String, dynamic>.from(_messages[index]);
-          updatedMessage['status'] = newStatus;
-          _messages[index] = updatedMessage;
+    _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
+      if (data['conversationId'] == _conversationId) {
+        // ✅ فك تشفير الرسائل الجديدة تلقائيًا
+        if (!_isBiometricChecking && !_biometricCheckFailed) {
+          Future.delayed(Duration(milliseconds: 300), () {
+            _decryptAllMessages();
+          });
         }
-      });
-    }
-  });
-}
+        _loadMessagesFromDatabase();
+      }
+    });
 
-void _listenToUserStatus() {
-  // ⏱️ طلب الحالة الأولية مرة واحدة
-  Future.delayed(Duration(seconds: 1), () {
-    if (mounted) {
-      _messagingService.requestUserStatus(widget.userId);
-    }
-  });
-  
-  // 🆕 الاستماع للتحديثات التلقائية من السيرفر
-  _userStatusSubscription = _messagingService.onUserStatusChange.listen((data) {
-    if (data['userId'] == widget.userId) {
+    _deleteSubscription = _messagingService.onMessageDeleted.listen((data) async {
+      if (!mounted) return;
+      final deletedMessageId = data['messageId'];
+      setState(() {
+        _messages.removeWhere((m) => m['id'] == deletedMessageId);
+      });
+    });
+
+    _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
+      final messageId = data['messageId'];
+      final newStatus = data['status'];
+      
       if (mounted) {
         setState(() {
-          _isOtherUserOnline = data['isOnline'] ?? false;
+          final index = _messages.indexWhere((m) => m['id'] == messageId);
+          if (index != -1) {
+            final updatedMessage = Map<String, dynamic>.from(_messages[index]);
+            updatedMessage['status'] = newStatus;
+            _messages[index] = updatedMessage;
+          }
         });
-        print('📡 ${widget.name} is now: ${_isOtherUserOnline ? "online" : "offline"}');
       }
-    }
-  });
-}
+    });
+  }
+
+  void _listenToUserStatus() {
+    Future.delayed(Duration(seconds: 1), () {
+      if (mounted) {
+        _messagingService.requestUserStatus(widget.userId);
+      }
+    });
+    
+    _userStatusSubscription = _messagingService.onUserStatusChange.listen((data) {
+      if (data['userId'] == widget.userId) {
+        if (mounted) {
+          setState(() {
+            _isOtherUserOnline = data['isOnline'] ?? false;
+          });
+          print('📡 ${widget.name} is now: ${_isOtherUserOnline ? "online" : "offline"}');
+        }
+      }
+    });
+  }
 
   Future<void> _pickImage(ImageSource source) async {
     try {
@@ -312,22 +447,6 @@ void _listenToUserStatus() {
       if (mounted) {
         setState(() => _isSending = false);
       }
-    }
-  }
-
-  Future<void> _decryptMessage(String messageId) async {
-    try {
-      final result = await _messagingService.decryptMessage(messageId);
-
-      if (result['success']) {
-        await _loadMessagesFromDatabase();
-        _showMessage('تم فك التشفير بنجاح', true);
-      } else {
-        _showMessage(result['message'] ?? 'فشل فك التشفير', false);
-      }
-
-    } catch (e) {
-      _showMessage('حدث خطأ أثناء فك التشفير', false);
     }
   }
 
@@ -580,81 +699,150 @@ void _listenToUserStatus() {
           ),
         ),
 
-        body: Column(
+        body: _buildBody(hasAttachment),
+      ),
+    );
+  }
+
+  Widget _buildBody(bool hasAttachment) {
+    // ✅ حالة التحقق البيومتري
+    if (_isBiometricChecking) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Expanded(
-              child: _isLoading && _messages.isEmpty
-                  ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
-                  : _messages.isEmpty
-                      ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.lock_outline, size: 64, color: AppColors.textHint.withOpacity(0.3)),
-                              const SizedBox(height: 16),
-                              Text('محادثة مشفرة من طرف لطرف', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-                              const SizedBox(height: 8),
-                              Text('ابدأ محادثة آمنة مع ${widget.name}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
-                            ],
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scrollController,
-                          padding: const EdgeInsets.all(16),
-                          reverse: true,
-                          itemCount: _messages.length,
-                          itemBuilder: (context, index) {
-                            final message = _messages[_messages.length - 1 - index];
-                            return _buildMessageBubble(message);
-                          },
-                        ),
-            ),
-            
-            if (hasAttachment) _buildAttachmentPreview(),
-            
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))],
-              ),
-              child: Row(
-                children: [
-                  IconButton(onPressed: _showAttachmentOptions, icon: Icon(Icons.attach_file), color: AppColors.primary),
-                  Expanded(
-                    child: TextField(
-                      controller: _messageController,
-                      enabled: !_isSending,
-                      maxLines: null,
-                      textDirection: TextDirection.rtl,
-                      style: AppTextStyles.bodyMedium,
-                      decoration: InputDecoration(
-                        hintText: 'اكتب رسالتك...',
-                        hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
-                        filled: true,
-                        fillColor: AppColors.background,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                      ),
-                      onSubmitted: (_) => _sendMessage(),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-                    child: IconButton(
-                      icon: _isSending
-                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                          : const Icon(Icons.send, color: Colors.white),
-                      onPressed: _isSending ? null : _sendMessage,
-                    ),
-                  ),
-                ],
-              ),
+            CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(height: 20),
+            Text(
+              'جارِ التحقق من الهوية...',
+              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.primary),
             ),
           ],
         ),
-      ),
+      );
+    }
+    
+    // ✅ حالة فشل التحقق البيومتري
+    if (_biometricCheckFailed) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.fingerprint_outlined, size: 64, color: Colors.grey),
+            const SizedBox(height: 16),
+            Text('فشل التحقق البيومتري', style: AppTextStyles.h2),
+            const SizedBox(height: 8),
+            Text(
+              'يرجى العودة والمحاولة مرة أخرى',
+              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context),
+              style: ElevatedButton.styleFrom(
+                foregroundColor: Colors.white,
+                backgroundColor: AppColors.primary,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+              ),
+              child: Text('العودة', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    // ✅ حالة فك تشفير الرسائل
+    if (_isDecryptingMessages) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(color: AppColors.primary),
+            const SizedBox(height: 20),
+            Text(
+              'جارِ فك تشفير المحادثة...',
+              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.primary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: _isLoading && _messages.isEmpty
+              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              : _messages.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.lock_outline, size: 64, color: AppColors.textHint.withOpacity(0.3)),
+                          const SizedBox(height: 16),
+                          Text('محادثة مشفرة من طرف لطرف', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
+                          const SizedBox(height: 8),
+                          Text('ابدأ محادثة آمنة مع ${widget.name}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
+                        ],
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      reverse: true,
+                      itemCount: _messages.length,
+                      itemBuilder: (context, index) {
+                        final message = _messages[_messages.length - 1 - index];
+                        return _buildMessageBubble(message);
+                      },
+                    ),
+        ),
+        
+        if (hasAttachment) _buildAttachmentPreview(),
+        
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))],
+          ),
+          child: Row(
+            children: [
+              IconButton(onPressed: _showAttachmentOptions, icon: Icon(Icons.attach_file), color: AppColors.primary),
+              Expanded(
+                child: TextField(
+                  controller: _messageController,
+                  enabled: !_isSending,
+                  maxLines: null,
+                  textDirection: TextDirection.rtl,
+                  style: AppTextStyles.bodyMedium,
+                  decoration: InputDecoration(
+                    hintText: 'اكتب رسالتك...',
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                    filled: true,
+                    fillColor: AppColors.background,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  ),
+                  onSubmitted: (_) => _sendMessage(),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                child: IconButton(
+                  icon: _isSending
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : const Icon(Icons.send, color: Colors.white),
+                  onPressed: _isSending ? null : _sendMessage,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -702,7 +890,7 @@ void _listenToUserStatus() {
 
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMine = message['isMine'] == 1;
-    final isLocked = message['requiresBiometric'] == 1 && message['isDecrypted'] == 0;
+    final isLocked = false; // ✅ الرسائل مفكوكة التشفير بعد التحقق
     final isDeleted = message['status'] == 'deleted';
     final isDeletedForRecipient = message['deletedForRecipient'] == 1;
     final text = message['plaintext'] ?? '';
@@ -724,9 +912,7 @@ void _listenToUserStatus() {
       },
       
       onTap: () {
-        if (isLocked && !isMine) {
-          _decryptMessage(message['id']);
-        } else if (hasAttachment && !isLocked) {
+        if (hasAttachment && !isLocked) {
           _openAttachment(attachmentData, attachmentType, attachmentName);
         }
       },
@@ -751,7 +937,6 @@ void _listenToUserStatus() {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ✅ عرض المرفقات (صور/ملفات)
               if (hasAttachment && !isLocked) ...[
                 if (attachmentType == 'image')
                   ClipRRect(
@@ -910,7 +1095,6 @@ void _listenToUserStatus() {
       );
     } else if (type == 'file') {
       try {
-        // ✅ تحويل Base64 إلى ملف مؤقت
         final bytes = base64Decode(base64Data);
         final tempDir = await getTemporaryDirectory();
         final fileName = name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
@@ -918,7 +1102,6 @@ void _listenToUserStatus() {
         
         await tempFile.writeAsBytes(bytes);
         
-        // ✅ فتح الملف
         final result = await OpenFilex.open(tempFile.path);
         
         if (result.type != ResultType.done) {

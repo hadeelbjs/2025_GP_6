@@ -9,6 +9,7 @@ import 'register_screen.dart';
 import 'reset_password.dart';
 import '../../../services/biometric_service.dart';
 import '../../dashboard/screens/main_dashboard.dart';
+import '../../../services/messaging_service.dart'; // ✅ إضافة
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -79,6 +80,28 @@ class _LoginScreenState extends State<LoginScreen> {
           duration: const Duration(seconds: 4),
         ),
       );
+    }
+  }
+
+  Future<void> _initializeMessagingAfterLogin() async {
+    try {
+      print('🔌 [LOGIN] Initializing MessagingService...');
+      
+      // تهيئة Signal Protocol
+      await SignalProtocolManager().initialize();
+      print('[LOGIN] Signal Protocol initialized');
+      
+      // تهيئة MessagingService (Socket)
+      final success = await MessagingService().initialize();
+      
+      if (success) {
+        print('[LOGIN] MessagingService initialized successfully');
+      } else {
+        print('[LOGIN] MessagingService initialization failed');
+      }
+      
+    } catch (e) {
+      print('[LOGIN] Error initializing MessagingService: $e');
     }
   }
 

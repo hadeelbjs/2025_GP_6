@@ -13,31 +13,36 @@ const server = http.createServer(app);
 
 const io = socketIO(server, {
   cors: {
-    origin: 'https://waseed-team-production.up.railway.app/api',
+    origin: '*', 
     credentials: true,
-    methods: ['GET', 'POST']
+    methods: ['GET', 'POST', 'PUT', 'DELETE']
   },
-  transports: ['websocket', 'polling']
+  transports: ['websocket', 'polling'],
+  allowEIO3: true, 
+  pingTimeout: 60000,
+  pingInterval: 25000
 });
 
 app.set('io', io);
 
 // Security Middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" } // ✅ للسماح بتحميل الصور
+  crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
-  credentials: true
+  origin: '*', 
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
 }));
 
-app.use(express.json({ limit: '10kb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// ✅ خدمة الملفات الثابتة (الصور والملفات المرفوعة)
+// خدمة الملفات الثابتة
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// حماية من NoSQL Injection بإزالة أي $ من المدخلات 
+// حماية من NoSQL Injection
 app.use((req, res, next) => {
   if (req.query) {
     Object.keys(req.query).forEach(key => {
@@ -78,23 +83,23 @@ const authLimiter = rateLimit({
   skipSuccessfulRequests: true
 });
 
-// ✅ Rate Limiter خاص للرفع
 const uploadLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 دقيقة
-  max: 20, // 20 ملف كحد أقصى
+  windowMs: 15 * 60 * 1000,
+  max: 20,
   message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
 });
 
 app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
-app.use('/api/upload', uploadLimiter); // ✅ حماية endpoint الرفع
+app.use('/api/upload', uploadLimiter);
 
+// Database Connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log(' Connected to MongoDB'))
+  .then(() => console.log('✅ Connected to MongoDB'))
   .catch(err => console.error('❌ DB connection error:', err));
 
-// Socket.IO
+// ✅ Socket.IO - يجب أن تكون قبل Routes
 require('./sockets/messageSocket')(io);
 
 // Routes
@@ -103,7 +108,7 @@ app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/user', require('./routes/user')); 
 app.use('/api/prekeys', require('./routes/prekeys')); 
 app.use('/api/messages', require('./routes/messages'));
-app.use('/api/upload', require('./routes/upload')); // ✅ Route جديد للرفع
+app.use('/api/upload', require('./routes/upload'));
 
 app.get('/', (req, res) => {
   res.json({ 
@@ -112,11 +117,12 @@ app.get('/', (req, res) => {
       auth: '/api/auth',
       contacts: '/api/contacts',
       messages: '/api/messages',
-      upload: '/api/upload' // ✅
+      upload: '/api/upload'
     }
   });
 });
 
+// Error Handler
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ 
@@ -127,7 +133,8 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 3000;
 
-server.listen(PORT, () => {
-  console.log(` Server running on port: ${PORT}`);
-  console.log(` Socket.IO ready`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`✅ Server running on port: ${PORT}`);
+  console.log(`✅ Socket.IO ready`);
+  console.log(`✅ Listening on all interfaces (0.0.0.0)`);
 });

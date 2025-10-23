@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4, // ✅ زيادة الإصدار
+      version: 4, 
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -90,6 +90,8 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE messages ADD COLUMN attachmentName TEXT');
       print('✅ Upgraded to v4');
     }
+    
+ 
   }
 
   Future<void> saveMessage(Map<String, dynamic> message) async {
@@ -129,6 +131,19 @@ class DatabaseHelper {
       orderBy: 'createdAt ASC',
       limit: limit,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> getEncryptedMessages(String conversationId) async {
+    final db = await database;
+    
+    final result = await db.query(
+      'messages',
+      where: 'conversationId = ? AND isMine = ? AND isDecrypted = ? AND plaintext IS NULL',
+      whereArgs: [conversationId, 0, 0], // الرسائل المستلمة وغير المفكوكة
+      orderBy: 'createdAt ASC', // الأقدم أولا
+    );
+    
+    return result;
   }
 
   Future<Map<String, dynamic>?> getMessage(String messageId) async {

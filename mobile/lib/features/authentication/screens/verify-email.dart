@@ -5,6 +5,7 @@ import '../../../services/api_services.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../services/messaging_service.dart';
 
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
@@ -119,6 +120,8 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
         // ✅ إذا كان 2FA (تسجيل دخول)، نولد المفاتيح
         if (widget.is2FA) {
           await _initializeEncryption();
+          await _initializeMessaging();
+
           
           await Future.delayed(const Duration(milliseconds: 500));
           if (!mounted) return;
@@ -178,6 +181,24 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       print('❌ خطأ في تهيئة التشفير: $e');
     }
   }
+
+  // تهيئة MessagingService (Socket + Listeners)
+Future<void> _initializeMessaging() async {
+  try {
+    print('🔌 [2FA] Initializing MessagingService...');
+    
+    final success = await MessagingService().initialize();
+    
+    if (success) {
+      print('[2FA] MessagingService initialized successfully');
+    } else {
+      print('[2FA] MessagingService initialization failed');
+    }
+    
+  } catch (e) {
+    print('[2FA] Error initializing MessagingService: $e');
+  }
+}
 
   Future<void> _resendCode() async {
     if (_resendTimer > 0) return;

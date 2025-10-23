@@ -1,4 +1,4 @@
-// lib/services/messaging_service.dart
+// messaging_service.dart - الملف المعدل
 
 import 'dart:async';
 import 'dart:convert';
@@ -234,6 +234,9 @@ class MessagingService {
 
       final conversationId = _generateConversationId(senderId);
 
+      // ✅ تم تعديل الكود - نحدد فيما إذا كانت المحادثة مفتوحة حالياً
+      final bool isCurrentChat = _currentOpenChatUserId == senderId;
+
       // حفظ الرسالة المشفرة مع المرفقات
       await _db.saveMessage({
         'id': messageId,
@@ -247,14 +250,15 @@ class MessagingService {
         'createdAt': timestamp,
         'deliveredAt': DateTime.now().millisecondsSinceEpoch,
         'isMine': 0,
-        'requiresBiometric': 1,
-        'isDecrypted': 0,
+        'requiresBiometric': 1,  
+        // ✅ نضع isDecrypted = 0 بغض النظر
+        'isDecrypted': 0,        
         'attachmentData': attachmentData,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
       });
 
- if (_currentOpenChatUserId != senderId) {
+     if (!isCurrentChat) {
       await _db.incrementUnreadCount(conversationId);
     } else {
       await _db.markConversationAsRead(conversationId);
@@ -317,10 +321,75 @@ class MessagingService {
 }
  }
 
-  //فك تشفير رسالة واحدة (يطلب التحقق كل مرة)
+  // ✅ دالة جديدة: فك تشفير جميع الرسائل بعد التحقق مرة واحدة
+  Future<Map<String, dynamic>> decryptAllConversationMessages(String conversationId) async {
+    try {
+      // نجلب الرسائل المشفرة غير المفكوكة للمحادثة
+      final encryptedMessages = await _db.getEncryptedMessages(conversationId);
+      
+      if (encryptedMessages.isEmpty) {
+        return {
+          'success': true,
+          'message': 'لا توجد رسائل تحتاج فك تشفير',
+          'count': 0,
+        };
+      }
+      
+      // نفك التشفير لكل رسالة ونحدثها بقاعدة البيانات
+      int successCount = 0;
+      for (final message in encryptedMessages) {
+        try {
+          final messageId = message['id'];
+          final senderId = message['senderId'];
+          
+          final decrypted = await _signalProtocol.decryptMessage(
+            senderId,
+            message['encryptionType'],
+            message['ciphertext'],
+          );
+          
+          if (decrypted != null) {
+            await _db.updateMessage(messageId, {
+              'plaintext': decrypted,
+              'isDecrypted': 1,
+              'requiresBiometric': 1, // نبقي الحقل لأسباب تاريخية
+              'status': 'read',
+              'readAt': DateTime.now().millisecondsSinceEpoch,
+            });
+            
+            // إرسال حالة القراءة للمرسل
+            _socketService.updateMessageStatus(
+              messageId: messageId,
+              status: 'verified',
+              recipientId: senderId,
+            );
+            
+            successCount++;
+          }
+        } catch (e) {
+          print('❌ فشل فك تشفير رسالة فردية: $e');
+          // نستمر للرسالة التالية
+        }
+      }
+      
+      return {
+        'success': true,
+        'message': 'تم فك تشفير $successCount رسائل',
+        'count': successCount,
+      };
+      
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'فشل فك تشفير الرسائل: $e',
+        'count': 0,
+      };
+    }
+  }
+
+  //فك تشفير رسالة واحدة (يطلب التحقق كل مرة) - نبقي هذه الدالة كاحتياط
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {
-
       // التحقق البيومتري - كل مرة تُفتح رسالة
       final authenticated = await BiometricService.authenticateWithBiometrics(
         reason: 'تحقق من هويتك لقراءة الرسالة',

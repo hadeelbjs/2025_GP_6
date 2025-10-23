@@ -20,7 +20,7 @@ class SocketService {
   final _statusController = StreamController<Map<String, dynamic>>.broadcast();
   final _deletedController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionController = StreamController<bool>.broadcast();
-    final _userStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _userStatusController = StreamController<Map<String, dynamic>>.broadcast();
 
   Stream<Map<String, dynamic>> get onNewMessage => _messageController.stream;
   Stream<Map<String, dynamic>> get onStatusUpdate => _statusController.stream;
@@ -28,22 +28,23 @@ class SocketService {
   Stream<bool> get onConnectionChange => _connectionController.stream;
   Stream<Map<String, dynamic>> get onUserStatusChange => _userStatusController.stream;
 
-
   bool get isConnected => _socket?.connected ?? false;
   String? _userId;
 
   final Set<String> _processedMessages = {};
   bool _isConnecting = false; 
 
- Future<bool> connect() async {
+  Future<bool> connect() async {
     try {
+      print('🔌 Connecting to Socket.IO...');
+
       if (_socket != null && _socket!.connected) {
-        print('✅ Socket already connected');
+        print('Socket already connected');
         return true;
       }
 
       if (_isConnecting) {
-        print('⏳ Connection in progress, waiting...');
+        print('Connection in progress, waiting...');
         await Future.delayed(Duration(seconds: 2));
         return _socket?.connected ?? false;
       }
@@ -74,44 +75,77 @@ class SocketService {
       }
 
       String baseUrl;
-      baseUrl = 'https://waseed-team-production.up.railway.app';
-      /*if (Platform.isAndroid) {
+      
+      if (Platform.isAndroid) {
         baseUrl = 'http://10.0.2.2:3000';
       } else if (Platform.isIOS) {
         baseUrl = 'http://localhost:3000';
       } else {
         baseUrl = 'http://localhost:3000';
       }
-*/
-      print('🔌 Connecting to: $baseUrl');
 
+
+      // ✅ إنشاء Socket مع خيارات محسّنة
       _socket = IO.io(
         baseUrl,
         IO.OptionBuilder()
-            .setTransports(['websocket', 'polling'])
+            .setTransports(['websocket', 'polling']) // كلاهما
+            .enableForceNew() // إجبار اتصال جديد
             .enableAutoConnect()
             .enableReconnection()
             .setReconnectionDelay(1000)
-            .setReconnectionAttempts(5)
+            .setReconnectionAttempts(10)
             .setAuth({'token': token})
+            .setTimeout(10000)
+            .disableMultiplex() // تعطيل multiplexing
+            .setExtraHeaders({'Authorization': 'Bearer $token'}) // header إضافي
             .build(),
       );
 
+
+      // إضافة listener للأخطاء قبل الاتصال
+      _socket!.onConnectError((data) {
+        print('❌ [ERROR] Connection error: $data');
+      });
+
+      _socket!.onError((data) {
+        print('❌ [ERROR] Socket error: $data');
+      });
+
       _setupEventListeners();
 
-      print('✅ Socket initialization complete');
-      _isConnecting = false;
-      return true;
+      _socket!.connect();
+      
+      // انتظار 3 ثواني للاتصال
+      print('⏳ [9/10] Waiting 3 seconds for connection...');
+      await Future.delayed(Duration(seconds: 3));
+      
+      if (_socket!.connected) {
+        print('✅ [10/10] Socket connected successfully! 🎉');
+        _isConnecting = false;
+        return true;
+      } else {
+        print('❌ [10/10] Socket NOT connected after 3 seconds');
+        print('❌ Socket state: ${_socket!.connected ? "connected" : "disconnected"}');
+        _isConnecting = false;
+        return false;
+      }
 
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('❌ Socket connection error: $e');
+      print('❌ Stack trace: $stackTrace');
       _isConnecting = false;
       return false;
     }
   }
 
   void _setupEventListeners() {
-        if (_socket == null) return;
+    if (_socket == null) {
+      print('❌ Cannot setup listeners - socket is null');
+      return;
+    }
+    
+    print('🔧 Clearing old listeners...');
     _socket!.off('connect');
     _socket!.off('connected');
     _socket!.off('message:new');
@@ -122,30 +156,43 @@ class SocketService {
     _socket!.off('disconnect');
     _socket!.off('error');
     _socket!.off('reconnect');
+    _socket!.off('connect_error');
+    _socket!.off('connect_timeout');
 
-   _socket?.on('connect', (_) {
-  print('✅ Socket connected!');
-  _connectionController.add(true);
-  
-  // 🆕 إعادة طلب الحالة بعد الاتصال
-  Future.delayed(Duration(milliseconds: 500), () {
-  });
-});
+    print('🔧 Setting up new listeners...');
 
-    _socket?.on('connected', (data) {
+    _socket!.on('connect', (_) {
+      print('✅✅✅ SOCKET CONNECTED! ✅✅✅');
+      print('✅ Socket ID: ${_socket!.id}');
+      _connectionController.add(true);
     });
 
-    // ✅ استقبال رسالة مع Base64
-    _socket?.on('message:new', (data) async {
+    _socket!.on('connect_error', (error) {
+      print('❌ Connect error: $error');
+    });
+
+    _socket!.on('connect_timeout', (data) {
+      print('❌ Connect timeout: $data');
+    });
+
+    _socket!.on('error', (data) {
+      print('❌ Socket error: $data');
+    });
+
+    _socket!.on('connected', (data) {
+      print('✅ Server confirmed connection: $data');
+    });
+
+    _socket!.on('message:new', (data) async {
+      print('📥 New message received: ${data['messageId']}');
       final messageId = data['messageId'] as String;
       
       if (_processedMessages.contains(messageId)) {
+        print('⚠️ Duplicate message, skipping');
         return;
       }
       
-      
       _processedMessages.add(messageId);
-      
       _messageController.add(Map<String, dynamic>.from(data));
       
       _socket?.emit('message:delivered', {
@@ -158,13 +205,12 @@ class SocketService {
         'attachmentName': data['attachmentName'],
         'createdAt': data['createdAt'],
       });
-      
     });
 
-    _socket?.on('message:sent', (data) async {
+    _socket!.on('message:sent', (data) async {
+      print('✅ Message sent confirmation: ${data['messageId']}');
       final messageId = data['messageId'];
       final delivered = data['delivered'] ?? false;
-      
       
       try {
         await DatabaseHelper.instance.updateMessageStatus(
@@ -172,56 +218,57 @@ class SocketService {
           delivered ? 'delivered' : 'sent',
         );
       } catch (e) {
+        print('❌ Error updating message status: $e');
       }
     });
 
-    _socket?.on('message:status_update', (data) {
+    _socket!.on('message:status_update', (data) {
+      print('📊 Status update: ${data['messageId']} → ${data['status']}');
       _statusController.add(Map<String, dynamic>.from(data));
     });
 
-    _socket?.on('message:deleted', (data) async {
- 
-  
-  final messageId = data['messageId'];
-  final deletedFor = data['deletedFor'];
-  
-  //  1. إشعار الواجهة أولاً (أعلى أولوية)
-  if (!_deletedController.isClosed) {
-    _deletedController.add(Map<String, dynamic>.from(data));
-  }
-  
-  // 2. ثم حذف من SQLite
-  try {
-    await Future.delayed(Duration(milliseconds: 30)); // تأخير صغير
-    
-    if (deletedFor == 'everyone') {
-      await DatabaseHelper.instance.deleteMessage(messageId);
-    } else if (deletedFor == 'recipient') {
-      await DatabaseHelper.instance.deleteMessage(messageId);
-    }
-  } catch (e) {
-  }
-});
+    _socket!.on('message:deleted', (data) async {
+      print('🗑️ Message deleted: ${data['messageId']}');
+      
+      final messageId = data['messageId'];
+      final deletedFor = data['deletedFor'];
+      
+      if (!_deletedController.isClosed) {
+        _deletedController.add(Map<String, dynamic>.from(data));
+      }
+      
+      try {
+        await Future.delayed(Duration(milliseconds: 30));
+        
+        if (deletedFor == 'everyone') {
+          await DatabaseHelper.instance.deleteMessage(messageId);
+        } else if (deletedFor == 'recipient') {
+          await DatabaseHelper.instance.deleteMessage(messageId);
+        }
+      } catch (e) {
+        print('❌ Error deleting message: $e');
+      }
+    });
 
-   _socket?.on('user:status', (data) {
+    _socket!.on('user:status', (data) {
+      print('👤 User status: ${data['userId']} → ${data['isOnline'] ? "online" : "offline"}');
       _userStatusController.add(Map<String, dynamic>.from(data));
     });
 
-    _socket?.on('disconnect', (_) {
+    _socket!.on('disconnect', (reason) {
+      print('❌ Socket disconnected: $reason');
       _connectionController.add(false);
     });
 
-    _socket?.on('error', (data) {
-      print('❌ Socket error: $data');
-    });
-
-    _socket?.on('reconnect', (attempt) {
+    _socket!.on('reconnect', (attempt) {
+      print('🔄 Reconnected after $attempt attempts');
       _connectionController.add(true);
       _processedMessages.clear();
     });
+
+    print('✅ All listeners configured');
   }
 
-  // ✅ إرسال رسالة مع Base64
   void sendMessageWithAttachment({
     required String messageId,
     required String recipientId,
@@ -237,6 +284,8 @@ class SocketService {
       return;
     }
 
+    print('📤 Sending message: $messageId → $recipientId');
+
     _socket!.emit('message:send', {
       'messageId': messageId,
       'recipientId': recipientId,
@@ -248,7 +297,6 @@ class SocketService {
       'attachmentMimeType': attachmentMimeType,
       'createdAt': DateTime.now().toIso8601String(),
     });
-
   }
 
   void updateMessageStatus({
@@ -265,13 +313,11 @@ class SocketService {
       'status': status,
       'recipientId': recipientId,
     });
-
   }
 
-  //  حذف رسالة - مُحدَّث
   void deleteMessage({
     required String messageId,
-    required String deleteFor, // 'everyone' or 'recipient'
+    required String deleteFor,
   }) {
     if (!isConnected) {
       return;
@@ -281,28 +327,27 @@ class SocketService {
       'messageId': messageId,
       'deleteFor': deleteFor,
     });
-
   }
-
 
   void requestUserStatus(String userId) {
-  if (_socket == null) {
-    return;
-  }
-  
-  if (!_socket!.connected) {
-    Future.delayed(Duration(seconds: 1), () {
-      requestUserStatus(userId); // إعادة المحاولة
+    if (_socket == null) {
+      return;
+    }
+    
+    if (!_socket!.connected) {
+      Future.delayed(Duration(seconds: 1), () {
+        requestUserStatus(userId);
+      });
+      return;
+    }
+
+    _socket!.emit('request:user_status', {
+      'targetUserId': userId,
     });
-    return;
   }
 
-  _socket!.emit('request:user_status', {
-    'targetUserId': userId,
-  });
-
-}
   void disconnectOnLogout() {
+    print('👋 Disconnecting on logout');
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
@@ -312,10 +357,10 @@ class SocketService {
 
   void dispose() {
     disconnectOnLogout(); 
-       _messageController.close();
+    _messageController.close();
     _statusController.close();
     _deletedController.close();
     _connectionController.close();
-    _userStatusController.close(); 
+    _userStatusController.close();
   }
 }

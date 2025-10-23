@@ -2,6 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:app_settings/app_settings.dart';
+
+
+
 class BiometricService {
   static final LocalAuthentication _localAuth = LocalAuthentication();
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
@@ -19,13 +23,26 @@ class BiometricService {
       return false;
     }
   }
-
+static void openBiometricSettings() {
+  AppSettings.openAppSettings(type: AppSettingsType.security);
+}
   /// التحقق من توفر البصمات في الجهاز
   static Future<bool> canCheckBiometrics() async {
     try {
       return await _localAuth.canCheckBiometrics;
     } catch (e) {
       debugPrint('خطأ في التحقق من توفر البصمات: $e');
+      return false;
+    }
+  }
+
+   /// ✅ دالة جديدة: التحقق من وجود بصمات مسجلة فعلياً في الجهاز
+  static Future<bool> hasEnrolledBiometrics() async {
+    try {
+      final availableBiometrics = await _localAuth.getAvailableBiometrics();
+      return availableBiometrics.isNotEmpty;
+    } catch (e) {
+      debugPrint('خطأ في التحقق من البصمات المسجلة: $e');
       return false;
     }
   }

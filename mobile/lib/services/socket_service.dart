@@ -76,16 +76,16 @@ class SocketService {
       }
 
       String baseUrl;
-      baseUrl = 'https://waseed-team-production.up.railway.app';
+    //baseUrl = 'https://waseed-team-production.up.railway.app';
       
-      /*if (Platform.isAndroid) {
+      if (Platform.isAndroid) {
         baseUrl = 'http://10.0.2.2:3000';
       } else if (Platform.isIOS) {
         baseUrl = 'http://localhost:3000';
       } else {
         baseUrl = 'http://localhost:3000';
       }
-      */
+      
 
       // ✅ إنشاء Socket مع خيارات محسّنة
       _socket = IO.io(

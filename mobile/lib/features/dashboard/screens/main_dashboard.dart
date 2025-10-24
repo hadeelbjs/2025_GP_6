@@ -8,6 +8,8 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/biometric_service.dart';
+import '../../../services/socket_service.dart';
+
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -25,6 +27,20 @@ class _MainDashboardState extends State<MainDashboard> {
     super.initState();
     _loadNotificationCount();
   }
+
+
+Future<void> _initializeSocket() async {
+  try {
+    await SocketService().connect();
+    if (kDebugMode) {
+      print('Socket connected from Dashboard!');
+    }
+  } catch (e) {
+    if (kDebugMode) {
+      print('Socket connection failed in Dashboard: $e');
+    }
+  }
+}
 
  
 

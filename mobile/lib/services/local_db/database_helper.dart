@@ -146,6 +146,19 @@ class DatabaseHelper {
     return result;
   }
 
+  Future<List<Map<String, dynamic>>> getPendingMessages() async {
+  final db = await database;
+  
+  final result = await db.query(
+    'messages',
+    where: 'status IN (?, ?)', // ممكن تكون "sending" أو "pending"
+    whereArgs: ['sending', 'pending'],
+    orderBy: 'createdAt ASC',
+  );
+  
+  return result;
+}
+
   Future<Map<String, dynamic>?> getMessage(String messageId) async {
     final db = await database;
     

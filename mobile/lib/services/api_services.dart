@@ -3,7 +3,10 @@ import 'dart:convert';
 import 'dart:io' show Platform, File; 
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:waseed/services/crypto/signal_protocol_manager.dart';
 import 'dart:async';
+import 'socket_service.dart';
+import 'package:path/path.dart';
 class ApiService {
   // ============================
   // Base URL deployment
@@ -502,7 +505,13 @@ Future<Map<String, dynamic>> skipPhoneVerification({
     await _storage.delete(key: 'access_token');
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'user_data');
-    await _storage.deleteAll();
+    await _storage.delete(key: 'refresh_data');
+    await SignalProtocolManager().clearAllKeys();
+
+    // قطع اتصال الـ Socket عند تسجيل الخروج
+    final socketService = SocketService();
+    socketService.disconnectOnLogout();
+    
   }
 
   // ================================
@@ -857,6 +866,11 @@ Future<Map<String, dynamic>> requestBiometricEnable() async {
       'message': 'خطأ في الاتصال: ${e.toString()}'
     };
   }
+}
+
+Future<void> Logout() async {
+  print("Alert the server of the logout action");
+  await logout();
 }
 
 // تأكيد تفعيل البايومتركس

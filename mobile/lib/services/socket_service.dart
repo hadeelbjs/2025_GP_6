@@ -7,6 +7,7 @@ import 'dart:io' show Platform;
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'local_db/database_helper.dart';
+import 'messaging_service.dart';
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
@@ -75,15 +76,16 @@ class SocketService {
       }
 
       String baseUrl;
+      baseUrl = 'https://waseed-team-production.up.railway.app';
       
-      if (Platform.isAndroid) {
+      /*if (Platform.isAndroid) {
         baseUrl = 'http://10.0.2.2:3000';
       } else if (Platform.isIOS) {
         baseUrl = 'http://localhost:3000';
       } else {
         baseUrl = 'http://localhost:3000';
       }
-
+      */
 
       // ✅ إنشاء Socket مع خيارات محسّنة
       _socket = IO.io(
@@ -162,11 +164,10 @@ class SocketService {
     print('🔧 Setting up new listeners...');
 
     _socket!.on('connect', (_) {
-      print('✅✅✅ SOCKET CONNECTED! ✅✅✅');
-      print('✅ Socket ID: ${_socket!.id}');
+      print('✅ Socket connected');
       _connectionController.add(true);
+      MessagingService().resendPendingMessages(); // 🔁 إعادة الإرسال
     });
-
     _socket!.on('connect_error', (error) {
       print('❌ Connect error: $error');
     });

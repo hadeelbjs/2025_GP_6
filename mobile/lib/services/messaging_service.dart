@@ -108,6 +108,7 @@ class MessagingService {
     String? fileName,
   }) async {
     try {
+      resendPendingMessages();
       final messageId = _uuid.v4();
       final conversationId = _generateConversationId(recipientId);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
@@ -293,6 +294,29 @@ class MessagingService {
     } catch (e) {
     }
   }
+
+  Future<void> resendPendingMessages() async {
+  final db = DatabaseHelper.instance;
+  final pending = await db.getPendingMessages();
+
+  for (final msg in pending) {
+    try {
+      print('🔁 Re-sending pending message ${msg['id']}');
+      _socketService.sendMessageWithAttachment(
+        messageId: msg['id'],
+        recipientId: msg['receiverId'],
+        encryptedType: msg['encryptionType'],
+        encryptedBody: msg['ciphertext'],
+        attachmentData: msg['attachmentData'],
+        attachmentType: msg['attachmentType'],
+        attachmentName: msg['attachmentName'],
+      );
+      await db.updateMessageStatus(msg['id'], 'sent');
+    } catch (e) {
+      print('⚠️ Failed to resend ${msg['id']}: $e');
+    }
+  }
+}
 
  Future<void> _handleMessageDeleted(Map<String, dynamic> data) async {
   try {

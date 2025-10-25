@@ -31,6 +31,8 @@ class SocketService {
 
   bool get isConnected => _socket?.connected ?? false;
   String? _userId;
+  IO.Socket? get socket => _socket;
+
 
   final Set<String> _processedMessages = {};
   bool _isConnecting = false; 
@@ -248,6 +250,14 @@ class SocketService {
       _userStatusController.add(Map<String, dynamic>.from(data));
     });
 
+   // ✅ استقبال إشعار فشل التحقق
+    _socket!.on('conversation:recipient_failed_verification', (data) async {
+      final recipientId = data['recipientId'];
+      print(' Recipient $recipientId failed verification');
+      });
+
+
+
     _socket!.on('disconnect', (reason) {
       print('❌ Socket disconnected: $reason');
       _connectionController.add(false);
@@ -258,6 +268,8 @@ class SocketService {
       _connectionController.add(true);
       _processedMessages.clear();
     });
+
+
 
   }
 
@@ -346,6 +358,12 @@ class SocketService {
     _processedMessages.clear();
     _isConnecting = false;
   }
+
+void emitEvent(String event, Map<String, dynamic> data) {
+  if (_socket != null && _socket!.connected) {
+    _socket!.emit(event, data);
+  }
+}
 
   void dispose() {
     disconnectOnLogout(); 

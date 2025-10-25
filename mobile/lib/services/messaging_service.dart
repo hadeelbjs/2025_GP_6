@@ -274,23 +274,37 @@ class MessagingService {
   }
 }
   
-  Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
-    try {
-      final messageId = data['messageId'];
-      final newStatus = data['status'];
-
-      await _db.updateMessageStatus(messageId, newStatus);
+Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
+  try {
+    if (data['type'] == 'recipient_failed_verification') {
+      final recipientId = data['recipientId'];
+      print('⚠️ Handling failed verification for recipient: $recipientId');
       
       if (!_messageStatusController.isClosed) {
         _messageStatusController.add({
-          'messageId': messageId,
-          'status': newStatus,
+          'type': 'recipient_failed_verification',
+          'recipientId': recipientId,
         });
       }
-
-    } catch (e) {
+      return; 
     }
+    
+    final messageId = data['messageId'];
+    final newStatus = data['status'];
+
+    await _db.updateMessageStatus(messageId, newStatus);
+    
+    if (!_messageStatusController.isClosed) {
+      _messageStatusController.add({
+        'messageId': messageId,
+        'status': newStatus,
+      });
+    }
+
+  } catch (e) {
+    print('❌ Error in _handleStatusUpdate: $e');
   }
+}
 
   Future<void> resendPendingMessages() async {
   final db = DatabaseHelper.instance;

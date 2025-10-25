@@ -11,6 +11,7 @@ import 'package:open_filex/open_filex.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/messaging_service.dart';
+import '../../../services/local_db/database_helper.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -169,21 +170,32 @@ class _ChatScreenState extends State<ChatScreen> {
       });
     });
 
-    _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
-      final messageId = data['messageId'];
-      final newStatus = data['status'];
-      
-      if (mounted) {
-        setState(() {
-          final index = _messages.indexWhere((m) => m['id'] == messageId);
-          if (index != -1) {
-            final updatedMessage = Map<String, dynamic>.from(_messages[index]);
-            updatedMessage['status'] = newStatus;
-            _messages[index] = updatedMessage;
-          }
-        });
+   _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
+  // ✅ التعامل مع فشل التحقق عند المستقبل
+  if (data['type'] == 'recipient_failed_verification') {
+    final recipientId = data['recipientId'];
+    if (recipientId == widget.userId && mounted) {
+      // ✅ إعادة تحميل الرسائل لتحديث العلامات
+      _loadMessagesFromDatabase();
+    }
+    return;
+  }
+  
+  // ✅ التعامل العادي مع تحديثات الحالة
+  final messageId = data['messageId'];
+  final newStatus = data['status'];
+  
+  if (mounted) {
+    setState(() {
+      final index = _messages.indexWhere((m) => m['id'] == messageId);
+      if (index != -1) {
+        final updatedMessage = Map<String, dynamic>.from(_messages[index]);
+        updatedMessage['status'] = newStatus;
+        _messages[index] = updatedMessage;
       }
     });
+  }
+});
   }
 
   void _listenToUserStatus() {
@@ -347,6 +359,8 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _showDeleteOptions(Map<String, dynamic> message) {
+   final failedVerificationAtRecipient = message['failedVerificationAtRecipient'] == 1;
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
@@ -374,6 +388,19 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
             
             SizedBox(height: 20),
+
+          if (failedVerificationAtRecipient) ...[
+            _buildDeleteOption(
+              icon: Icons.delete_outline,
+              iconColor: Colors.grey,
+              title: 'حذف لدي فقط',
+              subtitle: 'الرسالة محذوفة لدى المستقبل',
+              onTap: () {
+                Navigator.pop(context);
+                _deleteMessageLocally(message['id']);
+              },
+            ),
+          ] else ...[
             
             _buildDeleteOption(
               icon: Icons.person_remove_outlined,
@@ -398,6 +425,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 _confirmDeleteForEveryone(message['id']);
               },
             ),
+          ],
             
             SizedBox(height: 10),
             
@@ -453,6 +481,7 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+
   void _confirmDeleteForRecipient(String messageId) {
     showDialog(
       context: context,
@@ -477,6 +506,23 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
   }
+
+Future<void> _deleteMessageLocally(String messageId) async {
+  try {
+    final db = await DatabaseHelper.instance.database;
+    await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+    
+    setState(() {
+      _messages.removeWhere((msg) => msg['id'] == messageId);
+    });
+    
+    _showMessage('تم الحذف', true);
+  } catch (e) {
+    _showMessage('فشل الحذف', false);
+  }
+}
+
+
 
   void _confirmDeleteForEveryone(String messageId) {
     showDialog(
@@ -741,8 +787,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final isLocked = false; // ✅ الرسائل مفكوكة التشفير بعد التحقق
     final isDeleted = message['status'] == 'deleted';
     final isDeletedForRecipient = message['deletedForRecipient'] == 1;
+    final failedVerificationAtRecipient = message['failedVerificationAtRecipient'] == 1; 
     final text = message['plaintext'] ?? '';
     final status = message['status'] ?? 'sent';
+
     
     final attachmentData = message['attachmentData'];
     final attachmentType = message['attachmentType'];
@@ -856,7 +904,29 @@ class _ChatScreenState extends State<ChatScreen> {
                     ),
                   ],
                 ),
-              
+                if (failedVerificationAtRecipient && isMine) ...[
+  const SizedBox(height: 4),
+  Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      Icon(Icons.warning_amber_rounded, size: 12, color: Colors.orange.shade300),
+      const SizedBox(width: 4),
+      Flexible(
+        child: Text(
+          'تم حذف هذه الرسالة لدى المستقبل لفشل التحقق',
+          style: AppTextStyles.bodySmall.copyWith(
+            color: Colors.orange.shade200,
+            fontSize: 10,
+            fontStyle: FontStyle.italic,
+          ),
+        ),
+      ),
+    ],
+  ),
+                ],
+
+
+
               if (isDeletedForRecipient && isMine) ...[
                 const SizedBox(height: 4),
                 Row(
@@ -893,7 +963,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     Icon(
                       _getStatusIcon(status),
                       size: 14,
-                      color: status == 'verified' ? Colors.lightBlueAccent : Colors.white.withOpacity(0.7),
+                      color: (status == 'verified' || status == 'opened' || status == 'read')
+                          ? Colors.lightBlueAccent 
+                          : Colors.white.withOpacity(0.7), 
                     ),
                   ],
                 ],
@@ -916,18 +988,20 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  
   IconData _getStatusIcon(String status) {
     switch (status) {
+      case 'pending':
       case 'sending':
-        return Icons.access_time;
+        return Icons.access_time; 
       case 'sent':
-        return Icons.check;
+        return Icons.check; 
       case 'delivered':
-        return Icons.done_all;
+        return Icons.done_all; 
+      case 'verified': 
+      case 'opened':
       case 'read':
-        return Icons.done_all;
-      case 'verified':
-        return Icons.verified;
+        return Icons.done_all; 
       default:
         return Icons.access_time;
     }

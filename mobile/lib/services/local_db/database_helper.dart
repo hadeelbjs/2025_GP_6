@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 4, 
+      version: 5, 
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -44,6 +44,7 @@ class DatabaseHelper {
         requiresBiometric INTEGER DEFAULT 1,
         isDecrypted INTEGER DEFAULT 0,
         deletedForRecipient INTEGER DEFAULT 0,
+        failedVerificationAtRecipient INTEGER DEFAULT 0,
         attachmentData TEXT,
         attachmentType TEXT,
         attachmentName TEXT,
@@ -90,7 +91,12 @@ class DatabaseHelper {
       await db.execute('ALTER TABLE messages ADD COLUMN attachmentName TEXT');
       print('✅ Upgraded to v4');
     }
-    
+
+if (oldVersion < 5) {
+  await db.execute(
+    'ALTER TABLE messages ADD COLUMN failedVerificationAtRecipient INTEGER DEFAULT 0'
+  );
+} 
  
   }
 

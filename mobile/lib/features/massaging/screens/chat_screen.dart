@@ -41,6 +41,9 @@ class _ChatScreenState extends State<ChatScreen> {
   // ✅ إزالة متغيرات التحقق البيومتري لأنه تم التحقق قبل الدخول
   bool _isDecryptingMessages = false;
   
+  int _decryptionFailureCount = 0; // عدد مرات فشل فك التشفير
+  bool _hasShownDecryptionDialog = false; // لتجنب عرض Dialog متعدد
+  
   File? _pendingImageFile;
   PlatformFile? _pendingFile;
   
@@ -71,22 +74,407 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // ✅ دالة جديدة: فك تشفير جميع الرسائل دفعة واحدة
   Future<void> _decryptAllMessages() async {
-    try {
-      if (_conversationId == null) return;
+  try {
+    if (_conversationId == null) return;
+    
+    print('🔓 Starting decryption for conversation: $_conversationId');
+    
+    final result = await _messagingService.decryptAllConversationMessages(
+      _conversationId!
+    );
+    
+    if (result['success'] == true) {
+      final count = result['count'] ?? 0;
       
-      final result = await _messagingService.decryptAllConversationMessages(_conversationId!);
-      
-      if (result['success'] == true && result['count'] > 0) {
+      if (count > 0) {
+        print('✅ Decrypted $count messages successfully');
         await _loadMessagesFromDatabase();
-        _showMessage('تم فك تشفير الرسائل بنجاح', true);
+        
+        _decryptionFailureCount = 0;
+        _hasShownDecryptionDialog = false;
+      } else {
+        print('ℹ️ No encrypted messages to decrypt');
       }
-    } catch (e) {
+    } else {
+      // ❌ فشل فك التشفير
+      final errorType = result['error'];
+      
+      print('❌ Decryption failed: $errorType');
+      
+      // ========================================
+      // ✅ معالجة خاصة لـ InvalidSessionException
+      // ========================================
+      if (errorType == 'InvalidSessionException' || 
+          errorType == 'NoSessionException' ||
+          errorType?.toString().contains('session') == true) {
+        
+        print('⚠️ Session error detected - auto-recreating session');
+        
+        // إنشاء session جديد تلقائياً بدون سؤال المستخدم
+        await _autoRecreateSession();
+        return; // الخروج بعد إعادة الإنشاء
+      }
+      
+      // ========================================
+      // ✅ معالجة أخطاء المفاتيح الأخرى (مع العداد)
+      // ========================================
+      if (errorType == 'InvalidKeyException' || 
+          errorType == 'InvalidMessageException' ||
+          errorType == 'UntrustedIdentityException') {
+        
+        _decryptionFailureCount++;
+        print('⚠️ Key-related error detected. Count: $_decryptionFailureCount');
+        
+        if (_decryptionFailureCount >= 3 && !_hasShownDecryptionDialog) {
+          _hasShownDecryptionDialog = true;
+          
+          if (mounted) {
+            await _showDecryptionFailureDialog();
+          }
+        } else if (_decryptionFailureCount < 3) {
+          _showMessage(
+            'فشل فك تشفير بعض الرسائل (محاولة $_decryptionFailureCount/3)',
+            false,
+          );
+        }
+      } else {
+        // أخطاء عامة أخرى
+        _showMessage('حدث خطأ أثناء فك التشفير', false);
+      }
+    }
+  } catch (e) {
+    print('❌ Exception during decryption: $e');
+    
+    // ✅ التحقق من نوع الاستثناء
+    if (e.toString().contains('session') || 
+        e.toString().contains('Session')) {
+      print('⚠️ Session exception caught - auto-recreating');
+      await _autoRecreateSession();
+    } else {
       _showMessage('فشل فك تشفير الرسائل', false);
     }
   }
+}
 
+
+// ========================================
+// ✅ جديد: إعادة إنشاء Session تلقائياً (بدون Dialog)
+// ========================================
+Future<void> _autoRecreateSession() async {
+  try {
+    print('🔄 Auto-recreating session for ${widget.userId}');
+    
+    // عرض رسالة للمستخدم
+    _showMessage('جاري إصلاح جلسة التشفير...', true);
+    
+    // 1. حذف Session القديم (إن وُجد)
+    await _messagingService.deleteSession(widget.userId);
+    print('🗑️ Old session deleted (if existed)');
+    
+    // 2. إنشاء Session جديد
+    final success = await _messagingService.createNewSession(widget.userId);
+    
+    if (success) {
+      print('✅ New session created automatically');
+      
+      // إعادة تعيين العدادات
+      _decryptionFailureCount = 0;
+      _hasShownDecryptionDialog = false;
+      
+      // إعادة تحميل الرسائل
+      await _loadMessagesFromDatabase();
+      
+      // عرض رسالة نجاح
+      _showMessage('تم إصلاح جلسة التشفير بنجاح', true);
+      
+      // محاولة فك التشفير مرة أخرى بعد ثانية
+      await Future.delayed(Duration(seconds: 1));
+      await _decryptAllMessages();
+      
+    } else {
+      print('❌ Failed to auto-create session');
+      _showMessage('فشل إصلاح جلسة التشفير', false);
+      
+      // إذا فشل الإنشاء التلقائي، عرض Dialog للمستخدم
+      if (mounted && !_hasShownDecryptionDialog) {
+        _hasShownDecryptionDialog = true;
+        await _showDecryptionFailureDialog();
+      }
+    }
+    
+  } catch (e) {
+    print('❌ Error in auto-recreate session: $e');
+    _showMessage('حدث خطأ أثناء إصلاح الجلسة', false);
+    
+    // في حالة الخطأ، عرض Dialog للمستخدم
+    if (mounted && !_hasShownDecryptionDialog) {
+      _hasShownDecryptionDialog = true;
+      await _showDecryptionFailureDialog();
+    }
+  }
+}
+
+
+// ========================================
+// ✅ تحديث: _recreateSession() للاستخدام اليدوي من Dialog
+// ========================================
+Future<void> _recreateSession() async {
+  try {
+    _showMessage('جاري إعادة إنشاء جلسة التشفير...', true);
+    
+    await _messagingService.deleteSession(widget.userId);
+    print('🗑️ Old session deleted for ${widget.userId}');
+    
+    final success = await _messagingService.createNewSession(widget.userId);
+    
+    if (success) {
+      print('✅ New session created successfully');
+      
+      _decryptionFailureCount = 0;
+      _hasShownDecryptionDialog = false;
+      
+      await _loadMessagesFromDatabase();
+      
+      _showMessage('تم إنشاء جلسة جديدة بنجاح', true);
+      
+      await Future.delayed(Duration(seconds: 1));
+      await _decryptAllMessages();
+      
+    } else {
+      print('❌ Failed to create new session');
+      _showMessage('فشل إنشاء جلسة جديدة', false);
+      _hasShownDecryptionDialog = false;
+    }
+    
+  } catch (e) {
+    print('❌ Error recreating session: $e');
+    _showMessage('حدث خطأ أثناء إعادة الإنشاء', false);
+    _hasShownDecryptionDialog = false;
+  }
+}
+
+
+// ========================================
+// ✅ الـ Dialog يبقى كما هو (للحالات الأخرى)
+// ========================================
+Future<void> _showDecryptionFailureDialog() async {
+  final shouldRecreate = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.red.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.lock_open,
+                  color: Colors.red,
+                  size: 28,
+                ),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  '⚠️ فشل فك التشفير',
+                  style: AppTextStyles.h3.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'لا يمكن فك تشفير الرسائل من ${widget.name}.',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                SizedBox(height: 16),
+                
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.orange.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.info_outline,
+                            size: 20,
+                            color: Colors.orange.shade700,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'السبب المحتمل:',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        '• المرسل قام بتحديث مفاتيح التشفير من جهاز آخر\n'
+                        '• تم تسجيل الدخول من جهاز جديد\n'
+                        '• تغيير في إعدادات الأمان',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          height: 1.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: 12),
+                
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.blue.withOpacity(0.3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.build_outlined,
+                            size: 20,
+                            color: Colors.blue.shade700,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'الحل المقترح:',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.blue.shade700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      SizedBox(height: 8),
+                      Text(
+                        'إعادة إنشاء جلسة تشفير جديدة مع ${widget.name}.',
+                        style: AppTextStyles.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                
+                SizedBox(height: 12),
+                
+                Container(
+                  padding: EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: Colors.red.withOpacity(0.2),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 20,
+                        color: Colors.red,
+                      ),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'ملاحظة: قد لا تتمكن من قراءة الرسائل القديمة بعد إعادة الإنشاء.',
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: Colors.red.shade700,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              style: TextButton.styleFrom(
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              ),
+              child: Text(
+                'تجاهل',
+                style: TextStyle(
+                  color: Colors.grey.shade600,
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 15,
+                ),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context, true),
+              icon: Icon(Icons.refresh, size: 18),
+              label: Text(
+                'إعادة إنشاء الجلسة',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  if (shouldRecreate == true) {
+    await _recreateSession();
+  } else {
+    _decryptionFailureCount = 0;
+    _hasShownDecryptionDialog = false;
+  }
+}
+
+  
   Future<void> _initializeChat() async {
     setState(() => _isLoading = true);
     

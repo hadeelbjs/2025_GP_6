@@ -14,7 +14,7 @@ import 'features/massaging/screens/chat_list_screen.dart';
 import 'features/account/screens/manage_account_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/crypto/signal_protocol_manager.dart';
-
+import 'dart:convert';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
@@ -158,17 +158,43 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   /// تهيئة التشفير للمستخدم المسجل دخول
-  Future<void> _initializeEncryption() async {
-  final signalManager = SignalProtocolManager();
-  await signalManager.initialize();
-  
-  // ✅ الفحص الصحيح
-  if (await signalManager.hasKeys()) {
-    print('✅ Keys exist - only refreshing PreKeys');
-    await signalManager.checkAndRefreshPreKeys();
-  } else {
-    print('🆕 Generating new keys');
-    await signalManager.generateAndUploadKeys();
+Future<void> _initializeEncryption() async {
+  try {
+    print('🔐 جاري تهيئة التشفير...');
+
+    
+    
+    // ✅ 1. جلب userId أولاً
+    final storage = const FlutterSecureStorage();
+    final userDataStr = await storage.read(key: 'user_data');
+    
+    if (userDataStr == null) {
+      print('❌ لا توجد بيانات مستخدم');
+      return;
+    }
+    
+    final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
+    final userId = userData['id'] as String;
+    
+    print('👤 User ID: $userId');
+    
+    // ✅ 2. تهيئة SignalProtocolManager
+    final signalManager = SignalProtocolManager();
+    await signalManager.initialize();
+    
+    // ✅ 3. الفحص باستخدام userId
+    final userIdentityKey = await storage.read(key: 'identity_key_$userId');
+    
+    if (userIdentityKey != null) {
+      print('✅ المفاتيح موجودة للمستخدم $userId');
+      await signalManager.checkAndRefreshPreKeys();
+    } else {
+      print('🆕 توليد مفاتيح جديدة للمستخدم $userId');
+      await signalManager.generateAndUploadKeys();
+    }
+    
+  } catch (e) {
+    print('❌ خطأ في تهيئة التشفير: $e');
   }
 }
 

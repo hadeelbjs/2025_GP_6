@@ -10,8 +10,10 @@ class MyIdentityKeyStore extends IdentityKeyStore {
   final FlutterSecureStorage _storage;
   IdentityKeyPair? _identityKeyPair;
   int? _localRegistrationId;
+  final String? _userId;
   
-  MyIdentityKeyStore(this._storage);
+  MyIdentityKeyStore(this._storage, {String? userId}) : _userId = userId;
+
 
   Future<void> initialize() async {
     final identityKeyData = await _storage.read(key: 'identity_key');
@@ -216,5 +218,105 @@ class MyIdentityKeyStore extends IdentityKeyStore {
     } catch (e) {
       print('❌ Error clearing Identity Store: $e');
     }
+  }
+
+  /// دالة مساعدة لإنشاء مفتاح فريد لكل مستخدم
+  String _getStorageKey(String key) {
+    if (_userId != null) {
+      return '${_userId}_$key';
+    }
+    return key;
+  }
+  
+  /// دالة محسّنة لحفظ IdentityKeyPair مع دعم userId
+  Future<void> saveIdentityKeyPairWithUserId(IdentityKeyPair keyPair) async {
+    _identityKeyPair = keyPair;
+    final data = jsonEncode({
+      'public': base64Encode(keyPair.getPublicKey().serialize()),
+      'private': base64Encode(keyPair.getPrivateKey().serialize()),
+    });
+    await _storage.write(
+      key: _getStorageKey('identity_key'),
+      value: data,
+    );
+    print('✅ Identity key pair saved for user: $_userId');
+  }
+  
+  /// دالة محسّنة لحفظ RegistrationId مع دعم userId
+  Future<void> saveRegistrationIdWithUserId(int registrationId) async {
+    _localRegistrationId = registrationId;
+    await _storage.write(
+      key: _getStorageKey('registration_id'),
+      value: registrationId.toString(),
+    );
+    print('✅ Registration ID saved for user: $_userId');
+  }
+  
+  /// دالة محسّنة للتهيئة مع دعم userId
+  Future<void> initializeWithUserId() async {
+    final identityKeyData = await _storage.read(
+      key: _getStorageKey('identity_key')
+    );
+    
+    if (identityKeyData != null) {
+      try {
+        final data = jsonDecode(identityKeyData);
+        _identityKeyPair = IdentityKeyPair(
+          IdentityKey.fromBytes(base64Decode(data['public']), 0),
+          DjbECPrivateKey(base64Decode(data['private'])),
+        );
+        print('✅ Identity key pair loaded for user: $_userId');
+      } catch (e) {
+        print('❌ Error loading identity key pair: $e');
+      }
+    }
+    
+    final regId = await _storage.read(
+      key: _getStorageKey('registration_id')
+    );
+    
+    if (regId != null) {
+      _localRegistrationId = int.parse(regId);
+      print('✅ Registration ID loaded for user $_userId: $_localRegistrationId');
+    }
+  }
+  
+  /// دالة محسّنة لحذف المفاتيح مع دعم userId
+  Future<void> clearAllWithUserId() async {
+    try {
+      _identityKeyPair = null;
+      _localRegistrationId = null;
+      
+      await _storage.delete(key: _getStorageKey('identity_key'));
+      await _storage.delete(key: _getStorageKey('registration_id'));
+      
+      // حذف جميع Identity Keys المحفوظة لهذا المستخدم
+      final allKeys = await _storage.readAll();
+      final prefix = _userId != null ? '${_userId}_identity_' : 'identity_';
+      
+      for (var key in allKeys.keys) {
+        if (key.startsWith(prefix)) {
+          await _storage.delete(key: key);
+        }
+      }
+      
+      print('🗑️ Identity Store cleared for user: $_userId');
+    } catch (e) {
+      print('❌ Error clearing Identity Store: $e');
+    }
+  }
+  
+  /// دالة للحصول على userId الحالي
+  String? get currentUserId => _userId;
+  
+  /// دالة للتحقق من وجود مفاتيح لهذا المستخدم
+  Future<bool> hasKeysForUser() async {
+    final identityKey = await _storage.read(
+      key: _getStorageKey('identity_key')
+    );
+    final regId = await _storage.read(
+      key: _getStorageKey('registration_id')
+    );
+    return identityKey != null && regId != null;
   }
 }

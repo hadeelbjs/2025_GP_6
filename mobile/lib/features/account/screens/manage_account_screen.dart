@@ -1769,14 +1769,8 @@ Widget _buildDeleteItem(String text) {
       }
 
 
-String baseUrl;
-    if (Platform.isAndroid) {
-      baseUrl = 'http://10.0.2.2:3000';
-    } else if (Platform.isIOS) {
-      baseUrl = 'http://localhost:3000';
-    } else {
-      baseUrl = 'http://localhost:3000';
-    }
+    String baseUrl = 'https://waseed-team-production.up.railway.app';
+  
 
       final response = await http.delete(
         Uri.parse('$baseUrl/api/user/delete-account'),

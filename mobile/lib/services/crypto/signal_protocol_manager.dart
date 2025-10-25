@@ -23,15 +23,32 @@ class SignalProtocolManager {
   late MySessionStore _sessionStore;
   
   bool _isInitialized = false;
+  String? _currentUserId;
 
-  Future<void> initialize() async {
-    if (_isInitialized){
-      return;} 
+  // ===================================
+  // 🔑 تهيئة مع معرّف المستخدم
+  // ===================================
+  Future<void> initialize({String? userId}) async {
+    // إذا لم يتم تمرير userId، نحاول جلبه من التخزين
+    if (userId == null) {
+      final userData = await _storage.read(key: 'user_data');
+      if (userData != null) {
+        userId = jsonDecode(userData)['id'];
+      }
+    }
 
-    _identityStore = MyIdentityKeyStore(_storage);
-    _preKeyStore = MyPreKeyStore(_storage);
-    _signedPreKeyStore = MySignedPreKeyStore(_storage);
-    _sessionStore = MySessionStore(_storage);
+    // إذا تغير المستخدم، نحتاج إعادة تهيئة
+    if (_isInitialized && _currentUserId == userId) {
+      return;
+    }
+
+    _currentUserId = userId;
+
+    // ✅ تمرير userId للـ Stores لاستخدامه كـ prefix في المفاتيح
+    _identityStore = MyIdentityKeyStore(_storage, userId: userId);
+    _preKeyStore = MyPreKeyStore(_storage, userId: userId);
+    _signedPreKeyStore = MySignedPreKeyStore(_storage, userId: userId);
+    _sessionStore = MySessionStore(_storage, userId: userId);
 
     await _identityStore.initialize();
     await _preKeyStore.initialize();
@@ -39,98 +56,342 @@ class SignalProtocolManager {
     await _sessionStore.initialize();
 
     _isInitialized = true;
-    
   }
 
-  // توليد المفاتيح ورفعها للسيرفر (عند التسجيل)
-  Future<bool> generateAndUploadKeys() async {
+  // ===================================
+  // 📊 التحقق من حالة المفاتيح
+  // ===================================
+  Future<KeysStatus> checkKeysStatus() async {
     try {
       await initialize();
 
-      final identityKeyPair = generateIdentityKeyPair();
-      final registrationId = generateRegistrationId(false);
-
-      await _identityStore.saveIdentityKeyPair(identityKeyPair);
-      await _identityStore.saveRegistrationId(registrationId);
-
-      await _storage.write(
-        key: 'registration_id',
-        value: registrationId.toString(),
-      );
-
-      final preKeys = generatePreKeys(0, 100);
-      for (var preKey in preKeys) {
-        await _preKeyStore.storePreKey(preKey.id, preKey);
-      }
-
-      final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
-      await _signedPreKeyStore.storeSignedPreKey(
-        signedPreKey.id,
-        signedPreKey,
-      );
-
-      // تجهيز البيانات للرفع
-      final bundle = {
-        'registrationId': registrationId,
-        'identityKey': base64Encode(
-          identityKeyPair.getPublicKey().serialize()
-        ),
-        'signedPreKey': {
-          'keyId': signedPreKey.id,
-          'publicKey': base64Encode(
-            signedPreKey.getKeyPair().publicKey.serialize()
-          ),
-          'signature': base64Encode(signedPreKey.signature),
-        },
-        'preKeys': preKeys.map((pk) => {
-          'keyId': pk.id,
-          'publicKey': base64Encode(
-            pk.getKeyPair().publicKey.serialize()
-          ),
-        }).toList(),
-      };
-
-      // رفع المفاتيح للسيرفر
-      final result = await _apiService.uploadPreKeyBundle(bundle);
+      // 1. التحقق من وجود مفاتيح محلية
+      final hasLocalKeys = await hasKeys();
       
-      if (!result['success']) {
-        throw Exception(result['message']);
+      if (!hasLocalKeys) {
+        return KeysStatus(
+          hasLocalKeys: false,
+          needsGeneration: true,
+          needsSync: false,
+        );
       }
 
-      return true;
+      // 2. جلب نسخة المفاتيح من السيرفر
+      final serverVersion = await _getServerKeysVersion();
+      final localVersion = await _getLocalKeysVersion();
+
+      // 3. المقارنة
+      final needsSync = serverVersion != null && 
+                        localVersion != null && 
+                        serverVersion != localVersion;
+
+      return KeysStatus(
+        hasLocalKeys: true,
+        needsGeneration: false,
+        needsSync: needsSync,
+        localVersion: localVersion,
+        serverVersion: serverVersion,
+      );
+
     } catch (e) {
-      print('Error generating keys: $e');
+      print('❌ Error checking keys status: $e');
+      return KeysStatus(
+        hasLocalKeys: false,
+        needsGeneration: true,
+        needsSync: false,
+      );
+    }
+  }
+
+  // ===================================
+  // 🔄 مزامنة المفاتيح مع السيرفر
+  // ===================================
+  Future<bool> syncKeysWithServer() async {
+    try {
+      print('🔄 Syncing keys with server...');
+      
+      // 1. حذف المفاتيح المحلية القديمة
+      await clearLocalKeys();
+      
+      // 2. توليد مفاتيح جديدة
+      final success = await generateAndUploadKeys();
+      
+      if (success) {
+        print('✅ Keys synced successfully');
+      }
+      
+      return success;
+    } catch (e) {
+      print('❌ Error syncing keys: $e');
       return false;
     }
   }
 
-  // إنشاء Session مع مستخدم آخر
-  Future<bool> createSession(String recipientId) async {
+  // ===================================
+  // 🆕 توليد ورفع المفاتيح
+  // ===================================
+  Future<bool> generateAndUploadKeys() async {
+  try {
+    await initialize();
     
+    // ✅ 1. جلب userId في البداية
+    final userId = await _getCurrentUserId();
+    print('🔑 Generating keys for user: $userId');
+
+    // 2. توليد المفاتيح
+    final identityKeyPair = generateIdentityKeyPair();
+    final registrationId = generateRegistrationId(false);
+    final preKeys = generatePreKeys(1, 100);
+    final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
+
+    // 3. حفظ النسخة المحلية (التاريخ كـ version)
+    final version = DateTime.now().millisecondsSinceEpoch;
+    await _saveLocalKeysVersion(version, userId);  // ✅ إضافة userId
+
+    // 4. تجهيز البيانات للرفع
+    final bundle = {
+      'registrationId': registrationId,
+      'identityKey': base64Encode(
+        identityKeyPair.getPublicKey().serialize()
+      ),
+      'signedPreKey': {
+        'keyId': signedPreKey.id,
+        'publicKey': base64Encode(
+          signedPreKey.getKeyPair().publicKey.serialize()
+        ),
+        'signature': base64Encode(signedPreKey.signature),
+      },
+      'preKeys': preKeys.map((pk) => {
+        'keyId': pk.id,
+        'publicKey': base64Encode(
+          pk.getKeyPair().publicKey.serialize()
+        ),
+      }).toList(),
+      'version': version,
+    };
+
+    // 5. رفع المفاتيح للسيرفر
+    print('📤 Uploading keys to server...');
+    final result = await _apiService.uploadPreKeyBundle(bundle);
+
+    if (!result['success']) {
+      throw Exception(result['message']);
+    }
+    
+    print('✅ Keys uploaded to server successfully');
+
+    // ✅ 6. حفظ محلياً مع userId
+    await _identityStore.saveIdentityKeyPair(identityKeyPair);
+    await _identityStore.saveRegistrationId(registrationId);
+    
+    // ✅ حفظ registration_id مع userId
+    await _storage.write(
+      key: 'registration_id_$userId',  // ✅ مع userId
+      value: registrationId.toString(),
+    );
+    
+    // ✅ حفظ identity_key_pair مع userId (للفحص السريع)
+    await _storage.write(
+      key: 'identity_key_$userId',  // ✅ مع userId
+      value: base64Encode(identityKeyPair.serialize()),
+    );
+
+    // 7. حفظ PreKeys
+    for (var preKey in preKeys) {
+      await _preKeyStore.storePreKey(preKey.id, preKey);
+    }
+
+    // 8. حفظ SignedPreKey
+    await _signedPreKeyStore.storeSignedPreKey(
+      signedPreKey.id,
+      signedPreKey,
+    );
+
+    print('✅ Keys generated and uploaded successfully for user: $userId');
+    return true;
+    
+  } catch (e) {
+    print('❌ Error generating keys: $e');
+    return false;
+  }
+}
+
+
+// ========================================
+// ✅ دالة مساعدة: جلب userId
+// ========================================
+
+Future<String> _getCurrentUserId() async {
+  try {
+    final userDataStr = await _storage.read(key: 'user_data');
+    
+    if (userDataStr == null) {
+      throw Exception('User not logged in - no user_data found');
+    }
+    
+    final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
+    final userId = userData['id'];
+    
+    if (userId == null) {
+      throw Exception('User ID not found in user_data');
+    }
+    
+    return userId as String;
+    
+  } catch (e) {
+    print('❌ Error getting current user ID: $e');
+    rethrow;
+  }
+}
+
+
+  // ===================================
+  // 🔓 فك تشفير مع معالجة الأخطاء
+  // ===================================
+  Future<DecryptionResult> decryptMessageSafe(
+    String senderId,
+    int type,
+    String body,
+  ) async {
+    try {
+      final plaintext = await decryptMessage(senderId, type, body);
+      
+      if (plaintext != null) {
+        return DecryptionResult(
+          success: true,
+          message: plaintext,
+        );
+      }
+      
+      // فشل فك التشفير - قد تكون المفاتيح قديمة
+      return DecryptionResult(
+        success: false,
+        needsKeySync: true,
+        error: 'Failed to decrypt - keys may be outdated',
+      );
+      
+    } catch (e) {
+      // التحقق من نوع الخطأ
+      if (e.toString().contains('InvalidKeyException') || 
+          e.toString().contains('InvalidMessageException') ||
+          e.toString().contains('DuplicateMessageException')) {
+        
+        print('⚠️ Decryption failed - Keys may need sync');
+        
+        return DecryptionResult(
+          success: false,
+          needsKeySync: true,
+          error: 'Decryption failed: ${e.toString()}',
+        );
+      }
+      
+      return DecryptionResult(
+        success: false,
+        needsKeySync: false,
+        error: e.toString(),
+      );
+    }
+  }
+
+  // ===================================
+  // 🔐 فك التشفير (الطريقة الأصلية)
+  // ===================================
+  Future<String?> decryptMessage(
+    String senderId,
+    int type,
+    String body,
+  ) async {
+    try {
+      final address = SignalProtocolAddress(senderId, 1);
+      
+      final cipher = SessionCipher(
+        _sessionStore, 
+        _preKeyStore, 
+        _signedPreKeyStore, 
+        _identityStore, 
+        address
+      );
+      
+      Uint8List plaintext;
+      final bodyBytes = base64Decode(body);
+      
+      if (type == CiphertextMessage.prekeyType) {
+        final message = PreKeySignalMessage(bodyBytes);
+        plaintext = await cipher.decrypt(message);
+      } else if (type == CiphertextMessage.whisperType) {
+        final message = SignalMessage.fromSerialized(bodyBytes);
+        plaintext = await cipher.decryptFromSignal(message);
+      } else {
+        throw Exception('Unknown message type: $type');
+      }
+      
+      return utf8.decode(plaintext);
+    } catch (e) {
+      print('❌ Decryption error: $e');
+      return null;
+    }
+  }
+
+  // ===================================
+  // 🔒 تشفير رسالة
+  // ===================================
+  Future<Map<String, dynamic>?> encryptMessage(
+    String recipientId,
+    String message,
+  ) async {
+    try {
+      final address = SignalProtocolAddress(recipientId, 1);
+      
+      if (!await _sessionStore.containsSession(address)) {
+        throw Exception('No session exists with user');
+      }
+
+      final cipher = SessionCipher(
+        _sessionStore, 
+        _preKeyStore, 
+        _signedPreKeyStore, 
+        _identityStore, 
+        address
+      );
+      
+      final ciphertext = await cipher.encrypt(
+        Uint8List.fromList(utf8.encode(message))
+      );
+      
+      return {
+        'type': ciphertext.getType(),
+        'body': base64Encode(ciphertext.serialize()),
+      };
+    } catch (e) {
+      print('❌ Encryption error: $e');
+      return null;
+    }
+  }
+
+  // ===================================
+  // 🤝 إنشاء Session
+  // ===================================
+  Future<bool> createSession(String recipientId) async {
     try {
       await initialize();
 
-       final userData = await FlutterSecureStorage().read(key: 'user_data');
-    if (userData != null) {
-      final currentUserId = jsonDecode(userData)['id'];
-      if (recipientId == currentUserId) {
-        return false;
+      final userData = await _storage.read(key: 'user_data');
+      if (userData != null) {
+        final currentUserId = jsonDecode(userData)['id'];
+        if (recipientId == currentUserId) {
+          return false;
+        }
       }
-    }
-    
 
-    // جلب PreKey Bundle من السيرفر
-    final response = await _apiService.getPreKeyBundle(recipientId);
-    
-    if (!response['success']) {
-      throw Exception(response['message']);
-    }
+      final response = await _apiService.getPreKeyBundle(recipientId);
+      
+      if (!response['success']) {
+        throw Exception(response['message']);
+      }
 
-    final bundleData = response['bundle'];
-      // بناء SignalProtocolAddress
+      final bundleData = response['bundle'];
       final recipientAddress = SignalProtocolAddress(recipientId, 1);
       
-      // معالجة PreKey (اختياري) لأنه يستخدم مرة واحدة فقط لإنشاء الجلسة
       ECPublicKey? preKeyPublic;
       int? preKeyId;
       
@@ -140,21 +401,17 @@ class SignalProtocolManager {
         preKeyId = bundleData['preKey']['keyId'];
       }
       
-      // معالجة SignedPreKey (إجباري) لأنه يستخدم للتحقق من المفاتيح
       final signedPreKeyBytes = base64Decode(
         bundleData['signedPreKey']['publicKey']
       );
       final signedPreKeyPublic = Curve.decodePoint(signedPreKeyBytes, 0);
       
-      // معالجة IdentityKey (إجباري) لأنه يمثل هوية المستخدم
       final identityKeyBytes = base64Decode(bundleData['identityKey']);
       final identityKeyPublic = Curve.decodePoint(identityKeyBytes, 0);
       
-      
-      // بناء PreKeyBundle
       final bundle = PreKeyBundle(
         bundleData['registrationId'],
-        1, // deviceId fixed to 1 since we don't support multiple devices
+        1,
         preKeyId,
         preKeyPublic,
         bundleData['signedPreKey']['keyId'],
@@ -163,7 +420,6 @@ class SignalProtocolManager {
         IdentityKey(identityKeyPublic),
       );
       
-      // إنشاء SessionBuilder
       final sessionBuilder = SessionBuilder(
         _sessionStore,
         _preKeyStore,
@@ -172,127 +428,119 @@ class SignalProtocolManager {
         recipientAddress,
       );
 
-      // معالجة Bundle وإنشاء Session
       await sessionBuilder.processPreKeyBundle(bundle);
       
-      print('Session created successfully with recipent : $recipientId');
+      print('✅ Session created successfully with recipient: $recipientId');
       return true;
       
     } catch (e) {
-      if (e.toString().contains('InvalidKeyException')) {
-        // إعادة تهيئة Signal Protocol
-        await SignalProtocolManager().initialize();
-      }
-    
-      print('Error creating session: $e');
+      print('❌ Error creating session: $e');
       return false;
     }
   }
 
-  // تشفير رسالة
-  Future<Map<String, dynamic>?> encryptMessage(
-    String recipientId,
-    String message,
-  ) async {
-    try {
-      final address = SignalProtocolAddress(recipientId, 1);
-      
-      // التحقق من وجود Session
-      if (!await _sessionStore.containsSession(address)) {
-        throw Exception('No session exists with user');
-      }
-
-      final cipher = SessionCipher(_sessionStore, _preKeyStore, 
-                                   _signedPreKeyStore, _identityStore, address);
-      
-      final ciphertext = await cipher.encrypt(Uint8List.fromList(utf8.encode(message)));
-      
-      return {
-        'type': ciphertext.getType(),
-        'body': base64Encode(ciphertext.serialize()),
-      };
-    } catch (e) {
-      print('Encryption error: $e');
-      return null;
-    }
-  }
-
-  // فك تشفير رسالة
-  Future<String?> decryptMessage(
-    String senderId,
-    int type,
-    String body,
-  ) async {
+  // ===================================
+  // 🧹 حذف المفاتيح المحلية فقط
+  // ===================================
+  Future<void> clearLocalKeys() async {
   try {
-    final address = SignalProtocolAddress(senderId, 1);
+    await _identityStore.clearAll();
+    await _preKeyStore.clearAll();
+    await _signedPreKeyStore.clearAll();
+    await _sessionStore.clearAll();
     
-    final cipher = SessionCipher(
-      _sessionStore, 
-      _preKeyStore, 
-      _signedPreKeyStore, 
-      _identityStore, 
-      address
-    );
+    // ✅ أضف هذا السطر
+    await _storage.delete(key: 'identity_key_$_currentUserId');
     
-    Uint8List plaintext;
-    final bodyBytes = base64Decode(body);
+    // الموجود حالياً
+    await _storage.delete(key: 'registration_id_$_currentUserId');
+    await _storage.delete(key: 'keys_version_$_currentUserId');
     
-    if (type == CiphertextMessage.prekeyType) {
-      final message = PreKeySignalMessage(bodyBytes);
-      plaintext = await cipher.decrypt(message);
-    } else if (type == CiphertextMessage.whisperType) {
-      final message = SignalMessage.fromSerialized(bodyBytes);
-      plaintext = await cipher.decryptFromSignal(message);
-    } else {
-      throw Exception('Unknown message type: $type');
-    }
+    _isInitialized = false;
     
-    return utf8.decode(plaintext);
+    print('✅ Local keys cleared');
   } catch (e) {
-    print('Decryption error: $e');
-    return null;
+    print('❌ Error clearing local keys: $e');
+    rethrow;
   }
 }
-  // التحقق من وجود Session
-  Future<bool> hasSession(String userId) async {
-    final address = SignalProtocolAddress(userId, 1);
-    return await _sessionStore.containsSession(address);
+  // ===================================
+  // 🗑️ حذف كل شيء (محلي + سيرفر)
+  // ===================================
+  Future<void> clearAllKeys() async {
+    try {
+      await clearLocalKeys();
+      
+      // حذف من السيرفر أيضاً إذا لزم الأمر
+      // await _apiService.deletePreKeyBundle();
+      
+      print('✅ All keys cleared');
+    } catch (e) {
+      print('❌ Error clearing all keys: $e');
+      rethrow;
+    }
   }
 
-  // حذف Session
-  Future<void> deleteSession(String userId) async {
-    final address = SignalProtocolAddress(userId, 1);
-    await _sessionStore.deleteSession(address);
+  // ===================================
+  // ✅ التحقق من وجود مفاتيح
+  // ===================================
+  Future<bool> hasKeys() async {
+    try {
+      await initialize();
+      final identityKeyPair = await _identityStore.getIdentityKeyPair();
+      final regId = await _identityStore.getLocalRegistrationId();
+      return identityKeyPair != null && regId != null;
+    } catch (e) {
+      return false;
+    }
   }
 
-  // التحقق من عدد PreKeys المتبقية
+  Future<bool> hasKeysForCurrentUser() async {
+  try {
+    final userId = await _getCurrentUserId();
+    final identityKey = await _storage.read(key: 'identity_key_$userId');
+    
+    if (identityKey != null) {
+      print('✅ Keys exist for user: $userId');
+      return true;
+    } else {
+      print('❌ No keys found for user: $userId');
+      return false;
+    }
+  } catch (e) {
+    print('❌ Error checking keys: $e');
+    return false;
+  }
+}
+
+  // ===================================
+  // 🔢 التحقق من عدد PreKeys
+  // ===================================
   Future<void> checkAndRefreshPreKeys() async {
     try {
       final result = await _apiService.checkPreKeysCount();
       
       if (result['success']) {
         final count = result['count'] ?? 0;
-        print('Available PreKeys: $count');
+        print('📊 Available PreKeys: $count');
         
         if (count < 20) {
-          print('Low on PreKeys ($count), generating more...');
-          await _generateAndUploadMorePreKeys();
+          print('⚠️ Low on PreKeys ($count), generating more...');
+          await uploadAdditionalPreKeysOnly();
         }
-      } else {
-        print('Failed to check PreKeys count: ${result['message']}');
       }
     } catch (e) {
-      print('Error checking PreKeys: $e');
+      print('❌ Error checking PreKeys: $e');
     }
   }
 
-
-  // توليد ورفع مفاتيح إضافية 
-  Future<void> _generateAndUploadMorePreKeys() async {
+  // ===================================
+  // ➕ رفع PreKeys إضافية فقط
+  // ===================================
+  Future<void> uploadAdditionalPreKeysOnly() async {
     try {
-      final identityKeyPair = await _identityStore.getIdentityKeyPair();
+      await initialize();
       
-      // توليد 100 مفتاح جديد بدءاً من ID عالي لتجنب التضارب
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final startId = timestamp % 100000;
       final newPreKeys = generatePreKeys(startId, 100);
@@ -300,7 +548,7 @@ class SignalProtocolManager {
       for (var preKey in newPreKeys) {
         await _preKeyStore.storePreKey(preKey.id, preKey);
       }
-
+      
       final bundle = {
         'preKeys': newPreKeys.map((pk) => {
           'keyId': pk.id,
@@ -309,99 +557,97 @@ class SignalProtocolManager {
           ),
         }).toList(),
       };
-
+      
       final result = await _apiService.uploadPreKeyBundle(bundle);
       
       if (result['success']) {
-        print('Uploaded ${newPreKeys.length} new PreKeys successfully');
-        print('Total keys: ${result['totalKeys']}, Available: ${result['availableKeys']}');
-      } else {
-        print('Failed to upload PreKeys: ${result['message']}');
+        print('✅ Uploaded ${newPreKeys.length} additional PreKeys');
       }
     } catch (e) {
-      print('Error generating more PreKeys: $e');
-    }
-  }
-
-  Future<void> clearAllKeys() async {
-    try {
-      _isInitialized = false;
-      // 1. حذف جميع مفاتيح Identity
-      await _identityStore.clearAll();
-      
-      // 2. حذف جميع PreKeys
-      await _preKeyStore.clearAll();
-      
-      // 3. حذف جميع Signed PreKeys
-      await _signedPreKeyStore.clearAll();
-      
-      // 4. حذف جميع Sessions
-      await _sessionStore.clearAll();
-      
-      // 5. حذف Registration ID
-      await _storage.delete(key: 'registration_id');
-      
-      // 6. إعادة تعيين حالة التهيئة
-      _isInitialized = false;
-      
-      print('All Signal Protocol data cleared successfully');
-    } catch (e) {
-      print('Error clearing Signal data: $e');
+      print('❌ Error uploading additional PreKeys: $e');
       rethrow;
     }
   }
 
-  // دالة للتحقق من وجود مفاتيح
-  Future<bool> hasKeys() async {
+  // ===================================
+  // 📝 إدارة نسخة المفاتيح
+  // ===================================
+  Future<void> _saveLocalKeysVersion(int version, String userId) async {
   try {
-    await initialize();
-    final identityKeyPair = await _identityStore.getIdentityKeyPair();
-    final regId = await _identityStore.getLocalRegistrationId();
-    return identityKeyPair != null && regId != null;
+    await _storage.write(
+      key: 'keys_version_$userId',  // ✅ مع userId
+      value: version.toString(),
+    );
+    print('💾 Saved keys version $version for user: $userId');
   } catch (e) {
-    return false;
+    print('❌ Error saving keys version: $e');
   }
 }
 
-  Future<void> uploadAdditionalPreKeysOnly() async {
-  try {
-    await initialize();
-    
-    // ✅ Use EXISTING identity key pair
-    final identityKeyPair = await _identityStore.getIdentityKeyPair();
-    final registrationId = await _identityStore.getLocalRegistrationId();
-    
-    // Generate new PreKeys
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final startId = timestamp % 100000;
-    final newPreKeys = generatePreKeys(startId, 100);
-    
-    // Store locally
-    for (var preKey in newPreKeys) {
-      await _preKeyStore.storePreKey(preKey.id, preKey);
-    }
-    
-    // Upload to server (without IdentityKey or SignedPreKey)
-    final bundle = {
-      'preKeys': newPreKeys.map((pk) => {
-        'keyId': pk.id,
-        'publicKey': base64Encode(
-          pk.getKeyPair().publicKey.serialize()
-        ),
-      }).toList(),
-    };
-    
-    final result = await _apiService.uploadPreKeyBundle(bundle);
-    
-    if (result['success']) {
-      print('✅ Uploaded ${newPreKeys.length} additional PreKeys');
-    } else {
-      print('❌ Failed to upload additional PreKeys: ${result['message']}');
-    }
-    
-  } catch (e) {
-    print('❌ Error uploading additional PreKeys: $e');
-    rethrow;
+  Future<int?> _getLocalKeysVersion() async {
+    final versionStr = await _storage.read(
+      key: 'keys_version_${_currentUserId}'
+    );
+    return versionStr != null ? int.tryParse(versionStr) : null;
   }
+
+  Future<int?> _getServerKeysVersion() async {
+    try {
+      final result = await _apiService.getKeysVersion();
+      if (result['success']) {
+        return result['version'];
+      }
+    } catch (e) {
+      print('❌ Error getting server version: $e');
+    }
+    return null;
+  }
+
+  // ===================================
+  // 🔍 دوال مساعدة أخرى
+  // ===================================
+  Future<bool> hasSession(String userId) async {
+    final address = SignalProtocolAddress(userId, 1);
+    return await _sessionStore.containsSession(address);
+  }
+
+  Future<void> deleteSession(String userId) async {
+    final address = SignalProtocolAddress(userId, 1);
+    await _sessionStore.deleteSession(address);
+  }
+
+  String? get currentUserId => _currentUserId;
 }
+
+// ===================================
+// 📊 Models للنتائج
+// ===================================
+class KeysStatus {
+  final bool hasLocalKeys;
+  final bool needsGeneration;
+  final bool needsSync;
+  final int? localVersion;
+  final int? serverVersion;
+
+  KeysStatus({
+    required this.hasLocalKeys,
+    required this.needsGeneration,
+    required this.needsSync,
+    this.localVersion,
+    this.serverVersion,
+  });
+}
+
+class DecryptionResult {
+  final bool success;
+  final String? message;
+  final bool needsKeySync;
+  final String? error;
+
+  DecryptionResult({
+    required this.success,
+    this.message,
+    this.needsKeySync = false,
+    this.error,
+  });
 }

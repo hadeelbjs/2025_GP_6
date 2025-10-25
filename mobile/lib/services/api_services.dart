@@ -508,7 +508,6 @@ Future<Map<String, dynamic>> skipPhoneVerification({
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'user_data');
     await _storage.delete(key: 'refresh_data');
-    await SignalProtocolManager().clearAllKeys();
 
     // قطع اتصال الـ Socket عند تسجيل الخروج
     final socketService = SocketService();
@@ -975,69 +974,6 @@ Future<Map<String, dynamic>> biometricLogin(String email) async {
 }
 
 // ============================================
-// Signal Protocol - PreKey Management
-// ============================================
-
-// رفع PreKey Bundle
-Future<Map<String, dynamic>> uploadPreKeyBundle(
-  Map<String, dynamic> bundle,
-) async {
-  try {
-    final headers = await _authHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/prekeys/upload'),
-      headers: headers,
-      body: jsonEncode(bundle),
-    ).timeout(const Duration(seconds: 10));
-
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'فشل رفع المفاتيح: $e',
-    };
-  }
-}
-
-// جلب PreKey Bundle لمستخدم
-Future<Map<String, dynamic>> getPreKeyBundle(String userId) async {
-  try {
-    final headers = await _authHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl/prekeys/$userId'),
-      headers: headers,
-    ).timeout(const Duration(seconds: 10));
-
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'فشل جلب المفاتيح: $e',
-    };
-  }
-}
-
-// التحقق من عدد PreKeys المتبقية
-Future<Map<String, dynamic>> checkPreKeysCount() async {
-  try {
-    final headers = await _authHeaders();
-    final response = await http.get(
-      Uri.parse('$baseUrl/prekeys/count/remaining'),
-      headers: headers,
-    ).timeout(const Duration(seconds: 10));
-
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {
-      'success': false,
-      'message': 'فشل التحقق من المفاتيح: $e',
-    };
-  }
-}
-
-
-
-// ============================================
 // Messages - الرسائل المشفرة
 // ============================================
 
@@ -1121,5 +1057,225 @@ Future<Map<String, dynamic>> getConversation(String userId) async {
     };
   }
 }
+
+Future<Map<String, dynamic>> getKeysVersion() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/prekeys/version/current'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'version': data['version'],
+          'exists': data['exists'],
+          'lastUpdate': data['lastUpdate'],
+        };
+      }
+
+      return {
+        'success': false,
+        'message': 'Failed to get version',
+      };
+    } catch (e) {
+      print('❌ Error getting keys version: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  // ===================================
+  // 🔄 التحقق من حالة المزامنة
+  // ===================================
+  Future<Map<String, dynamic>> checkSyncStatus(int localVersion) async {
+    try {
+      final serverResult = await getKeysVersion();
+      
+      if (!serverResult['success']) {
+        return serverResult;
+      }
+
+      final serverVersion = serverResult['version'];
+      
+      if (serverVersion == null) {
+        return {
+          'success': true,
+          'needsSync': false,
+          'needsGeneration': true,
+          'message': 'No keys on server',
+        };
+      }
+
+      final needsSync = serverVersion != localVersion;
+
+      return {
+        'success': true,
+        'needsSync': needsSync,
+        'needsGeneration': false,
+        'serverVersion': serverVersion,
+        'localVersion': localVersion,
+        'message': needsSync 
+          ? 'Keys are out of sync' 
+          : 'Keys are synchronized',
+      };
+    } catch (e) {
+      print('❌ Error checking sync status: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  // ===================================
+  // 🔑 رفع Bundle كامل مع النسخة
+  // ===================================
+  Future<Map<String, dynamic>> uploadPreKeyBundle(
+    Map<String, dynamic> bundle,
+  ) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/prekeys/upload'),
+        headers: await _getAuthHeaders(),
+        body: jsonEncode(bundle),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'],
+          'version': data['version'], // ✅ استقبال النسخة
+          'totalKeys': data['totalKeys'],
+          'availableKeys': data['availableKeys'],
+        };
+      }
+
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Upload failed',
+      };
+    } catch (e) {
+      print('❌ Error uploading bundle: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  // ===================================
+  // 📥 جلب PreKey Bundle
+  // ===================================
+  Future<Map<String, dynamic>> getPreKeyBundle(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/prekeys/$userId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'bundle': data['bundle'],
+        };
+      }
+
+      final data = jsonDecode(response.body);
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Failed to get bundle',
+      };
+    } catch (e) {
+      print('❌ Error getting bundle: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  // ===================================
+  // 📊 التحقق من عدد PreKeys
+  // ===================================
+  Future<Map<String, dynamic>> checkPreKeysCount() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/prekeys/count/remaining'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'count': data['count'],
+          'total': data['total'],
+          'version': data['version'],
+          'needsRefresh': data['needsRefresh'],
+        };
+      }
+
+      return {
+        'success': false,
+        'message': 'Failed to check count',
+      };
+    } catch (e) {
+      print('❌ Error checking PreKeys count: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  // ===================================
+  // 🗑️ حذف Bundle (عند حذف الحساب)
+  // ===================================
+  Future<Map<String, dynamic>> deletePreKeyBundle() async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/prekeys/delete-bundle'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': 'Bundle deleted successfully',
+        };
+      }
+
+      final data = jsonDecode(response.body);
+      return {
+        'success': false,
+        'message': data['message'] ?? 'Failed to delete bundle',
+      };
+    } catch (e) {
+      print('❌ Error deleting bundle: $e');
+      return {
+        'success': false,
+        'message': e.toString(),
+      };
+    }
+  }
+
+  // ===================================
+  // 🔧 Helper: الحصول على Headers مع التوكن
+  // ===================================
+  Future<Map<String, String>> _getAuthHeaders() async {
+    final token = await FlutterSecureStorage().read(key: 'auth_token');
+    
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
 
 }

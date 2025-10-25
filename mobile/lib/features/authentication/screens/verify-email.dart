@@ -6,7 +6,7 @@ import '../../../services/crypto/signal_protocol_manager.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../services/messaging_service.dart';
-
+import 'dart:convert';
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
   final String? fullName;
@@ -152,35 +152,49 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   }
 
   // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
-  Future<void> _initializeEncryption() async {
-    try {
-      print('🔐 جاري التحقق من مفاتيح التشفير...');
-      
-      final signalManager = SignalProtocolManager();
-      await signalManager.initialize();
-      
-      // التحقق من وجود المفاتيح
-      final storage = const FlutterSecureStorage();
-      final identityKey = await storage.read(key: 'identity_key');
-      
-      if (identityKey == null) {
-        print('🔑 لا توجد مفاتيح - جاري التوليد...');
-        final success = await signalManager.generateAndUploadKeys();
-        
-        if (success) {
-          print('✅ تم توليد ورفع المفاتيح بنجاح');
-        } else {
-          print('⚠️ فشل توليد/رفع المفاتيح');
-        }
-      } else {
-        print('✅ المفاتيح موجودة بالفعل');
-        // التحقق من عدد PreKeys المتبقية
-        await signalManager.checkAndRefreshPreKeys();
-      }
-    } catch (e) {
-      print('❌ خطأ في تهيئة التشفير: $e');
+  // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
+Future<void> _initializeEncryption() async {
+  try {
+    print('🔐 جاري التحقق من مفاتيح التشفير...');
+    
+    // ✅ 1. جلب userId
+    final storage = const FlutterSecureStorage();
+    final userDataStr = await storage.read(key: 'user_data');
+    
+    if (userDataStr == null) {
+      print('❌ لا توجد بيانات مستخدم');
+      return;
     }
+    
+    final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
+    final userId = userData['id'] as String;
+    
+    print('👤 Checking keys for user: $userId');
+    
+    // ✅ 2. تهيئة SignalProtocolManager
+    final signalManager = SignalProtocolManager();
+    await signalManager.initialize();
+    
+    // ✅ 3. فحص وجود المفاتيح باستخدام userId
+    final userIdentityKey = await storage.read(key: 'identity_key_$userId');
+    
+    if (userIdentityKey == null) {
+      print('🔑 لا توجد مفاتيح للمستخدم $userId - جاري التوليد...');
+      final success = await signalManager.generateAndUploadKeys();
+      
+      if (success) {
+        print('✅ تم توليد ورفع المفاتيح بنجاح');
+      } else {
+        print('⚠️ فشل توليد/رفع المفاتيح');
+      }
+    } else {
+      print('✅ المفاتيح موجودة بالفعل للمستخدم $userId');
+      await signalManager.checkAndRefreshPreKeys();
+    }
+  } catch (e) {
+    print('❌ خطأ في تهيئة التشفير: $e');
   }
+}
 
   // تهيئة MessagingService (Socket + Listeners)
 Future<void> _initializeMessaging() async {

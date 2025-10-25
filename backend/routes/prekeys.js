@@ -53,6 +53,7 @@ router.post('/upload', auth, async (req, res) => {
         
         return res.json({
           success: true,
+          userId: req.user.id,
           message: 'تم تحديث Bundle بالكامل',
           totalKeys: bundle.preKeys.length,
           availableKeys: bundle.getAvailablePreKeysCount()

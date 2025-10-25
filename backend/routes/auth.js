@@ -709,7 +709,7 @@ router.post('/resend-verification-phone', async (req, res) => {
   }
 });
 
-// ✅ تسجيل الدخول مع التحقق من انتهاء صلاحية الباسورد
+// تسجيل الدخول مع التحقق من انتهاء صلاحية الباسورد
 router.post('/login', async (req, res) => {
   const { email, password } = req.body;
 
@@ -719,20 +719,38 @@ router.post('/login', async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+        message: 'البيانات غير صحيحة'
       });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
+      user.failedLoginAttempts += 1;
+      user.lastFailedLoginAt = new Date();
+      await user.save();
+
+      const remaining = 3 - user.failedLoginAttempts; 
+
+      // قفل الحساب مؤقتاً بعد ٣ محاولات فاشلة
+      if (user.failedLoginAttempts >= 3) {
+        return res.status(403).json({
+          success: false,
+          message: 'تم قفل الحساب مؤقتاً بعد محاولات فاشلة كثيرة. الرجاء المحاولة لاحقاً.'
+        });
+      }
+
       return res.status(400).json({
         success: false,
-        message: 'البريد الإلكتروني أو كلمة المرور غير صحيحة'
+        message: `بيانات الدخول غير صحيحة. عدد المحاولات الفاشلة: ${user.failedLoginAttempts}${remaining > 0 ? ` (تبقى ${remaining} محاولات)` : ''}`
       });
     }
 
-    // ✅ التحقق من انتهاء صلاحية الباسورد (90 يوم)
+    // إعادة تعيين عداد المحاولات الفاشلة في حالة نجاح تسجيل الدخول
+    user.failedLoginAttempts = 0;
+    user.lastFailedLoginAt = null;
+
+    // التحقق من انتهاء صلاحية الباسورد (90 يوم)
     if (user.isPasswordExpired()) {
       user.passwordResetRequired = true;
       await user.save();

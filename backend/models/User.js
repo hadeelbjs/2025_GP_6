@@ -6,6 +6,9 @@ const UserSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   phone: { type: String, required: true, unique: true },
   password: { type: String, required: true },
+
+  failedLoginAttempts: { type: Number, default: 0 },
+
   
   // تتبع آخر 12 باسورد
   passwordHistory: [{
@@ -30,6 +33,9 @@ const UserSchema = new mongoose.Schema({
   
   passwordResetCode: String,
   passwordResetExpires: Date,
+
+  
+  lastLoginAt: Date,
   
   biometricEnabled: { type: Boolean, default: false },
   biometricVerificationCode: String,
@@ -158,5 +164,7 @@ UserSchema.statics.generateSecurePassword = function(length = 12) {
   // خلط الأحرف عشوائياً (لتجنب النمط الثابت)
   return password.split('').sort(() => Math.random() - 0.5).join('');
 };
+
+
 
 module.exports = mongoose.model('User', UserSchema);

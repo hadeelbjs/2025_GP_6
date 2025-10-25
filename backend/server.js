@@ -77,7 +77,7 @@ const generalLimiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // قفل لمدة 15 دقيقة
   max: 5,
   message: { success: false, message: 'تجاوزت عدد محاولات تسجيل الدخول' },
   skipSuccessfulRequests: true

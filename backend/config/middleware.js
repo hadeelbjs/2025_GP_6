@@ -84,9 +84,7 @@ const configureMiddleware = (app) => {
   const corsOptions = {
     origin: process.env.NODE_ENV === 'production'
       ? [
-          'https://waseed-team-production.up.railway.app',
-          'https://www.waseed.app',
-          'https://waseed.app',
+          'https://waseed-team-production.up.railway.app'
         ]
       : '*',
     credentials: true,
@@ -103,7 +101,7 @@ const configureMiddleware = (app) => {
   app.use('/uploads', express.static('uploads'));
 
   // ============================================
-  // Apply Rate Limiters - FIXED ORDER & CONFIGURATION
+  // Apply Rate Limiters 
   // ============================================
   
   // General API rate limiter (applies to all /api/* routes)
@@ -117,7 +115,7 @@ const configureMiddleware = (app) => {
   app.use('/api/auth/reset-password', authLimiter);
   app.use('/api/auth/change-password', authLimiter);
   
-  // Biometric endpoints - FIXED: Use biometricLimiter instead of emailLimiter
+  // Biometric endpoints: Use biometricLimiter instead of emailLimiter
   app.use('/api/auth/request-biometric-enable', biometricLimiter);
   app.use('/api/auth/verify-biometric-enable', biometricLimiter);
   app.use('/api/auth/biometric-login', authLimiter);

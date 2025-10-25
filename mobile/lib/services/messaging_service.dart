@@ -96,7 +96,7 @@ class MessagingService {
     _listenersSetup = true;
   }
   
-  // ✅ إرسال رسالة مع Base64
+  // إرسال رسالة مع Base64
   Future<Map<String, dynamic>> sendMessage({
     required String recipientId,
     required String recipientName,
@@ -233,7 +233,6 @@ class MessagingService {
 
       final conversationId = _generateConversationId(senderId);
 
-      // ✅ تم تعديل الكود - نحدد فيما إذا كانت المحادثة مفتوحة حالياً
       final bool isCurrentChat = _currentOpenChatUserId == senderId;
 
       // حفظ الرسالة المشفرة مع المرفقات

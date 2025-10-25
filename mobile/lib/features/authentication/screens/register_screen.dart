@@ -61,7 +61,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
 
     if (result['success']) {
-      _showMessage(result['message'] ?? 'تم إرسال رمز التحقق', isError: false);
 
       // حفظ newRegistrationId
       final String? newRegistrationId = result['newRegistrationId'];

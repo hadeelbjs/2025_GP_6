@@ -9,7 +9,8 @@ import 'register_screen.dart';
 import 'reset_password.dart';
 import '../../../services/biometric_service.dart';
 import '../../dashboard/screens/main_dashboard.dart';
-import '../../../services/messaging_service.dart'; // ✅ إضافة
+import '../../../services/messaging_service.dart'; 
+import '../widgets/MessageDialog.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -34,6 +35,18 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _showMessage(String message, {required bool isError}) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return MessageDialog(
+          message: message,
+          isError: isError,
+        );
+      },
+    );
+  }
+
   // ============================================
   // معالجة تسجيل الدخول العادي
   // ============================================
@@ -55,13 +68,6 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return; 
     
     if (result['success']) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم إرسال رمز التحقق إلى بريدك الإلكتروني'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
-        ),
-      );
 
       Navigator.push(
         context,
@@ -73,13 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(result['message'] ?? 'حدث خطأ'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 4),
-        ),
-      );
+      _showMessage(result['message'], isError: true);
     }
   }
 
@@ -113,12 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final biometricUser = await BiometricService.getBiometricUser();
     
     if (biometricUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('لم يتم العثور على بيانات البصمة'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showMessage('لم يتم العثور على بيانات بصمة مسجلة. الرجاء تسجيل الدخول أولاً.', isError: true);
       return;
     }
 
@@ -128,12 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
 
     if (!authenticated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل التحقق من البصمة'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showMessage('فشل التحقق من البصمة', isError: true);
       return;
     }
 

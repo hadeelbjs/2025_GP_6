@@ -5,6 +5,7 @@ import '../../../services/api_services.dart';
 
 import '../../dashboard/screens/main_dashboard.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 final _apiService = ApiService();
 
 class VerifyPhoneScreen extends StatefulWidget {
@@ -155,7 +156,7 @@ void _showMessage(String message, {required bool isError}) {
           ),
         ],
       ),
-      backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
+      backgroundColor: isError ? const Color.fromARGB(255, 211, 47, 47) : Colors.green.shade700,
       duration: const Duration(seconds: 3),
     ),
   );

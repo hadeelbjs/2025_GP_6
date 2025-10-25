@@ -343,6 +343,45 @@ setTimeout(() => {
       
     });
 
+
+
+// ✅ حذف رسائل المحادثة بعد فشل التحقق 3 مرات
+socket.on('conversation:failed_verification', async (data) => {
+  try {
+    const { otherUserId } = data;
+    const recipientId = userId; // المستقبل اللي فشل
+    
+    console.log(`🗑️ Failed verification: Recipient ${recipientId}, Sender ${otherUserId}`);
+    
+    // ✅ تحديث حالة الرسائل في MongoDB
+    await Message.updateMany(
+      {
+        $or: [
+          { senderId: otherUserId, recipientId: recipientId },
+          { senderId: recipientId, recipientId: otherUserId }
+        ]
+      },
+      {
+        $set: {
+          deletedForRecipient: true,
+          failedVerification: true,
+          status: 'failed_verification'
+        }
+      }
+    );
+    
+    // ✅ إرسال للمرسل (تحديث حالة الرسائل)
+    io.sendToUser(otherUserId, 'conversation:recipient_failed_verification', {
+      recipientId: recipientId
+    });
+    
+    console.log(`✅ Messages marked as failed verification`);
+    
+  } catch (err) {
+    console.error('❌ Failed verification error:', err);
+  }
+});
+
   socket.on('disconnect', () => {
       console.log(`❌ User disconnected: ${userId}`);
       

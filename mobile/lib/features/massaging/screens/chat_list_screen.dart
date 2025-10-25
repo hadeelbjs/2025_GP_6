@@ -10,6 +10,9 @@ import '../../../services/messaging_service.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
 import '../../../services/biometric_service.dart'; // ✅ استيراد BiometricService
 import 'chat_screen.dart';
+import '../../../services/local_db/database_helper.dart';
+import '../../../services/socket_service.dart';
+
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -29,6 +32,9 @@ class _ChatListScreenState extends State<ChatListScreen> {
   
   StreamSubscription? _newMessageSubscription;
   String? _currentOpenChatId;
+
+  final Map<String, int> _verificationAttempts = {};
+
 
   @override
   void initState() {
@@ -549,81 +555,172 @@ class _ChatListScreenState extends State<ChatListScreen> {
     }
   }
 
-  // ✅ التحقق من البايومترك قبل فتح المحادثة
   Future<void> _openChat(Map<String, dynamic> chat) async {
-    final userId = chat['id'] as String;
-    final name = chat['name'] as String;
+  final userId = chat['id'] as String;
+  final name = chat['name'] as String;
+  
+  try {
+    final canUseBiometric = await BiometricService.canCheckBiometrics();
     
-    try {
-      // ✅ 1. التحقق من دعم البايومترك
-      final canUseBiometric = await BiometricService.canCheckBiometrics();
-      
-      if (!canUseBiometric) {
-        _showMessage('هذا الجهاز لا يدعم البصمة', false);
-        return;
-      }
-
-      // ✅ 2. التحقق من تسجيل البصمة في الجهاز
-      final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
-      
-      if (!hasEnrolled) {
-        if (!mounted) return;
-        _showBiometricNotEnrolledDialog();
-        return;
-      }
-
-      // ✅ 3. طلب التحقق البيومتري
-      final verified = await BiometricService.authenticateWithBiometrics(
-        reason: 'تحقق من هويتك لفتح المحادثة',
-      );
-      
-      if (!verified) {
-        _showMessage('فشل التحقق البيومتري', false);
-        return;
-      }
-
-      // ✅ 4. بعد نجاح التحقق، إعداد الجلسة والدخول للشات
-      _currentOpenChatId = userId;
-      
-      await _signalProtocolManager.initialize();
-      
-      final hasSession = await _signalProtocolManager.hasSession(userId);
-      
-      if (!hasSession) {
-        _showMessage('جاري إعداد التشفير...', true);
-        
-        final success = await _signalProtocolManager.createSession(userId);
-        
-        if (!success) {
-          _showMessage('فشل إعداد التشفير', false);
-          _currentOpenChatId = null;
-          return;
-        }
-      }
-      
-      if (!mounted) return;
-      
-      // ✅ 5. الدخول للشات
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatScreen(
-            userId: userId,
-            name: name,
-            username: chat['username'],
-          ),
-        ),
-      );
-      
-      _currentOpenChatId = null;
-      await _loadConversations();
-      
-    } catch (e) {
-      print('Error opening chat: $e');
-      _currentOpenChatId = null;
-      _showMessage('حدث خطأ', false);
+    if (!canUseBiometric) {
+      _showMessage('هذا الجهاز لا يدعم البصمة', false);
+      return;
     }
+
+    final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+    
+    if (!hasEnrolled) {
+      if (!mounted) return;
+      _showBiometricNotEnrolledDialog();
+      return;
+    }
+
+    // ✅ 3. طلب التحقق البيومتري
+    final verified = await BiometricService.authenticateWithBiometrics(
+      reason: 'تحقق من هويتك لفتح المحادثة',
+    );
+    
+    if (!verified) {
+      
+      _verificationAttempts[userId] = (_verificationAttempts[userId] ?? 0) + 1;
+      
+      final attempts = _verificationAttempts[userId]!;
+      print('🔴 Failed attempt $attempts/3 for user $userId');
+      
+      if (attempts >= 3) {
+        await _handleFailedVerification(userId, name);
+        _verificationAttempts[userId] = 0; // إعادة تعيين
+        return;
+      }
+      
+      // عرض عدد المحاولات المتبقية
+      final remaining = 3 - attempts;
+      _showMessage('فشل التحقق. المحاولات المتبقية: $remaining', false);
+      return;
+    }
+
+    _verificationAttempts[userId] = 0;
+    
+    _currentOpenChatId = userId;
+    
+    await _signalProtocolManager.initialize();
+    
+    final hasSession = await _signalProtocolManager.hasSession(userId);
+    
+    if (!hasSession) {
+      _showMessage('جاري إعداد التشفير...', true);
+      
+      final success = await _signalProtocolManager.createSession(userId);
+      
+      if (!success) {
+        _showMessage('فشل إعداد التشفير', false);
+        _currentOpenChatId = null;
+        return;
+      }
+    }
+    
+    if (!mounted) return;
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          userId: userId,
+          name: name,
+          username: chat['username'],
+        ),
+      ),
+    );
+    
+    _currentOpenChatId = null;
+    await _loadConversations();
+    
+  } catch (e) {
+    print('Error opening chat: $e');
+    _currentOpenChatId = null;
+    _showMessage('حدث خطأ', false);
   }
+}
+
+
+Future<void> _handleFailedVerification(String otherUserId, String name) async {
+  try {
+    print('🗑️ Handling failed verification for $otherUserId');
+    
+    // ✅ 1. حذف جميع رسائل المحادثة محلياً
+    final conversationId = _generateConversationId(otherUserId);
+    await DatabaseHelper.instance.deleteConversation(conversationId);
+    
+    // ✅ 2. إرسال إشعار للسيرفر (بدون socket مباشرة)
+    SocketService().emitEvent('conversation:failed_verification', {
+      'otherUserId': otherUserId,
+    });
+    
+    
+    // ✅ 3. عرض رسالة للمستخدم
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          icon: Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.red,
+            size: 48,
+          ),
+          title: Text(
+            'تم حذف المحادثة',
+            style: AppTextStyles.h3.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          content: Text(
+            'تم حذف محادثتك مع $name لتجاوز عدد محاولات التحقق المسموحة (3/3).\n\n'
+            'لحماية خصوصيتك، تم حذف جميع الرسائل من جهازك.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadConversations(); // تحديث القائمة
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(
+                'حسناً',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    
+  } catch (e) {
+    print('Error handling failed verification: $e');
+    _showMessage('حدث خطأ أثناء الحذف', false);
+  }
+}
+
+String _generateConversationId(String otherUserId) {
+  return _messagingService.getConversationId(otherUserId);
+}
+
+
 
   // ✅ Dialog للتنبيه عند عدم وجود بصمة مسجلة
   void _showBiometricNotEnrolledDialog() {

@@ -26,7 +26,6 @@ class SignalProtocolManager {
 
   Future<void> initialize() async {
     if (_isInitialized){
-      print("is initialized");
       return;} 
 
     _identityStore = MyIdentityKeyStore(_storage);

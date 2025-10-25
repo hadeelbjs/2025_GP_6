@@ -8,6 +8,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
+import '../../../services/biometric_service.dart'; // ✅ استيراد BiometricService
 import 'chat_screen.dart';
 
 class ChatListScreen extends StatefulWidget {
@@ -27,7 +28,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool _isLoading = false;
   
   StreamSubscription? _newMessageSubscription;
-  String? _currentOpenChatId; // ✅ لتتبع المحادثة المفتوحة
+  String? _currentOpenChatId;
 
   @override
   void initState() {
@@ -48,7 +49,6 @@ class _ChatListScreenState extends State<ChatListScreen> {
     _listenToNewMessages();
   }
 
-  // ✅ الاستماع للرسائل الجديدة مع إخفاء الإشعار إذا المحادثة مفتوحة
   void _listenToNewMessages() {
     _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
       print('📨 New message notification');
@@ -56,13 +56,11 @@ class _ChatListScreenState extends State<ChatListScreen> {
       
       final senderId = data['senderId'];
       
-      // ✅ إذا المستخدم داخل نفس المحادثة، لا تظهر الإشعار
       if (_currentOpenChatId == senderId) {
         print('⚠️ User inside chat - no notification');
         return;
       }
       
-      // ✅ إشعار أنيق ومفيد
       if (mounted) {
         final senderName = _chats.firstWhere(
           (c) => c['id'] == senderId,
@@ -179,27 +177,28 @@ class _ChatListScreenState extends State<ChatListScreen> {
       }
     }
   }
-Future<void> _loadConversations() async {
-  try {
-    final conversations = await _messagingService.getAllConversations();
-    
-    if (mounted) {
-      setState(() {
-        _conversations = conversations;
-      });
+
+  Future<void> _loadConversations() async {
+    try {
+      final conversations = await _messagingService.getAllConversations();
+      
+      if (mounted) {
+        setState(() {
+          _conversations = conversations;
+        });
+      }
+      
+      print('✅ Loaded ${conversations.length} conversations');
+      
+      for (var conv in conversations) {
+        print('📊 ${conv['contactName']}: unread = ${conv['unreadCount']}');
+      }
+      
+    } catch (e) {
+      print('❌ Error loading conversations: $e');
     }
-    
-    print('✅ Loaded ${conversations.length} conversations');
-    
-    // ✅ طباعة تفاصيل كل محادثة للتأكد
-    for (var conv in conversations) {
-      print('📊 ${conv['contactName']}: unread = ${conv['unreadCount']}');
-    }
-    
-  } catch (e) {
-    print('❌ Error loading conversations: $e');
   }
-}
+
   void _handleSessionExpired() {
     _showMessage('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', false);
 
@@ -300,76 +299,76 @@ Future<void> _loadConversations() async {
     );
   }
 
-Widget _buildChatList() {
-  final Map<String, Map<String, dynamic>> mergedMap = {}; // ✅ استخدم Map بدل List
-  
-  // ✅ إضافة الـ conversations أولاً
-  for (var conv in _conversations) {
-    final contactId = conv['contactId'];
-    final contact = _chats.firstWhere(
-      (c) => c['id'] == contactId,
-      orElse: () => {},
-    );
+  Widget _buildChatList() {
+    final Map<String, Map<String, dynamic>> mergedMap = {}; // ✅ استخدم Map بدل List
     
-    if (contact.isNotEmpty) {
-      mergedMap[contactId] = { // ✅ استخدم contactId كـ key
-        ...contact,
-        'lastMessage': conv['lastMessage'],
-        'lastMessageTime': conv['lastMessageTime'],
-        'unreadCount': conv['unreadCount'] ?? 0,
-      };
+    // ✅ إضافة الـ conversations أولاً
+    for (var conv in _conversations) {
+      final contactId = conv['contactId'];
+      final contact = _chats.firstWhere(
+        (c) => c['id'] == contactId,
+        orElse: () => {},
+      );
+      
+      if (contact.isNotEmpty) {
+        mergedMap[contactId] = { // ✅ استخدم contactId كـ key
+          ...contact,
+          'lastMessage': conv['lastMessage'],
+          'lastMessageTime': conv['lastMessageTime'],
+          'unreadCount': conv['unreadCount'] ?? 0,
+        };
+      }
     }
-  }
-  
-  for (var contact in _chats) {
-    final contactId = contact['id'];
-    if (!mergedMap.containsKey(contactId)) { // ✅ فقط إذا مو موجود
-      mergedMap[contactId] = {
-        ...contact,
-        'lastMessage': null,
-        'lastMessageTime': null,
-        'unreadCount': 0,
-      };
+    
+    for (var contact in _chats) {
+      final contactId = contact['id'];
+      if (!mergedMap.containsKey(contactId)) { // ✅ فقط إذا مو موجود
+        mergedMap[contactId] = {
+          ...contact,
+          'lastMessage': null,
+          'lastMessageTime': null,
+          'unreadCount': 0,
+        };
+      }
     }
-  }
 
-  final mergedList = mergedMap.values.toList();
-  
-  
-  mergedList.sort((a, b) {
-    final timeA = a['lastMessageTime'] ?? 0;
-    final timeB = b['lastMessageTime'] ?? 0;
-    return timeB.compareTo(timeA);
-  });
+    final mergedList = mergedMap.values.toList();
+    
+    // ✅ ترتيب حسب آخر رسالة
+    mergedList.sort((a, b) {
+      final timeA = a['lastMessageTime'] ?? 0;
+      final timeB = b['lastMessageTime'] ?? 0;
+      return timeB.compareTo(timeA);
+    });
 
-  if (mergedList.isEmpty) {
-    return _buildEmptyState();
-  }
+    if (mergedList.isEmpty) {
+      return _buildEmptyState();
+    }
 
-  return RefreshIndicator(
-    onRefresh: () async {
-      await _loadChats();
-      await _loadConversations();
-    },
-    color: AppColors.primary,
-    child: ListView.separated(
-      padding: const EdgeInsets.symmetric(vertical: 15),
-      itemCount: mergedList.length,
-      separatorBuilder: (context, index) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20),
-        child: Divider(
-          color: AppColors.textHint.withOpacity(0.1),
-          height: 1,
-          thickness: 1,
-        ),
-      ),
-      itemBuilder: (context, index) {
-        final chat = mergedList[index];
-        return _buildChatItem(chat);
+    return RefreshIndicator(
+      onRefresh: () async {
+        await _loadChats();
+        await _loadConversations();
       },
-    ),
-  );
-}
+      color: AppColors.primary,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(vertical: 15),
+        itemCount: mergedList.length,
+        separatorBuilder: (context, index) => Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Divider(
+            color: AppColors.textHint.withOpacity(0.1),
+            height: 1,
+            thickness: 1,
+          ),
+        ),
+        itemBuilder: (context, index) {
+          final chat = mergedList[index];
+          return _buildChatItem(chat);
+        },
+      ),
+    );
+  }
 
   Widget _buildEmptyState() {
     return Center(
@@ -506,7 +505,6 @@ Widget _buildChatList() {
 
             const SizedBox(width: 10),
 
-            // ✅ عداد الرسائل غير المقروءة
             if (unreadCount > 0)
               Container(
                 padding: EdgeInsets.all(6),
@@ -551,15 +549,42 @@ Widget _buildChatList() {
     }
   }
 
-  // ✅ فتح المحادثة مع تسجيل الـ ID
+  // ✅ التحقق من البايومترك قبل فتح المحادثة
   Future<void> _openChat(Map<String, dynamic> chat) async {
     final userId = chat['id'] as String;
     final name = chat['name'] as String;
     
-    // ✅ تسجيل أن المستخدم داخل هذه المحادثة
-    _currentOpenChatId = userId;
-    
     try {
+      // ✅ 1. التحقق من دعم البايومترك
+      final canUseBiometric = await BiometricService.canCheckBiometrics();
+      
+      if (!canUseBiometric) {
+        _showMessage('هذا الجهاز لا يدعم البصمة', false);
+        return;
+      }
+
+      // ✅ 2. التحقق من تسجيل البصمة في الجهاز
+      final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+      
+      if (!hasEnrolled) {
+        if (!mounted) return;
+        _showBiometricNotEnrolledDialog();
+        return;
+      }
+
+      // ✅ 3. طلب التحقق البيومتري
+      final verified = await BiometricService.authenticateWithBiometrics(
+        reason: 'تحقق من هويتك لفتح المحادثة',
+      );
+      
+      if (!verified) {
+        _showMessage('فشل التحقق البيومتري', false);
+        return;
+      }
+
+      // ✅ 4. بعد نجاح التحقق، إعداد الجلسة والدخول للشات
+      _currentOpenChatId = userId;
+      
       await _signalProtocolManager.initialize();
       
       final hasSession = await _signalProtocolManager.hasSession(userId);
@@ -578,6 +603,7 @@ Widget _buildChatList() {
       
       if (!mounted) return;
       
+      // ✅ 5. الدخول للشات
       await Navigator.push(
         context,
         MaterialPageRoute(
@@ -589,9 +615,7 @@ Widget _buildChatList() {
         ),
       );
       
-      // ✅ عند الرجوع، إلغاء التسجيل
       _currentOpenChatId = null;
-      
       await _loadConversations();
       
     } catch (e) {
@@ -599,5 +623,68 @@ Widget _buildChatList() {
       _currentOpenChatId = null;
       _showMessage('حدث خطأ', false);
     }
+  }
+
+  // ✅ Dialog للتنبيه عند عدم وجود بصمة مسجلة
+  void _showBiometricNotEnrolledDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.fingerprint_outlined, 
+                color: AppColors.primary, 
+                size: 28,
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'البصمة / Face ID غير مسجلة',
+                  style: AppTextStyles.h3,
+                ),
+              ),
+            ],
+          ),
+          content: Text(
+            'لم يتم العثور على بصمة أو Face ID مسجلة في جهازك.\n\nيرجى إضافة إحداها من إعدادات الجهاز للمتابعة.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: Text(
+                'إلغاء', 
+                style: TextStyle(color: Colors.grey),
+              ),
+            ),
+            ElevatedButton.icon(
+              onPressed: () {
+                BiometricService.openBiometricSettings();
+                Navigator.pop(context);
+              },
+              icon: Icon(Icons.settings, size: 18),
+              label: Text('فتح الإعدادات'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

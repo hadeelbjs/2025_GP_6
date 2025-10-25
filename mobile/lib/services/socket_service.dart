@@ -37,15 +37,11 @@ class SocketService {
 
   Future<bool> connect() async {
     try {
-      print('🔌 Connecting to Socket.IO...');
-
       if (_socket != null && _socket!.connected) {
-        print('Socket already connected');
         return true;
       }
 
       if (_isConnecting) {
-        print('Connection in progress, waiting...');
         await Future.delayed(Duration(seconds: 2));
         return _socket?.connected ?? false;
       }
@@ -118,8 +114,6 @@ class SocketService {
 
       _socket!.connect();
       
-      // انتظار 3 ثواني للاتصال
-      print('⏳ [9/10] Waiting 3 seconds for connection...');
       await Future.delayed(Duration(seconds: 3));
       
       if (_socket!.connected) {
@@ -147,7 +141,6 @@ class SocketService {
       return;
     }
     
-    print('🔧 Clearing old listeners...');
     _socket!.off('connect');
     _socket!.off('connected');
     _socket!.off('message:new');
@@ -161,7 +154,6 @@ class SocketService {
     _socket!.off('connect_error');
     _socket!.off('connect_timeout');
 
-    print('🔧 Setting up new listeners...');
 
     _socket!.on('connect', (_) {
       print('✅ Socket connected');
@@ -224,7 +216,6 @@ class SocketService {
     });
 
     _socket!.on('message:status_update', (data) {
-      print('📊 Status update: ${data['messageId']} → ${data['status']}');
       _statusController.add(Map<String, dynamic>.from(data));
     });
 
@@ -267,7 +258,6 @@ class SocketService {
       _processedMessages.clear();
     });
 
-    print('✅ All listeners configured');
   }
 
   void sendMessageWithAttachment({

@@ -11,7 +11,6 @@ import 'package:open_filex/open_filex.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/messaging_service.dart';
-import '../../../services/biometric_service.dart'; 
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -39,9 +38,7 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   String? _conversationId;
   
-  // ✅ متغيرات جديدة للتحقق البيومتري
-  bool _isBiometricChecking = true;
-  bool _biometricCheckFailed = false;
+  // ✅ إزالة متغيرات التحقق البيومتري لأنه تم التحقق قبل الدخول
   bool _isDecryptingMessages = false;
   
   File? _pendingImageFile;
@@ -57,7 +54,7 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _checkBiometricAndInitialize(); // ✅ تعديل: البدء بالتحقق البيومتري
+    _initializeChat(); // ✅ مباشرة بدون فحص بايومترك
     _listenToUserStatus(); 
     _messagingService.setCurrentOpenChat(widget.userId);
   }
@@ -74,118 +71,6 @@ class _ChatScreenState extends State<ChatScreen> {
     super.dispose();
   }
 
-  // ✅ دالة جديدة: التحقق من البايومتركس قبل تهيئة المحادثة
-  Future<void> _checkBiometricAndInitialize() async {
-    try {
-      final canUseBiometric = await BiometricService.canCheckBiometrics();
-      
-      if (!canUseBiometric) {
-        setState(() {
-          _isBiometricChecking = false;
-        });
-        _showMessage('هذا الجهاز لا يدعم البصمة', false);
-        await _initializeChat();
-        return;
-      }
-
-        // ✅ تحقق جديد: هل المستخدم سجّل بصمة؟
-      final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
-      
-      if (!hasEnrolled) {
-        setState(() {
-          _isBiometricChecking = false;
-        //  _biometricCheckFailed = true;
-        });
-        _showBiometricNotEnrolledDialog();
-        return;
-      }
-      
-      final verified = await BiometricService.authenticateWithBiometrics(
-        reason: 'تحقق من هويتك لفتح المحادثة',
-      );
-      
-      setState(() {
-        _isBiometricChecking = false;
-      });
-      
-      if (!verified) {
-        setState(() {
-          _biometricCheckFailed = true;
-        });
-        _showMessage('فشل التحقق البيومتري', false);
-        return;
-      }
-      
-      await _initializeChat();
-      
-      if (_conversationId != null) {
-        setState(() {
-          _isDecryptingMessages = true;
-        });
-        
-        await _decryptAllMessages();
-        
-        setState(() {
-          _isDecryptingMessages = false;
-        });
-      }
-      
-    } catch (e) {
-      setState(() {
-        _isBiometricChecking = false;
-      });
-      _showMessage('حدث خطأ في التحقق', false);
-    }
-  }
-
-
-
-  /// ✅ دالة جديدة: عرض نافذة تنبيه عند عدم وجود بصمة أو Face ID مسجلة
-  void _showBiometricNotEnrolledDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: Row(
-            children: [
-              Icon(Icons.fingerprint_outlined, color: AppColors.primary, size: 28),
-              SizedBox(width: 12),
-              Text('البصمة / Face ID غير مسجلة', style: AppTextStyles.h3),
-            ],
-          ),
-          content: Text(
-            'لم يتم العثور على بصمة أو Face ID مسجلة في جهازك.\n\nيرجى إضافة إحداها من إعدادات الجهاز للمتابعة.',
-            style: AppTextStyles.bodyMedium,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context); // الخروج من شاشة المحادثة
-              },
-              child: Text('إلغاء', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton.icon(
-              onPressed: () {
-                BiometricService.openBiometricSettings();
-                Navigator.pop(context);
-                Navigator.pop(context);
-              },
-              icon: Icon(Icons.settings),
-              label: Text('فتح الإعدادات'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-  
-  
   // ✅ دالة جديدة: فك تشفير جميع الرسائل دفعة واحدة
   Future<void> _decryptAllMessages() async {
     try {
@@ -218,6 +103,19 @@ class _ChatScreenState extends State<ChatScreen> {
       await _loadMessagesFromDatabase();
       _subscribeToRealtimeUpdates();
       await _messagingService.markConversationAsRead(_conversationId!);
+
+      // ✅ فك تشفير الرسائل بعد التهيئة مباشرة
+      if (_conversationId != null) {
+        setState(() {
+          _isDecryptingMessages = true;
+        });
+        
+        await _decryptAllMessages();
+        
+        setState(() {
+          _isDecryptingMessages = false;
+        });
+      }
 
     } catch (e) {
       _showMessage('حدث خطأ في تهيئة المحادثة', false);
@@ -256,11 +154,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
       if (data['conversationId'] == _conversationId) {
         // ✅ فك تشفير الرسائل الجديدة تلقائيًا
-        if (!_isBiometricChecking && !_biometricCheckFailed) {
-          Future.delayed(Duration(milliseconds: 300), () {
-            _decryptAllMessages();
-          });
-        }
+        Future.delayed(Duration(milliseconds: 300), () {
+          _decryptAllMessages();
+        });
         _loadMessagesFromDatabase();
       }
     });
@@ -705,55 +601,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildBody(bool hasAttachment) {
-    // ✅ حالة التحقق البيومتري
-    if (_isBiometricChecking) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: AppColors.primary),
-            const SizedBox(height: 20),
-            Text(
-              'جارِ التحقق من الهوية...',
-              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.primary),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // ✅ حالة فشل التحقق البيومتري
-    if (_biometricCheckFailed) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.fingerprint_outlined, size: 64, color: Colors.grey),
-            const SizedBox(height: 16),
-            Text('فشل التحقق البيومتري', style: AppTextStyles.h2),
-            const SizedBox(height: 8),
-            Text(
-              'يرجى العودة والمحاولة مرة أخرى',
-              style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                foregroundColor: Colors.white,
-                backgroundColor: AppColors.primary,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
-              ),
-              child: Text('العودة', style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.bold, color: Colors.white)),
-            ),
-          ],
-        ),
-      );
-    }
-    
-    // ✅ حالة فك تشفير الرسائل
+    // ✅ حالة فك تشفير الرسائل فقط (تم إزالة حالات التحقق البيومتري)
     if (_isDecryptingMessages) {
       return Center(
         child: Column(

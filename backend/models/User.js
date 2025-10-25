@@ -43,6 +43,10 @@ const UserSchema = new mongoose.Schema({
     publicKey: String,
     signature: String
   },
+
+newEmailVerificationCode: String,
+newEmailVerificationExpires: Date,
+pendingEmail: String,
   
   preKeys: [{
     keyId: Number,

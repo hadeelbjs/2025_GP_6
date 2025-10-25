@@ -1270,12 +1270,16 @@ Future<Map<String, dynamic>> getKeysVersion() async {
   // 🔧 Helper: الحصول على Headers مع التوكن
   // ===================================
   Future<Map<String, String>> _getAuthHeaders() async {
-    final token = await FlutterSecureStorage().read(key: 'auth_token');
-    
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer $token',
-    };
+  final token = await _storage.read(key: 'access_token');  
+  
+  if (token == null) {
+    throw Exception('جلسة غير صالحة');
   }
+  
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': 'Bearer $token',
+  };
+}
 
 }

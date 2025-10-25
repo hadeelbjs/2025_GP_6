@@ -421,8 +421,8 @@ router.post('/verify-phone', async (req, res) => {
         return res.json({
           success: true,
           message: 'تم تأكيد رقم الجوال بنجاح',
-          accessToken,
-          refreshToken,
+          accessToken: accessToken,
+          refreshToken: refreshToken,
           user: {
             id: user.id,
             fullName: user.fullName,

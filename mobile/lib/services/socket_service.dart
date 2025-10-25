@@ -8,9 +8,12 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'local_db/database_helper.dart';
 import 'messaging_service.dart';
+import 'package:sqflite/sqflite.dart';
+
 
 class SocketService {
   static final SocketService _instance = SocketService._internal();
+  
   factory SocketService() => _instance;
   SocketService._internal();
 
@@ -74,16 +77,16 @@ class SocketService {
       }
 
       String baseUrl;
-      baseUrl = 'https://waseed-team-production.up.railway.app';
+     // baseUrl = 'https://waseed-team-production.up.railway.app';
       
-      /*
+      
       if (Platform.isAndroid) {
         baseUrl = 'http://10.0.2.2:3000';
       } else if (Platform.isIOS) {
         baseUrl = 'http://localhost:3000';
       } else {
         baseUrl = 'http://localhost:3000';
-      }*/
+      }
       
 
       // ✅ إنشاء Socket مع خيارات محسّنة
@@ -253,8 +256,19 @@ class SocketService {
    // ✅ استقبال إشعار فشل التحقق
     _socket!.on('conversation:recipient_failed_verification', (data) async {
       final recipientId = data['recipientId'];
-      print(' Recipient $recipientId failed verification');
-      });
+      final Database db = await DatabaseHelper.instance.database;
+  await db.rawUpdate('''
+    UPDATE messages 
+    SET failedVerificationAtRecipient = 1 
+    WHERE receiverId = ? AND isMine = 1
+  ''', [recipientId]);
+  
+  _statusController.add({
+    'type': 'recipient_failed_verification',
+    'recipientId': recipientId,
+  });
+});
+
 
 
 

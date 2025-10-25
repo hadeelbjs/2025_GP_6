@@ -86,8 +86,20 @@ const MessageSchema = new mongoose.Schema({
     default: Date.now,
     index: true,
   },
+
   
   deliveredAt: Date,
+
+failedVerificationAtRecipient: {
+  type: Boolean,
+  default: false,
+},
+
+failedVerification: {
+  type: Boolean,
+  default: false,
+}
+
 });
 
 

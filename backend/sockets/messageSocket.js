@@ -108,6 +108,22 @@ module.exports = (io) => {
           createdAt: msg.createdAt ? msg.createdAt.toISOString() : new Date().toISOString(),
         });
 
+
+        await Message.findOneAndUpdate(
+          { messageId: msg.messageId },
+          { 
+            status: 'delivered',
+            deliveredAt: new Date()
+          }
+        );
+
+        // ✅ إبلاغ المرسل أن الرسالة تم توصيلها
+        io.sendToUser(msg.senderId.toString(), 'message:status_update', {
+          messageId: msg.messageId,
+          status: 'delivered',
+          timestamp: Date.now(),
+        });
+
         console.log(`📨 Delivered pending message: ${msg.messageId}`);
       }
     } else {
@@ -159,6 +175,16 @@ setTimeout(() => {
           delivered,
           timestamp: Date.now(),
         });
+
+
+        if (delivered) {
+          socket.emit('message:status_update', {
+            messageId,
+            status: 'delivered',  
+            timestamp: Date.now(),
+          });
+        }
+
 
         // ✅ حفظ في DB إذا offline
         if (!delivered) {
@@ -369,6 +395,18 @@ socket.on('conversation:failed_verification', async (data) => {
         }
       }
     );
+
+  await Message.updateMany(
+    {
+      senderId: otherUserId,
+      recipientId: recipientId
+    },
+    {
+      $set: {
+        failedVerificationAtRecipient: true
+      }
+    }
+  );
     
     // ✅ إرسال للمرسل (تحديث حالة الرسائل)
     io.sendToUser(otherUserId, 'conversation:recipient_failed_verification', {

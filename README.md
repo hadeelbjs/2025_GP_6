@@ -26,5 +26,4 @@ After cloning the repository, open your terminal and follow these steps:
 cd mobile
 flutter pub get
 flutter run
-
 ```

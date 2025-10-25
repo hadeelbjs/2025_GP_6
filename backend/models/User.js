@@ -8,6 +8,7 @@ const UserSchema = new mongoose.Schema({
   password: { type: String, required: true },
 
   failedLoginAttempts: { type: Number, default: 0 },
+  lastFailedLoginAt: Date,
 
   
   // تتبع آخر 12 باسورد
@@ -34,8 +35,6 @@ const UserSchema = new mongoose.Schema({
   passwordResetCode: String,
   passwordResetExpires: Date,
 
-  
-  lastLoginAt: Date,
   
   biometricEnabled: { type: Boolean, default: false },
   biometricVerificationCode: String,

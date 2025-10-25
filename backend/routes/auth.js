@@ -1233,8 +1233,8 @@ router.post('/biometric-login', async (req, res) => {
     res.json({
       success: true,
       message: 'تم تسجيل الدخول بالبايومتريكس بنجاح',
-      accessToken,
-      refreshToken,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
       user: {
         id: user.id,
         fullName: user.fullName,

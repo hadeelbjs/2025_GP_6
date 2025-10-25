@@ -7,7 +7,7 @@ const PreKeyBundleSchema = new mongoose.Schema({
     ref: 'User',
     required: true,
     unique: true,
-    index: true // للبحث السريع
+    index: true
   },
   
   registrationId: {
@@ -39,7 +39,6 @@ const PreKeyBundleSchema = new mongoose.Schema({
     }
   },
   
-  // تحسين: إضافة حقل "used" لتتبع المفاتيح المستخدمة
   preKeys: [{
     keyId: {
       type: Number,
@@ -63,7 +62,13 @@ const PreKeyBundleSchema = new mongoose.Schema({
     }
   }],
   
-  // إضافية: تتبع آخر تحديث للمفاتيح
+  // ✅ إضافة رقم النسخة لتتبع التحديثات
+  version: {
+    type: Number,
+    required: true,
+    default: () => Date.now()
+  },
+  
   lastKeyRotation: {
     type: Date,
     default: Date.now
@@ -86,7 +91,12 @@ PreKeyBundleSchema.pre('save', function(next) {
   next();
 });
 
-// دالة مساعدة: جلب عدد PreKeys المتاحة (غير مستخدمة)
+// ✅ عند تحديث كامل للمفاتيح، تحديث النسخة
+PreKeyBundleSchema.methods.updateVersion = function() {
+  this.version = Date.now();
+};
+
+// دالة مساعدة: جلب عدد PreKeys المتاحة
 PreKeyBundleSchema.methods.getAvailablePreKeysCount = function() {
   return this.preKeys.filter(pk => !pk.used).length;
 };
@@ -94,7 +104,7 @@ PreKeyBundleSchema.methods.getAvailablePreKeysCount = function() {
 // دالة مساعدة: هل نحتاج تجديد المفاتيح؟
 PreKeyBundleSchema.methods.needsRefresh = function() {
   const availableKeys = this.getAvailablePreKeysCount();
-  return availableKeys < 20; // إذا أقل من 20 مفتاح، نحتاج تجديد
+  return availableKeys < 20;
 };
 
 // دالة مساعدة: الحصول على PreKey غير مستخدم

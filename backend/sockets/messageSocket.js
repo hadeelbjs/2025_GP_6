@@ -9,7 +9,6 @@ async function broadcastStatusToContacts(userId, isOnline, io) {
   try {
     const Contact = require('../models/Contact');
     
-    console.log(`🔔 Broadcasting ${userId} status: ${isOnline ? 'online' : 'offline'}`);
     
     // ✅ البحث باستخدام requester و recipient (مو userId و contactId)
     const contacts = await Contact.find({
@@ -19,7 +18,6 @@ async function broadcastStatusToContacts(userId, isOnline, io) {
       ]
     });
     
-    console.log(`📋 Found ${contacts.length} contacts for user ${userId}`);
     
     // إرسال الحالة لكل جهة اتصال
     contacts.forEach(contact => {
@@ -28,7 +26,6 @@ async function broadcastStatusToContacts(userId, isOnline, io) {
         ? contact.recipient.toString() 
         : contact.requester.toString();
       
-      console.log(`   Sending to contact: ${contactUserId}`);
       
       // إرسال الحالة الجديدة
       const sent = io.sendToUser(contactUserId, 'user:status', {
@@ -76,7 +73,7 @@ module.exports = (io) => {
 
   io.on('connection', (socket) => {
     const userId = socket.userId;
-    console.log(`✅ User connected: ${userId} (Socket: ${socket.id})`);
+    console.log(`✅ User connected: ${userId}`);
 
     userSockets.set(userId.toString(), socket.id);
       onlineUsers.add(userId.toString());
@@ -122,7 +119,6 @@ module.exports = (io) => {
 })();
 
 setTimeout(() => {
-  console.log(`🔔 About to broadcast ${userId} as online`);
   broadcastStatusToContacts(userId.toString(), true, io);
 }, 500);
 
@@ -232,7 +228,6 @@ setTimeout(() => {
     socket.on('message:status', async (data) => {
       try {
         const { messageId, status, recipientId } = data;
-        console.log(`📊 Status update: ${messageId} → ${status}`);
 
         await Message.findOneAndUpdate(
           { messageId },
@@ -346,7 +341,6 @@ setTimeout(() => {
         isOnline: isOnline
       });
       
-      console.log(`📡 Status request for ${targetUserId}: ${isOnline ? 'online' : 'offline'}`);
     });
 
   socket.on('disconnect', () => {
@@ -357,10 +351,8 @@ setTimeout(() => {
       
       setTimeout(() => {
         if (!onlineUsers.has(userId.toString())) {
-          console.log(`🔔 About to broadcast ${userId} as offline`);
           broadcastStatusToContacts(userId.toString(), false, io);
         } else {
-          console.log(`⚠️ User ${userId} reconnected quickly`);
         }
       }, 1000);
     });

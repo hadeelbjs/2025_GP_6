@@ -8,6 +8,10 @@ import 'login_screen.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
 import '../widgets/MessageDialog.dart';
+import 'dart:convert'; 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../../../services/socket_service.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -18,13 +22,13 @@ class RegisterScreen extends StatefulWidget {
 class _RegisterScreenState extends State<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
-  
+
   final _fullNameController = TextEditingController();
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   bool _isLoading = false;
 
   @override
@@ -39,81 +43,77 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   // معالجة التسجيل
   Future<void> _handleRegister() async {
-  bool isValid = _formKey.currentState!.validate();
-  
-  if (!isValid) {
-    return;
-  }
-  
-  setState(() => _isLoading = true);
+    bool isValid = _formKey.currentState!.validate();
+    if (!isValid) return;
 
-  final result = await _apiService.register(
-    fullName: _fullNameController.text.trim(),
-    username: _usernameController.text.trim(),
-    email: _emailController.text.trim(),
-    phone: _phoneController.text.trim(),
-    password: _passwordController.text,
-  );
+    setState(() => _isLoading = true);
 
-  setState(() => _isLoading = false);
-
-  if (!mounted) return;
-
-  if (result['success']) {
-    _showMessage(result['message'] ?? 'تم إرسال رمز التحقق', isError: false);
-
-    //  حفظ newRegistrationId
-    final String? newRegistrationId = result['newRegistrationId'];
-    
-    if (newRegistrationId == null) {
-      _showMessage('حدث خطأ: لم يتم استلام معرف التسجيل', isError: true);
-      return;
-    }
-
-    // الانتقال لصفحة التحقق من الإيميل
-    final emailVerified = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (context) => VerifyEmailScreen(
-          email: _emailController.text.trim(),
-          phone: _phoneController.text.trim(),
-          fullName: _fullNameController.text.trim(),
-          newRegistrationId: newRegistrationId, 
-        ),
-      ),
+    final result = await _apiService.register(
+      fullName: _fullNameController.text.trim(),
+      username: _usernameController.text.trim(),
+      email: _emailController.text.trim(),
+      phone: _phoneController.text.trim(),
+      password: _passwordController.text,
     );
 
-    if (emailVerified == true && mounted) {
-      _showPhoneVerificationOptions();
-    }
-  } else {
-    _showMessage(result['message'] ?? 'حدث خطأ', isError: true);
-  }
-}
-  // عرض رسالة  
-  void _showMessage(String message, {required bool isError}) {
-  showDialog(
-    context: context,
-    builder: (BuildContext context) {
-      return MessageDialog(
-        message: message,
-        isError: isError,
-      );
-    },
-  );
-}
+    setState(() => _isLoading = false);
 
-  // توليد ورفع المفاتيح (دالة مساعدة)
+    if (!mounted) return;
+
+    if (result['success']) {
+      _showMessage(result['message'] ?? 'تم إرسال رمز التحقق', isError: false);
+
+      // حفظ newRegistrationId
+      final String? newRegistrationId = result['newRegistrationId'];
+      if (newRegistrationId == null) {
+        _showMessage('حدث خطأ: لم يتم استلام معرف التسجيل', isError: true);
+        return;
+      }
+
+      // الانتقال لصفحة التحقق من الإيميل
+      final emailVerified = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VerifyEmailScreen(
+            email: _emailController.text.trim(),
+            phone: _phoneController.text.trim(),
+            fullName: _fullNameController.text.trim(),
+            newRegistrationId: newRegistrationId,
+          ),
+        ),
+      );
+
+      if (emailVerified == true && mounted) {
+        _showPhoneVerificationOptions();
+      }
+    } else {
+      _showMessage(result['message'] ?? 'حدث خطأ', isError: true);
+    }
+  }
+
+  // عرض رسالة
+  void _showMessage(String message, {required bool isError}) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return MessageDialog(
+          message: message,
+          isError: isError,
+        );
+      },
+    );
+  }
+
+  // توليد ورفع المفاتيح
   Future<void> _generateAndUploadKeys() async {
     try {
       final signalManager = SignalProtocolManager();
       final keysUploaded = await signalManager.generateAndUploadKeys();
-
       if (!keysUploaded) {
         _showMessage('تحذير: فشل إعداد مفاتيح تشفير الرسائل', isError: true);
       }
     } catch (e) {
-      print(' خطأ في توليد/رفع المفاتيح: $e');
+      print('خطأ في توليد/رفع المفاتيح: $e');
     }
   }
 
@@ -189,13 +189,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final sendSmsResult = await _apiService.sendPhoneVerification(
       _phoneController.text.trim(),
     );
-    
+
     setState(() => _isLoading = false);
 
     if (!mounted) return;
 
     if (sendSmsResult['success']) {
-      // إذا نجح إرسال الرمز، انتقل لصفحة التحقق
       final phoneVerified = await Navigator.push<bool>(
         context,
         MaterialPageRoute(
@@ -206,16 +205,16 @@ class _RegisterScreenState extends State<RegisterScreen> {
           ),
         ),
       );
-      
-      // بعد التحقق من الجوال - الآن عندك Token
+
       if (phoneVerified == true && mounted) {
         setState(() => _isLoading = true);
-        
-        // توليد ورفع المفاتيح
+
+        final token = await _apiService.getAccessToken();
         await _generateAndUploadKeys();
-        
+        await SocketService().connect();
+
         setState(() => _isLoading = false);
-        
+
         if (!mounted) return;
         Navigator.pushAndRemoveUntil(
           context,
@@ -224,11 +223,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
         );
       }
     } else {
-      // إذا فشل إرسال الرمز، ادخل للصفحة الرئيسية مع رسالة
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'حدث خطأ في إرسال رمز التحقق من الخادم. يمكنك التحقق من رقم جوالك لاحقاً من الإعدادات',
+            'حدث خطأ في إرسال رمز التحقق من الخادم. يمكنك التحقق لاحقاً من الإعدادات',
             style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
           ),
           backgroundColor: Colors.orange,
@@ -236,10 +234,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      // الدخول للصفحة الرئيسية
       await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
-      
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const MainDashboard()),
@@ -248,24 +244,34 @@ class _RegisterScreenState extends State<RegisterScreen> {
     }
   }
 
-  // تخطي تحقق الجوال والذهاب للصفحة الرئيسية
+  // تخطي تحقق الجوال
   Future<void> _skipPhoneVerification() async {
     setState(() => _isLoading = true);
 
-    // 1. استدعاء API لتخطي التحقق والحصول على التوكن
     final result = await _apiService.skipPhoneVerification(
       email: _emailController.text.trim(),
     );
 
     if (!mounted) return;
 
+    final storage = const FlutterSecureStorage();
+
     if (result['success']) {
-      // 2. Token is there so generate and upload keys
+      final token = result['token'];
+      final user = result['user'];
+
+      if (token != null) {
+        await storage.write(key: 'access_token', value: token);
+      }
+      if (user != null) {
+        await storage.write(key: 'user_data', value: jsonEncode(user));
+      }
+
       await _generateAndUploadKeys();
-      
+      await SocketService().connect();
+
       setState(() => _isLoading = false);
-      
-      // 3. الانتقال للصفحة الرئيسية
+
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
         context,
@@ -317,7 +323,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      
                       CustomTextField(
                         controller: _fullNameController,
                         label: 'الاسم الكامل',
@@ -332,7 +337,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       CustomTextField(
                         controller: _usernameController,
                         label: 'اسم المستخدم',
@@ -357,7 +361,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       CustomTextField(
                         controller: _emailController,
                         label: 'البريد الإلكتروني',
@@ -370,8 +373,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           }
                           final email = value.trim();
                           final emailRegex = RegExp(
-                            r'^[a-zA-Z0-9._]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-                          );
+                              r'^[a-zA-Z0-9._]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
                           if (!emailRegex.hasMatch(email)) {
                             return 'الرجاء إدخال بريد إلكتروني صالح';
                           }
@@ -379,7 +381,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       CustomTextField(
                         controller: _phoneController,
                         label: 'رقم الهاتف',
@@ -398,7 +399,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
                       CustomTextField(
                         controller: _passwordController,
                         label: 'كلمة المرور',
@@ -417,7 +417,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleRegister,
                         style: ElevatedButton.styleFrom(
@@ -448,15 +447,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                       ),
                       const SizedBox(height: 16),
-                      
                       TextButton(
                         onPressed: _isLoading
                             ? null
                             : () {
-                               Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(builder: (_) => const LoginScreen()),
-                              );
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const LoginScreen()),
+                                );
                               },
                         child: const Text(
                           'لديك حساب؟ تسجيل الدخول',

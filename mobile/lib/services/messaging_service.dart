@@ -64,7 +64,6 @@ class MessagingService {
         return false;
       }
     } else {
-      print('Socket already connected, reusing connection');
     }
 
       _setupSocketListeners();
@@ -95,7 +94,6 @@ class MessagingService {
     });
 
     _listenersSetup = true;
-    print('✅ Socket listeners setup complete');
   }
   
   // ✅ إرسال رسالة مع Base64

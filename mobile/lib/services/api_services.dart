@@ -7,12 +7,14 @@ import 'package:waseed/services/crypto/signal_protocol_manager.dart';
 import 'dart:async';
 import 'socket_service.dart';
 import 'package:path/path.dart';
+import 'package:waseed/config/appConfig.dart';
+
 class ApiService {
   // ============================
   // Base URL deployment
   // ============================
-  static const String baseUrl = 'https://waseed-team-production.up.railway.app/api';
-    // ============================
+    static String get baseUrl => AppConfig.apiBaseUrl;    
+    
   // Base URL بحسب المنصة
   // ============================
 

@@ -12,6 +12,8 @@ import '../../../services/crypto/signal_protocol_manager.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../services/socket_service.dart';
+import '../../../config/appConfig.dart';
+
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
@@ -24,6 +26,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   final _apiService = ApiService();
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
+  static String get baseUrl => AppConfig.hosting;
+
 
  
   @override
@@ -1769,11 +1773,10 @@ Widget _buildDeleteItem(String text) {
       }
 
 
-    String baseUrl = 'https://waseed-team-production.up.railway.app';
-  
+    
 
       final response = await http.delete(
-        Uri.parse('$baseUrl/api/user/delete-account'),
+        Uri.parse('$baseUrl/user/delete-account'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',

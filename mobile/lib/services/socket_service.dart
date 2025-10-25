@@ -9,6 +9,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'local_db/database_helper.dart';
 import 'messaging_service.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:waseed/config/appConfig.dart';
 
 
 class SocketService {
@@ -40,8 +41,11 @@ class SocketService {
   final Set<String> _processedMessages = {};
   bool _isConnecting = false; 
 
+  static String get baseUrl => AppConfig.socketUrl;
+
   Future<bool> connect() async {
     try {
+      
       if (_socket != null && _socket!.connected) {
         return true;
       }
@@ -76,8 +80,6 @@ class SocketService {
         return false;
       }
 
-      String baseUrl;
-     baseUrl = 'https://waseed-team-production.up.railway.app';
       
       
       

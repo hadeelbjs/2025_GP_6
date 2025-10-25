@@ -15,7 +15,11 @@ import 'features/account/screens/manage_account_screen.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/crypto/signal_protocol_manager.dart';
 import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 void main() async {
+  await dotenv.load(fileName: ".env");
+  
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }

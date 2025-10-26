@@ -226,7 +226,8 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success']) {
-        await _storage.write(key: 'access_token', value: data['token']);
+        await _storage.write(key: 'access_token', value: data['accessToken']);
+         await _storage.write(key: 'refresh_token', value: data['refreshToken']);
         await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
       }
 

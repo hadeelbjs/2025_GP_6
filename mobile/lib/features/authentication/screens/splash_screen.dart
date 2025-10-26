@@ -81,7 +81,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
 
     _logoAlignToTop = AlignmentTween(
       begin: Alignment.center,
-      end: const Alignment(0, -0.70),
+      end: const Alignment(0, -0.60),
     ).animate(
       CurvedAnimation(
         parent: _c,
@@ -116,7 +116,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final logoSize = screenWidth * 0.56;
+    final logoSize = screenWidth * 0.62;
 
     return Scaffold(
       backgroundColor: AppColors.bg,
@@ -139,7 +139,7 @@ class _OnboardingScreenState extends State<OnboardingScreen>
             },
           ),
           Align(
-            alignment: const Alignment(0.98, 0.15),
+            alignment: const Alignment(0.85, 0.18),
             child: AnimatedBuilder(
               animation: _c,
               builder: (context, _) {
@@ -148,15 +148,15 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                   child: SlideTransition(
                     position: _contentSlide,
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10.0),
+                      padding: const EdgeInsets.only(right: 20),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: const [
                           _WelcomeText(),
-                          SizedBox(height: 25),
+                          SizedBox(height: 5),
                           _BrandTitle(),
-                          SizedBox(height: 25),
+                          SizedBox(height: 20),
                           _SloganText(),
                         ],
                       ),
@@ -188,8 +188,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                           );
                         },
                       ),
-
-
                       ],
                     ),
                   ),
@@ -219,7 +217,7 @@ class _Logo extends StatelessWidget {
         errorBuilder: (context, error, stack) {
           return const Text(
             'وصـيـد',
-            textAlign: TextAlign.right,
+            textAlign: TextAlign.center,
             style: TextStyle(
               fontFamily: 'IBMPlexSansArabic',
               fontSize: 72,
@@ -238,15 +236,16 @@ class _WelcomeText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
+    return Text(
       'مرحباً بك في',
       textAlign: TextAlign.right,
       style: TextStyle(
         fontFamily: 'IBMPlexSansArabic',
-        fontSize: 34,
-        fontWeight: FontWeight.w600,
-        height: 1.2,
-        color: AppColors.primary,
+        fontSize: 28,
+        fontWeight: FontWeight.w500,
+        height: 1.3,
+        color: AppColors.primary.withOpacity(0.7),
+        letterSpacing: 0.3,
       ),
     );
   }
@@ -257,15 +256,26 @@ class _BrandTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
-      'وصيد',
-      textAlign: TextAlign.right,
-      style: TextStyle(
-        fontFamily: 'IBMPlexSansArabic',
-        fontSize: 72,
-        fontWeight: FontWeight.w800,
-        height: 1.0,
-        color: AppColors.primary,
+    return ShaderMask(
+      shaderCallback: (bounds) => const LinearGradient(
+        colors: [
+          AppColors.primary,
+          AppColors.primaryAlt,
+        ],
+        begin: Alignment.topRight,
+        end: Alignment.bottomLeft,
+      ).createShader(bounds),
+      child: const Text(
+        'وصــيد',
+        textAlign: TextAlign.right,
+        style: TextStyle(
+          fontFamily: 'IBMPlexSansArabic',
+          fontSize: 72,
+          fontWeight: FontWeight.w800,
+          height: 1.2,
+          color: Colors.white,
+          letterSpacing: -0.2,
+        ),
       ),
     );
   }
@@ -277,14 +287,15 @@ class _SloganText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Text(
-      'أمانك بلغتك',
+      'حيث أمانك بلغتك',
       textAlign: TextAlign.right,
       style: TextStyle(
         fontFamily: 'IBMPlexSansArabic',
-        fontSize: 34,
-        fontWeight: FontWeight.w700,
+        fontSize: 24,
+        fontWeight: FontWeight.w600,
         height: 1.2,
         color: AppColors.primary,
+        letterSpacing: 0.2,
       ),
     );
   }
@@ -303,17 +314,28 @@ class _PrimaryButton extends StatelessWidget {
       height: 66,
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [AppColors.primary, AppColors.primaryAlt],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+          colors: [
+            AppColors.primary,
+            AppColors.primaryAlt,
+            AppColors.primaryLight,
+          ],
+          stops: [0.0, 0.5, 1.0],
         ),
         borderRadius: BorderRadius.circular(34),
         boxShadow: [
           BoxShadow(
-            color: AppColors.primary.withOpacity(0.28),
-            blurRadius: 18,
-            spreadRadius: 1,
-            offset: const Offset(0, 10),
+            color: AppColors.primaryAlt.withOpacity(0.4),
+            blurRadius: 24,
+            spreadRadius: 0,
+            offset: const Offset(0, 4),
+          ),
+          BoxShadow(
+            color: AppColors.primary.withOpacity(0.9),
+            blurRadius: 8,
+            spreadRadius: -2,
+            offset: const Offset(0, 12),
           ),
         ],
       ),
@@ -322,6 +344,8 @@ class _PrimaryButton extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(34),
           onTap: onTap,
+          splashColor: Colors.white.withOpacity(0.3),
+          highlightColor: Colors.white.withOpacity(0.1),
           child: const Center(
             child: Text(
               'ابدأ الآن',
@@ -331,6 +355,7 @@ class _PrimaryButton extends StatelessWidget {
                 fontWeight: FontWeight.w700,
                 color: Colors.white,
                 height: 1.0,
+                letterSpacing: 0.3,
               ),
             ),
           ),
@@ -340,52 +365,67 @@ class _PrimaryButton extends StatelessWidget {
   }
 }
 
-/// ------------------------------ Bottom Wave ------------------------------
+/// ------------------------------ Bottom Wave - ELEGANT VERSION ------------------------------
 class _BottomGeometricShape extends StatelessWidget {
   const _BottomGeometricShape();
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 240,
+      height: 260,
       width: double.infinity,
-      child: CustomPaint(painter: _ModernWavePainter()),
+      child: CustomPaint(painter: _ElegantWavePainter()),
     );
   }
 }
-
-class _ModernWavePainter extends CustomPainter {
+class _ElegantWavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final w = size.width;
     final h = size.height;
 
-    final paintDark = Paint()
-      ..color = AppColors.primaryAlt
-      ..style = PaintingStyle.fill;
+    // Deep elegant base
+    final paint1 = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.bottomLeft,
+        end: Alignment.topRight,
+        colors: [
+          Color(0xFF281B67),
+          Color(0xFF3D2E8C),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, w, h));
 
     final path1 = Path()
       ..moveTo(0, h * 0.8)
-      ..quadraticBezierTo(w * 0.35, h * 0.4, w, h * 0.65)
+      ..quadraticBezierTo(w * 0.25, h * 0.65, w * 0.6, h * 0.8)
+      ..quadraticBezierTo(w * 0.85, h * 0.9, w, h * 0.75)
       ..lineTo(w, h)
       ..lineTo(0, h)
       ..close();
-    canvas.drawPath(path1, paintDark);
+    canvas.drawPath(path1, paint1);
 
-    final paintLight = Paint()
-      ..color = AppColors.primaryLight.withOpacity(0.6)
-      ..style = PaintingStyle.fill;
+    // Secondary smooth layer for depth
+    final paint2 = Paint()
+      ..shader = const LinearGradient(
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+        colors: [
+          Color(0xFF4A3E92),
+          Color(0xFF6B5DA8),
+        ],
+      ).createShader(Rect.fromLTWH(0, 0, w, h))
+      ..style = PaintingStyle.fill
+      ..isAntiAlias = true;
 
     final path2 = Path()
-      ..moveTo(0, h * 0.7)
-      ..quadraticBezierTo(w * 0.6, h * 0.25, w, h * 0.45)
+      ..moveTo(0, h * 0.85)
+      ..quadraticBezierTo(w * 0.3, h * 0.7, w, h * 0.9)
       ..lineTo(w, h)
       ..lineTo(0, h)
       ..close();
-    canvas.drawPath(path2, paintLight);
+    canvas.drawPath(path2, paint2);
   }
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
- 

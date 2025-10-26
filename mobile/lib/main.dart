@@ -16,7 +16,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'services/crypto/signal_protocol_manager.dart';
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
-
+import 'features/authentication/screens/splash_screen.dart';
 void main() async {
   await dotenv.load(fileName: ".env");
   
@@ -41,6 +41,7 @@ class MyApp extends StatelessWidget {
         '/splash': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
         '/register': (context) => const RegisterScreen(),
+        '/onboard': (context) => const OnboardingScreen(),
         
         '/dashboard': (context) => const ProtectedRoute(
           child: MainDashboard(),
@@ -110,15 +111,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       // 1. فحص إذا للتو تم logout
       final justLoggedOut = await BiometricService.getJustLoggedOut();
       print('Just logged out? $justLoggedOut');
-      
-      if (justLoggedOut) {
+      final isAuth = await _authGuard.isAuthenticated();
+      if (justLoggedOut || !isAuth) {
         await BiometricService.setJustLoggedOut(false);
-        Navigator.of(context).pushReplacementNamed('/login');
+        Navigator.of(context).pushReplacementNamed('/onboard');
         return;
       }
 
       // 2. فحص إذا مسجل دخول
-      final isAuth = await _authGuard.isAuthenticated();
       print('Is authenticated? $isAuth');
       
       if (isAuth) {

@@ -603,8 +603,122 @@ Future<String> _getCurrentUserId() async {
     return null;
   }
 
+  Future<DecryptionResult> handleDecryptionFailure(
+  String senderId,
+  String errorMessage,
+) async {
+  try {
+    print('⚠️ Handling decryption failure for sender: $senderId');
+    
+    // 1. حذف Session القديم
+    await deleteSession(senderId);
+    print('🗑️ Old session deleted');
+    
+    // 2. إرجاع نتيجة تطلب إعادة إنشاء Session
+    return DecryptionResult(
+      success: false,
+      needsKeySync: true,
+      needsSessionReset: true,  // ✅ جديد
+      error: 'يرجى إعادة المحاولة - تم إعادة تعيين المفاتيح',
+    );
+    
+  } catch (e) {
+    print('❌ Error handling decryption failure: $e');
+    return DecryptionResult(
+      success: false,
+      error: 'فشل معالجة خطأ التشفير',
+    );
+  }
+}
+
+/// محاولة فك التشفير مع معالجة الأخطاء التلقائية
+Future<DecryptionResult> decryptMessageWithAutoRecovery(
+  String senderId,
+  int type,
+  String body,
+) async {
+  try {
+    print('🔐 Attempting to decrypt message from $senderId');
+    
+    // 1. المحاولة الأولى
+    final result = await decryptMessageSafe(senderId, type, body);
+    
+    if (result.success) {
+      print('✅ Decryption successful');
+      return result;
+    }
+    
+    // 2. إذا فشل، نفحص نوع الخطأ
+    if (result.error?.contains('InvalidKeyIdException') == true ||
+        result.error?.contains('InvalidMessageException') == true ||
+        result.error?.contains('Bad Mac') == true) {
+      
+      print('⚠️ Session corruption detected - attempting recovery');
+      
+      // 3. حذف Session القديم
+      await deleteSession(senderId);
+      print('🗑️ Corrupted session deleted');
+      
+      // 4. إرجاع نتيجة تطلب إعادة Session
+      return DecryptionResult(
+        success: false,
+        needsSessionReset: true,
+        error: 'تم اكتشاف خلل في المفاتيح. يرجى إرسال رسالة جديدة.',
+      );
+    }
+    
+    // 5. أخطاء أخرى
+    return result;
+    
+  } catch (e) {
+    print('❌ Unexpected error in auto-recovery: $e');
+    return DecryptionResult(
+      success: false,
+      error: 'خطأ غير متوقع في فك التشفير',
+    );
+  }
+}
+
+/// إنشاء Session جديد مع المستخدم (بعد حذف القديم)
+Future<SessionResetResult> resetSessionWithUser(String userId) async {
+  try {
+    print('🔄 Resetting session with user: $userId');
+    
+    // 1. حذف Session القديم
+    await deleteSession(userId);
+    print('🗑️ Old session deleted');
+    
+    // 2. إنشاء Session جديد
+    final success = await createSession(userId);
+    
+    if (success) {
+      print('✅ New session created successfully');
+      return SessionResetResult(
+        success: true,
+        message: 'تم إعادة إنشاء المفاتيح بنجاح',
+      );
+    } else {
+      print('❌ Failed to create new session');
+      return SessionResetResult(
+        success: false,
+        error: 'فشل إنشاء مفاتيح جديدة',
+      );
+    }
+    
+  } catch (e) {
+    print('❌ Error resetting session: $e');
+    return SessionResetResult(
+      success: false,
+      error: 'خطأ في إعادة تعيين المفاتيح',
+    );
+  }
+}
+
+
+
+
   // ===================================
-  // 🔍 دوال مساعدة أخرى
+  // دوال مساعدة أخرى
   // ===================================
   Future<bool> hasSession(String userId) async {
     final address = SignalProtocolAddress(userId, 1);
@@ -620,7 +734,7 @@ Future<String> _getCurrentUserId() async {
 }
 
 // ===================================
-// 📊 Models للنتائج
+// Models للنتائج
 // ===================================
 class KeysStatus {
   final bool hasLocalKeys;
@@ -637,17 +751,33 @@ class KeysStatus {
     this.serverVersion,
   });
 }
-
 class DecryptionResult {
   final bool success;
   final String? message;
   final bool needsKeySync;
+  final bool needsSessionReset;  
   final String? error;
 
   DecryptionResult({
     required this.success,
     this.message,
     this.needsKeySync = false,
+    this.needsSessionReset = false, 
     this.error,
   });
 }
+
+class SessionResetResult {
+  final bool success;
+  final String? message;
+  final String? error;
+
+  SessionResetResult({
+    required this.success,
+    this.message,
+    this.error,
+  });
+}
+
+
+

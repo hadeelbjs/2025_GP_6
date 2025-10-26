@@ -26,7 +26,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> {
   final _apiService = ApiService();
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
-  static String get baseUrl => AppConfig.hosting;
+  static String get baseUrl => AppConfig.apiBaseUrl;
 
 
  

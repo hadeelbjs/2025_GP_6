@@ -20,13 +20,14 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5, 
+      version: 6, // ✅ تحديث النسخة إلى 6
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
   }
 
   Future<void> _onCreate(Database db, int version) async {
+    // ✅ جدول الرسائل مع جميع الأعمدة
     await db.execute('''
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
@@ -43,8 +44,11 @@ class DatabaseHelper {
         isMine INTEGER DEFAULT 0,
         requiresBiometric INTEGER DEFAULT 1,
         isDecrypted INTEGER DEFAULT 0,
+        isDeleted INTEGER DEFAULT 0,
+        isDeletedForMe INTEGER DEFAULT 0,
         deletedForRecipient INTEGER DEFAULT 0,
         failedVerificationAtRecipient INTEGER DEFAULT 0,
+        isLocked INTEGER DEFAULT 0,
         attachmentData TEXT,
         attachmentType TEXT,
         attachmentName TEXT,
@@ -52,6 +56,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // ✅ جدول المحادثات
     await db.execute('''
       CREATE TABLE conversations (
         id TEXT PRIMARY KEY,
@@ -64,6 +69,7 @@ class DatabaseHelper {
       )
     ''');
 
+    // ✅ Indexes للأداء
     await db.execute('''
       CREATE INDEX idx_messages_conversation 
       ON messages(conversationId, createdAt DESC)
@@ -73,46 +79,169 @@ class DatabaseHelper {
       CREATE INDEX idx_messages_status 
       ON messages(status, conversationId)
     ''');
+    
+    await db.execute('''
+      CREATE INDEX idx_messages_deleted
+      ON messages(isDeleted, isDeletedForMe)
+    ''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    print('🔄 Upgrading database from v$oldVersion to v$newVersion');
+    
+    // Version 2: إضافة deletedForRecipient
     if (oldVersion < 2) {
-      await db.execute('ALTER TABLE messages ADD COLUMN deletedForRecipient INTEGER DEFAULT 0');
-      print('✅ Upgraded to v2');
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN deletedForRecipient INTEGER DEFAULT 0');
+        print('✅ Upgraded to v2: Added deletedForRecipient');
+      } catch (e) {
+        print('⚠️ Column deletedForRecipient might already exist');
+      }
     }
     
+    // Version 3: إضافة المرفقات
     if (oldVersion < 3) {
-      await db.execute('ALTER TABLE messages ADD COLUMN attachmentData TEXT');
-      await db.execute('ALTER TABLE messages ADD COLUMN attachmentType TEXT');
-      print('✅ Upgraded to v3');
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN attachmentData TEXT');
+        await db.execute('ALTER TABLE messages ADD COLUMN attachmentType TEXT');
+        print('✅ Upgraded to v3: Added attachments');
+      } catch (e) {
+        print('⚠️ Attachment columns might already exist');
+      }
     }
     
+    // Version 4: إضافة attachmentName
     if (oldVersion < 4) {
-      await db.execute('ALTER TABLE messages ADD COLUMN attachmentName TEXT');
-      print('✅ Upgraded to v4');
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN attachmentName TEXT');
+        print('✅ Upgraded to v4: Added attachmentName');
+      } catch (e) {
+        print('⚠️ Column attachmentName might already exist');
+      }
     }
 
-if (oldVersion < 5) {
-  await db.execute(
-    'ALTER TABLE messages ADD COLUMN failedVerificationAtRecipient INTEGER DEFAULT 0'
-  );
-} 
- 
+    // Version 5: إضافة failedVerificationAtRecipient
+    if (oldVersion < 5) {
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN failedVerificationAtRecipient INTEGER DEFAULT 0');
+        print('✅ Upgraded to v5: Added failedVerificationAtRecipient');
+      } catch (e) {
+        print('⚠️ Column failedVerificationAtRecipient might already exist');
+      }
+    }
+    
+    // ✅ Version 6: إضافة أعمدة الحذف والقفل
+    if (oldVersion < 6) {
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN isDeleted INTEGER DEFAULT 0');
+        print('✅ Added isDeleted');
+      } catch (e) {
+        print('⚠️ Column isDeleted might already exist');
+      }
+      
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN isDeletedForMe INTEGER DEFAULT 0');
+        print('✅ Added isDeletedForMe');
+      } catch (e) {
+        print('⚠️ Column isDeletedForMe might already exist');
+      }
+      
+      try {
+        await db.execute('ALTER TABLE messages ADD COLUMN isLocked INTEGER DEFAULT 0');
+        print('✅ Added isLocked');
+      } catch (e) {
+        print('⚠️ Column isLocked might already exist');
+      }
+      
+      // إضافة Index جديد
+      try {
+        await db.execute('''
+          CREATE INDEX idx_messages_deleted
+          ON messages(isDeleted, isDeletedForMe)
+        ''');
+        print('✅ Created index for deleted messages');
+      } catch (e) {
+        print('⚠️ Index might already exist');
+      }
+      
+      print('✅ Upgraded to v6: Added deletion and lock columns');
+    }
   }
+
+  // ============================================
+  // ✅ دوال حفظ وتحديث الرسائل
+  // ============================================
 
   Future<void> saveMessage(Map<String, dynamic> message) async {
     final db = await database;
+    
+    // ✅ التأكد من وجود جميع الأعمدة المطلوبة
+    final messageToSave = {
+      'id': message['id'],
+      'conversationId': message['conversationId'],
+      'senderId': message['senderId'],
+      'receiverId': message['receiverId'],
+      'ciphertext': message['ciphertext'],
+      'encryptionType': message['encryptionType'],
+      'plaintext': message['plaintext'],
+      'status': message['status'] ?? 'sent',
+      'createdAt': message['createdAt'],
+      'deliveredAt': message['deliveredAt'],
+      'readAt': message['readAt'],
+      'isMine': message['isMine'] ?? 0,
+      'requiresBiometric': message['requiresBiometric'] ?? 1,
+      'isDecrypted': message['isDecrypted'] ?? 0,
+      'isDeleted': message['isDeleted'] ?? 0,
+      'isDeletedForMe': message['isDeletedForMe'] ?? 0,
+      'deletedForRecipient': message['deletedForRecipient'] ?? 0,
+      'failedVerificationAtRecipient': message['failedVerificationAtRecipient'] ?? 0,
+      'isLocked': message['isLocked'] ?? 0,
+      'attachmentData': message['attachmentData'],
+      'attachmentType': message['attachmentType'],
+      'attachmentName': message['attachmentName'],
+    };
+    
     await db.insert(
       'messages',
-      message,
+      messageToSave,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
     
+    // تحديث آخر رسالة في المحادثة
     await _updateConversationLastMessage(
       message['conversationId'],
       message['plaintext'] ?? '🔒 رسالة مشفرة',
       message['createdAt'],
     );
+  }
+
+  // ✅ جلب رسائل المحادثة (مع دعم الأعمدة الجديدة)
+  Future<List<Map<String, dynamic>>> getConversationMessages(String conversationId) async {
+    final db = await database;
+    
+    final messages = await db.query(
+      'messages',
+      where: 'conversationId = ?',
+      whereArgs: [conversationId],
+      orderBy: 'createdAt ASC',
+    );
+    
+    // ✅ تحويل الرسائل إلى format يفهمه ChatScreen
+    return messages.map((msg) => {
+      'id': msg['id'],
+      'content': msg['plaintext'] ?? msg['ciphertext'],
+      'timestamp': DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int).toIso8601String(),
+      'isMine': msg['isMine'] == 1,
+      'status': msg['status'],
+      'isDeleted': msg['isDeleted'] == 1,
+      'isDeletedForMe': msg['isDeletedForMe'] == 1,
+      'isDeletedForRecipient': msg['deletedForRecipient'] == 1,
+      'isLocked': msg['isLocked'] == 1,
+      'failedVerificationAtRecipient': msg['failedVerificationAtRecipient'] == 1,
+      'attachmentType': msg['attachmentType'],
+      'attachmentData': msg['attachmentData'],
+      'attachmentName': msg['attachmentName'],
+    }).toList();
   }
 
   Future<List<Map<String, dynamic>>> getMessages(
@@ -145,25 +274,25 @@ if (oldVersion < 5) {
     final result = await db.query(
       'messages',
       where: 'conversationId = ? AND isMine = ? AND isDecrypted = ? AND plaintext IS NULL',
-      whereArgs: [conversationId, 0, 0], // الرسائل المستلمة وغير المفكوكة
-      orderBy: 'createdAt ASC', // الأقدم أولا
+      whereArgs: [conversationId, 0, 0],
+      orderBy: 'createdAt ASC',
     );
     
     return result;
   }
 
   Future<List<Map<String, dynamic>>> getPendingMessages() async {
-  final db = await database;
-  
-  final result = await db.query(
-    'messages',
-    where: 'status IN (?, ?)', // ممكن تكون "sending" أو "pending"
-    whereArgs: ['sending', 'pending'],
-    orderBy: 'createdAt ASC',
-  );
-  
-  return result;
-}
+    final db = await database;
+    
+    final result = await db.query(
+      'messages',
+      where: 'status IN (?, ?)',
+      whereArgs: ['sending', 'pending'],
+      orderBy: 'createdAt ASC',
+    );
+    
+    return result;
+  }
 
   Future<Map<String, dynamic>?> getMessage(String messageId) async {
     final db = await database;
@@ -178,6 +307,10 @@ if (oldVersion < 5) {
     if (result.isEmpty) return null;
     return result.first;
   }
+
+  // ============================================
+  // ✅ تحديث حالة الرسائل
+  // ============================================
 
   Future<void> updateMessageStatus(
     String messageId,
@@ -216,11 +349,46 @@ if (oldVersion < 5) {
         await _updateConversationLastMessage(
           message['conversationId'],
           updates['plaintext'],
-          message['createdAt'],
+          message['createdAt'] as int,
         );
       }
     }
   }
+
+  // ✅ تحديث حالة الحذف
+  Future<void> markMessageAsDeleted(String messageId, {bool forMe = false}) async {
+    final db = await database;
+    
+    if (forMe) {
+      await db.update(
+        'messages',
+        {'isDeletedForMe': 1},
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+    } else {
+      await db.update(
+        'messages',
+        {'isDeleted': 1},
+        where: 'id = ?',
+        whereArgs: [messageId],
+      );
+    }
+  }
+
+  Future<void> markMessageAsDeletedForRecipient(String messageId) async {
+    final db = await database;
+    await db.update(
+      'messages',
+      {'deletedForRecipient': 1},
+      where: 'id = ?',
+      whereArgs: [messageId],
+    );
+  }
+
+  // ============================================
+  // ✅ إدارة المحادثات
+  // ============================================
 
   Future<int> getUnreadCount(String conversationId) async {
     final db = await database;
@@ -230,6 +398,7 @@ if (oldVersion < 5) {
       WHERE conversationId = ? 
       AND isMine = 0
       AND status != 'read'
+      AND isDeletedForMe = 0
     ''', [conversationId]);
     
     return Sqflite.firstIntValue(result) ?? 0;
@@ -313,6 +482,10 @@ if (oldVersion < 5) {
     ''', [conversationId]);
   }
 
+  // ============================================
+  // ✅ حذف البيانات
+  // ============================================
+
   Future<void> deleteConversation(String conversationId) async {
     final db = await database;
     await db.delete(
@@ -347,5 +520,42 @@ if (oldVersion < 5) {
       await _database!.close();
       _database = null;
     }
+  }
+
+  // ============================================
+  // ✅ دوال مساعدة للتشخيص
+  // ============================================
+
+  Future<void> printDatabaseSchema() async {
+    final db = await database;
+    
+    final tables = await db.rawQuery(
+      "SELECT name FROM sqlite_master WHERE type='table'"
+    );
+    
+    print('📊 Database Tables:');
+    for (var table in tables) {
+      final tableName = table['name'];
+      print('\n📋 Table: $tableName');
+      
+      final columns = await db.rawQuery(
+        "PRAGMA table_info($tableName)"
+      );
+      
+      for (var col in columns) {
+        print('   - ${col['name']}: ${col['type']} (${col['notnull'] == 1 ? 'NOT NULL' : 'NULL'})');
+      }
+    }
+  }
+
+  Future<int> getMessagesCount(String conversationId) async {
+    final db = await database;
+    
+    final result = await db.rawQuery('''
+      SELECT COUNT(*) as count FROM messages
+      WHERE conversationId = ?
+    ''', [conversationId]);
+    
+    return Sqflite.firstIntValue(result) ?? 0;
   }
 }

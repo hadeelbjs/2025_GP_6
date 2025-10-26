@@ -722,6 +722,8 @@ String _generateConversationId(String otherUserId) {
 
 
 
+
+
   // ✅ Dialog للتنبيه عند عدم وجود بصمة مسجلة
   void _showBiometricNotEnrolledDialog() {
     showDialog(

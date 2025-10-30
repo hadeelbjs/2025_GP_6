@@ -12,6 +12,7 @@ import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/local_db/database_helper.dart';
+import 'contact_privacy_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -33,21 +34,21 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _messagingService = MessagingService();
   final _scrollController = ScrollController();
-  
+
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
   bool _isSending = false;
   String? _conversationId;
-  
+
   // ✅ إزالة متغيرات التحقق البيومتري لأنه تم التحقق قبل الدخول
   bool _isDecryptingMessages = false;
-  
+
   int _decryptionFailureCount = 0; // عدد مرات فشل فك التشفير
   bool _hasShownDecryptionDialog = false; // لتجنب عرض Dialog متعدد
-  
+
   File? _pendingImageFile;
   PlatformFile? _pendingFile;
-  
+
   StreamSubscription? _newMessageSubscription;
   StreamSubscription? _deleteSubscription;
   StreamSubscription? _statusSubscription;
@@ -59,7 +60,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void initState() {
     super.initState();
     _initializeChat(); // ✅ مباشرة بدون فحص بايومترك
-    _listenToUserStatus(); 
+    _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
   }
 
@@ -70,418 +71,398 @@ class _ChatScreenState extends State<ChatScreen> {
     _newMessageSubscription?.cancel();
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
-    _userStatusSubscription?.cancel(); 
+    _userStatusSubscription?.cancel();
     _messagingService.setCurrentOpenChat(null);
     super.dispose();
   }
 
   Future<void> _decryptAllMessages() async {
-  try {
-    if (_conversationId == null) return;
-    
-    print('🔓 Starting decryption for conversation: $_conversationId');
-    
-    final result = await _messagingService.decryptAllConversationMessages(
-      _conversationId!
-    );
-    
-    if (result['success'] == true) {
-      final count = result['count'] ?? 0;
-      
-      if (count > 0) {
-        print('✅ Decrypted $count messages successfully');
-        await _loadMessagesFromDatabase();
-        
-        _decryptionFailureCount = 0;
-        _hasShownDecryptionDialog = false;
-      } else {
-        print('ℹ️ No encrypted messages to decrypt');
-      }
-    } else {
-      // ❌ فشل فك التشفير
-      final errorType = result['error'];
-      
-      print('❌ Decryption failed: $errorType');
-      
-      // ========================================
-      // ✅ معالجة خاصة لـ InvalidSessionException
-      // ========================================
-      if (errorType == 'InvalidSessionException' || 
-          errorType == 'NoSessionException' ||
-          errorType?.toString().contains('session') == true) {
-        
-        print('⚠️ Session error detected - auto-recreating session');
-        
-        // إنشاء session جديد تلقائياً بدون سؤال المستخدم
-        await _autoRecreateSession();
-        return; // الخروج بعد إعادة الإنشاء
-      }
-      
-      // ========================================
-      // ✅ معالجة أخطاء المفاتيح الأخرى (مع العداد)
-      // ========================================
-      if (errorType == 'InvalidKeyException' || 
-          errorType == 'InvalidMessageException' ||
-          errorType == 'UntrustedIdentityException') {
-        
-        _decryptionFailureCount++;
-        print('⚠️ Key-related error detected. Count: $_decryptionFailureCount');
-        
-        if (_decryptionFailureCount >= 3 && !_hasShownDecryptionDialog) {
-          _hasShownDecryptionDialog = true;
-          
-          if (mounted) {
-            await _showDecryptionFailureDialog();
-          }
-        } else if (_decryptionFailureCount < 3) {
-          _showMessage(
-            'فشل فك تشفير بعض الرسائل (محاولة $_decryptionFailureCount/3)',
-            false,
-          );
+    try {
+      if (_conversationId == null) return;
+
+      print('🔓 Starting decryption for conversation: $_conversationId');
+
+      final result = await _messagingService.decryptAllConversationMessages(
+        _conversationId!,
+      );
+
+      if (result['success'] == true) {
+        final count = result['count'] ?? 0;
+
+        if (count > 0) {
+          print('✅ Decrypted $count messages successfully');
+          await _loadMessagesFromDatabase();
+
+          _decryptionFailureCount = 0;
+          _hasShownDecryptionDialog = false;
+        } else {
+          print('ℹ️ No encrypted messages to decrypt');
         }
       } else {
-        // أخطاء عامة أخرى
-        _showMessage('حدث خطأ أثناء فك التشفير', false);
+        // ❌ فشل فك التشفير
+        final errorType = result['error'];
+
+        print('❌ Decryption failed: $errorType');
+
+        // ========================================
+        // ✅ معالجة خاصة لـ InvalidSessionException
+        // ========================================
+        if (errorType == 'InvalidSessionException' ||
+            errorType == 'NoSessionException' ||
+            errorType?.toString().contains('session') == true) {
+          print('⚠️ Session error detected - auto-recreating session');
+
+          // إنشاء session جديد تلقائياً بدون سؤال المستخدم
+          await _autoRecreateSession();
+          return; // الخروج بعد إعادة الإنشاء
+        }
+
+        // ========================================
+        // ✅ معالجة أخطاء المفاتيح الأخرى (مع العداد)
+        // ========================================
+        if (errorType == 'InvalidKeyException' ||
+            errorType == 'InvalidMessageException' ||
+            errorType == 'UntrustedIdentityException') {
+          _decryptionFailureCount++;
+          print(
+            '⚠️ Key-related error detected. Count: $_decryptionFailureCount',
+          );
+
+          if (_decryptionFailureCount >= 3 && !_hasShownDecryptionDialog) {
+            _hasShownDecryptionDialog = true;
+
+            if (mounted) {
+              await _showDecryptionFailureDialog();
+            }
+          } else if (_decryptionFailureCount < 3) {
+            _showMessage(
+              'فشل فك تشفير بعض الرسائل (محاولة $_decryptionFailureCount/3)',
+              false,
+            );
+          }
+        } else {
+          // أخطاء عامة أخرى
+          _showMessage('حدث خطأ أثناء فك التشفير', false);
+        }
+      }
+    } catch (e) {
+      print('❌ Exception during decryption: $e');
+
+      // ✅ التحقق من نوع الاستثناء
+      if (e.toString().contains('session') ||
+          e.toString().contains('Session')) {
+        print('⚠️ Session exception caught - auto-recreating');
+        await _autoRecreateSession();
+      } else {
+        _showMessage('فشل فك تشفير الرسائل', false);
       }
     }
-  } catch (e) {
-    print('❌ Exception during decryption: $e');
-    
-    // ✅ التحقق من نوع الاستثناء
-    if (e.toString().contains('session') || 
-        e.toString().contains('Session')) {
-      print('⚠️ Session exception caught - auto-recreating');
-      await _autoRecreateSession();
-    } else {
-      _showMessage('فشل فك تشفير الرسائل', false);
-    }
   }
-}
 
+  // ========================================
+  // ✅ جديد: إعادة إنشاء Session تلقائياً (بدون Dialog)
+  // ========================================
+  Future<void> _autoRecreateSession() async {
+    try {
+      print('🔄 Auto-recreating session for ${widget.userId}');
 
-// ========================================
-// ✅ جديد: إعادة إنشاء Session تلقائياً (بدون Dialog)
-// ========================================
-Future<void> _autoRecreateSession() async {
-  try {
-    print('🔄 Auto-recreating session for ${widget.userId}');
-    
-    // عرض رسالة للمستخدم
-    _showMessage('جاري إصلاح جلسة التشفير...', true);
-    
-    // 1. حذف Session القديم (إن وُجد)
-    await _messagingService.deleteSession(widget.userId);
-    print('🗑️ Old session deleted (if existed)');
-    
-    // 2. إنشاء Session جديد
-    final success = await _messagingService.createNewSession(widget.userId);
-    
-    if (success) {
-      print('✅ New session created automatically');
-      
-      // إعادة تعيين العدادات
-      _decryptionFailureCount = 0;
-      _hasShownDecryptionDialog = false;
-      
-      // إعادة تحميل الرسائل
-      await _loadMessagesFromDatabase();
-      
-      // عرض رسالة نجاح
-      _showMessage('تم إصلاح جلسة التشفير بنجاح', true);
-      
-      // محاولة فك التشفير مرة أخرى بعد ثانية
-      await Future.delayed(Duration(seconds: 1));
-      await _decryptAllMessages();
-      
-    } else {
-      print('❌ Failed to auto-create session');
-      _showMessage('فشل إصلاح جلسة التشفير', false);
-      
-      // إذا فشل الإنشاء التلقائي، عرض Dialog للمستخدم
+      // عرض رسالة للمستخدم
+      _showMessage('جاري إصلاح جلسة التشفير...', true);
+
+      // 1. حذف Session القديم (إن وُجد)
+      await _messagingService.deleteSession(widget.userId);
+      print('🗑️ Old session deleted (if existed)');
+
+      // 2. إنشاء Session جديد
+      final success = await _messagingService.createNewSession(widget.userId);
+
+      if (success) {
+        print('✅ New session created automatically');
+
+        // إعادة تعيين العدادات
+        _decryptionFailureCount = 0;
+        _hasShownDecryptionDialog = false;
+
+        // إعادة تحميل الرسائل
+        await _loadMessagesFromDatabase();
+
+        // عرض رسالة نجاح
+        _showMessage('تم إصلاح جلسة التشفير بنجاح', true);
+
+        // محاولة فك التشفير مرة أخرى بعد ثانية
+        await Future.delayed(Duration(seconds: 1));
+        await _decryptAllMessages();
+      } else {
+        print('❌ Failed to auto-create session');
+        _showMessage('فشل إصلاح جلسة التشفير', false);
+
+        // إذا فشل الإنشاء التلقائي، عرض Dialog للمستخدم
+        if (mounted && !_hasShownDecryptionDialog) {
+          _hasShownDecryptionDialog = true;
+          await _showDecryptionFailureDialog();
+        }
+      }
+    } catch (e) {
+      print('❌ Error in auto-recreate session: $e');
+      _showMessage('حدث خطأ أثناء إصلاح الجلسة', false);
+
+      // في حالة الخطأ، عرض Dialog للمستخدم
       if (mounted && !_hasShownDecryptionDialog) {
         _hasShownDecryptionDialog = true;
         await _showDecryptionFailureDialog();
       }
     }
-    
-  } catch (e) {
-    print('❌ Error in auto-recreate session: $e');
-    _showMessage('حدث خطأ أثناء إصلاح الجلسة', false);
-    
-    // في حالة الخطأ، عرض Dialog للمستخدم
-    if (mounted && !_hasShownDecryptionDialog) {
-      _hasShownDecryptionDialog = true;
-      await _showDecryptionFailureDialog();
-    }
   }
-}
 
+  // ========================================
+  // ✅ تحديث: _recreateSession() للاستخدام اليدوي من Dialog
+  // ========================================
+  Future<void> _recreateSession() async {
+    try {
+      _showMessage('جاري إعادة إنشاء جلسة التشفير...', true);
 
-// ========================================
-// ✅ تحديث: _recreateSession() للاستخدام اليدوي من Dialog
-// ========================================
-Future<void> _recreateSession() async {
-  try {
-    _showMessage('جاري إعادة إنشاء جلسة التشفير...', true);
-    
-    await _messagingService.deleteSession(widget.userId);
-    print('🗑️ Old session deleted for ${widget.userId}');
-    
-    final success = await _messagingService.createNewSession(widget.userId);
-    
-    if (success) {
-      print('✅ New session created successfully');
-      
-      _decryptionFailureCount = 0;
-      _hasShownDecryptionDialog = false;
-      
-      await _loadMessagesFromDatabase();
-      
-      _showMessage('تم إنشاء جلسة جديدة بنجاح', true);
-      
-      await Future.delayed(Duration(seconds: 1));
-      await _decryptAllMessages();
-      
-    } else {
-      print('❌ Failed to create new session');
-      _showMessage('فشل إنشاء جلسة جديدة', false);
+      await _messagingService.deleteSession(widget.userId);
+      print('🗑️ Old session deleted for ${widget.userId}');
+
+      final success = await _messagingService.createNewSession(widget.userId);
+
+      if (success) {
+        print('✅ New session created successfully');
+
+        _decryptionFailureCount = 0;
+        _hasShownDecryptionDialog = false;
+
+        await _loadMessagesFromDatabase();
+
+        _showMessage('تم إنشاء جلسة جديدة بنجاح', true);
+
+        await Future.delayed(Duration(seconds: 1));
+        await _decryptAllMessages();
+      } else {
+        print('❌ Failed to create new session');
+        _showMessage('فشل إنشاء جلسة جديدة', false);
+        _hasShownDecryptionDialog = false;
+      }
+    } catch (e) {
+      print('❌ Error recreating session: $e');
+      _showMessage('حدث خطأ أثناء إعادة الإنشاء', false);
       _hasShownDecryptionDialog = false;
     }
-    
-  } catch (e) {
-    print('❌ Error recreating session: $e');
-    _showMessage('حدث خطأ أثناء إعادة الإنشاء', false);
-    _hasShownDecryptionDialog = false;
   }
-}
 
-
-// ========================================
-// ✅ الـ Dialog يبقى كما هو (للحالات الأخرى)
-// ========================================
-Future<void> _showDecryptionFailureDialog() async {
-  final shouldRecreate = await showDialog<bool>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: WillPopScope(
-        onWillPop: () async => false,
-        child: AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.red.withOpacity(0.1),
-                  shape: BoxShape.circle,
+  // ========================================
+  // ✅ الـ Dialog يبقى كما هو (للحالات الأخرى)
+  // ========================================
+  Future<void> _showDecryptionFailureDialog() async {
+    final shouldRecreate = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: WillPopScope(
+          onWillPop: () async => false,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(Icons.lock_open, color: Colors.red, size: 28),
                 ),
-                child: Icon(
-                  Icons.lock_open,
-                  color: Colors.red,
-                  size: 28,
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    '⚠️ فشل فك التشفير',
+                    style: AppTextStyles.h3.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'لا يمكن فك تشفير الرسائل من ${widget.name}.',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 16),
+
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              size: 20,
+                              color: Colors.orange.shade700,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'السبب المحتمل:',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.orange.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '• المرسل قام بتحديث مفاتيح التشفير من جهاز آخر\n'
+                          '• تم تسجيل الدخول من جهاز جديد\n'
+                          '• تغيير في إعدادات الأمان',
+                          style: AppTextStyles.bodySmall.copyWith(height: 1.5),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 12),
+
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.build_outlined,
+                              size: 20,
+                              color: Colors.blue.shade700,
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'الحل المقترح:',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: Colors.blue.shade700,
+                              ),
+                            ),
+                          ],
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'إعادة إنشاء جلسة تشفير جديدة مع ${widget.name}.',
+                          style: AppTextStyles.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  SizedBox(height: 12),
+
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.red.withOpacity(0.2)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          size: 20,
+                          color: Colors.red,
+                        ),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'ملاحظة: قد لا تتمكن من قراءة الرسائل القديمة بعد إعادة الإنشاء.',
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: Colors.red.shade700,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                style: TextButton.styleFrom(
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                ),
+                child: Text(
+                  'تجاهل',
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 15,
+                  ),
                 ),
               ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  '⚠️ فشل فك التشفير',
-                  style: AppTextStyles.h3.copyWith(
-                    fontWeight: FontWeight.bold,
+              ElevatedButton.icon(
+                onPressed: () => Navigator.pop(context, true),
+                icon: Icon(Icons.refresh, size: 18),
+                label: Text(
+                  'إعادة إنشاء الجلسة',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
               ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'لا يمكن فك تشفير الرسائل من ${widget.name}.',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                SizedBox(height: 16),
-                
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.orange.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            size: 20,
-                            color: Colors.orange.shade700,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'السبب المحتمل:',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.orange.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        '• المرسل قام بتحديث مفاتيح التشفير من جهاز آخر\n'
-                        '• تم تسجيل الدخول من جهاز جديد\n'
-                        '• تغيير في إعدادات الأمان',
-                        style: AppTextStyles.bodySmall.copyWith(
-                          height: 1.5,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                
-                SizedBox(height: 12),
-                
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.blue.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.blue.withOpacity(0.3),
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.build_outlined,
-                            size: 20,
-                            color: Colors.blue.shade700,
-                          ),
-                          SizedBox(width: 8),
-                          Text(
-                            'الحل المقترح:',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.blue.shade700,
-                            ),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: 8),
-                      Text(
-                        'إعادة إنشاء جلسة تشفير جديدة مع ${widget.name}.',
-                        style: AppTextStyles.bodySmall,
-                      ),
-                    ],
-                  ),
-                ),
-                
-                SizedBox(height: 12),
-                
-                Container(
-                  padding: EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: Colors.red.withOpacity(0.2),
-                    ),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.warning_amber_rounded,
-                        size: 20,
-                        color: Colors.red,
-                      ),
-                      SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'ملاحظة: قد لا تتمكن من قراءة الرسائل القديمة بعد إعادة الإنشاء.',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: Colors.red.shade700,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              style: TextButton.styleFrom(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              ),
-              child: Text(
-                'تجاهل',
-                style: TextStyle(
-                  color: Colors.grey.shade600,
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 15,
-                ),
-              ),
-            ),
-            ElevatedButton.icon(
-              onPressed: () => Navigator.pop(context, true),
-              icon: Icon(Icons.refresh, size: 18),
-              label: Text(
-                'إعادة إنشاء الجلسة',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-          ],
         ),
       ),
-    ),
-  );
+    );
 
-  if (shouldRecreate == true) {
-    await _recreateSession();
-  } else {
-    _decryptionFailureCount = 0;
-    _hasShownDecryptionDialog = false;
+    if (shouldRecreate == true) {
+      await _recreateSession();
+    } else {
+      _decryptionFailureCount = 0;
+      _hasShownDecryptionDialog = false;
+    }
   }
-}
 
-  
   Future<void> _initializeChat() async {
     setState(() => _isLoading = true);
-    
+
     try {
       final initialized = await _messagingService.initialize();
-      
+
       if (!initialized) {
         _showMessage('فشل الاتصال بالخادم', false);
         return;
@@ -498,14 +479,13 @@ Future<void> _showDecryptionFailureDialog() async {
         setState(() {
           _isDecryptingMessages = true;
         });
-        
+
         await _decryptAllMessages();
-        
+
         setState(() {
           _isDecryptingMessages = false;
         });
       }
-
     } catch (e) {
       _showMessage('حدث خطأ في تهيئة المحادثة', false);
     } finally {
@@ -534,9 +514,7 @@ Future<void> _showDecryptionFailureDialog() async {
           _scrollController.jumpTo(_scrollController.position.minScrollExtent);
         }
       });
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   void _subscribeToRealtimeUpdates() {
@@ -550,7 +528,9 @@ Future<void> _showDecryptionFailureDialog() async {
       }
     });
 
-    _deleteSubscription = _messagingService.onMessageDeleted.listen((data) async {
+    _deleteSubscription = _messagingService.onMessageDeleted.listen((
+      data,
+    ) async {
       if (!mounted) return;
       final deletedMessageId = data['messageId'];
       setState(() {
@@ -558,32 +538,34 @@ Future<void> _showDecryptionFailureDialog() async {
       });
     });
 
-   _statusSubscription = _messagingService.onMessageStatusUpdate.listen((data) {
-  // ✅ التعامل مع فشل التحقق عند المستقبل
-  if (data['type'] == 'recipient_failed_verification') {
-    final recipientId = data['recipientId'];
-    if (recipientId == widget.userId && mounted) {
-      // ✅ إعادة تحميل الرسائل لتحديث العلامات
-      _loadMessagesFromDatabase();
-    }
-    return;
-  }
-  
-  // ✅ التعامل العادي مع تحديثات الحالة
-  final messageId = data['messageId'];
-  final newStatus = data['status'];
-  
-  if (mounted) {
-    setState(() {
-      final index = _messages.indexWhere((m) => m['id'] == messageId);
-      if (index != -1) {
-        final updatedMessage = Map<String, dynamic>.from(_messages[index]);
-        updatedMessage['status'] = newStatus;
-        _messages[index] = updatedMessage;
+    _statusSubscription = _messagingService.onMessageStatusUpdate.listen((
+      data,
+    ) {
+      // ✅ التعامل مع فشل التحقق عند المستقبل
+      if (data['type'] == 'recipient_failed_verification') {
+        final recipientId = data['recipientId'];
+        if (recipientId == widget.userId && mounted) {
+          // ✅ إعادة تحميل الرسائل لتحديث العلامات
+          _loadMessagesFromDatabase();
+        }
+        return;
+      }
+
+      // ✅ التعامل العادي مع تحديثات الحالة
+      final messageId = data['messageId'];
+      final newStatus = data['status'];
+
+      if (mounted) {
+        setState(() {
+          final index = _messages.indexWhere((m) => m['id'] == messageId);
+          if (index != -1) {
+            final updatedMessage = Map<String, dynamic>.from(_messages[index]);
+            updatedMessage['status'] = newStatus;
+            _messages[index] = updatedMessage;
+          }
+        });
       }
     });
-  }
-});
   }
 
   void _listenToUserStatus() {
@@ -592,14 +574,18 @@ Future<void> _showDecryptionFailureDialog() async {
         _messagingService.requestUserStatus(widget.userId);
       }
     });
-    
-    _userStatusSubscription = _messagingService.onUserStatusChange.listen((data) {
+
+    _userStatusSubscription = _messagingService.onUserStatusChange.listen((
+      data,
+    ) {
       if (data['userId'] == widget.userId) {
         if (mounted) {
           setState(() {
             _isOtherUserOnline = data['isOnline'] ?? false;
           });
-          print('📡 ${widget.name} is now: ${_isOtherUserOnline ? "online" : "offline"}');
+          print(
+            '📡 ${widget.name} is now: ${_isOtherUserOnline ? "online" : "offline"}',
+          );
         }
       }
     });
@@ -612,13 +598,12 @@ Future<void> _showDecryptionFailureDialog() async {
         maxWidth: 1600,
         imageQuality: 85,
       );
-      
+
       if (picked == null) return;
-      
+
       setState(() {
         _pendingImageFile = File(picked.path);
       });
-      
     } catch (e) {
       _showMessage('تعذر اختيار الصورة', false);
     }
@@ -630,13 +615,12 @@ Future<void> _showDecryptionFailureDialog() async {
         allowMultiple: false,
         type: FileType.any,
       );
-      
+
       if (result == null || result.files.isEmpty) return;
-      
+
       setState(() {
         _pendingFile = result.files.single;
       });
-      
     } catch (e) {
       _showMessage('تعذر اختيار الملف', false);
     }
@@ -664,7 +648,7 @@ Future<void> _showDecryptionFailureDialog() async {
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              
+
               ListTile(
                 leading: Icon(Icons.image_outlined, color: AppColors.primary),
                 title: Text('صورة من المعرض', style: AppTextStyles.bodyLarge),
@@ -673,25 +657,31 @@ Future<void> _showDecryptionFailureDialog() async {
                   _pickImage(ImageSource.gallery);
                 },
               ),
-              
+
               ListTile(
-                leading: Icon(Icons.camera_alt_outlined, color: AppColors.primary),
+                leading: Icon(
+                  Icons.camera_alt_outlined,
+                  color: AppColors.primary,
+                ),
                 title: Text('التقاط صورة', style: AppTextStyles.bodyLarge),
                 onTap: () {
                   Navigator.pop(context);
                   _pickImage(ImageSource.camera);
                 },
               ),
-              
+
               ListTile(
-                leading: Icon(Icons.insert_drive_file_outlined, color: AppColors.primary),
+                leading: Icon(
+                  Icons.insert_drive_file_outlined,
+                  color: AppColors.primary,
+                ),
                 title: Text('اختيار ملف', style: AppTextStyles.bodyLarge),
                 onTap: () {
                   Navigator.pop(context);
                   _pickFile();
                 },
               ),
-              
+
               SizedBox(height: 10),
             ],
           ),
@@ -702,16 +692,17 @@ Future<void> _showDecryptionFailureDialog() async {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    
-    if (text.isEmpty && _pendingImageFile == null && _pendingFile == null) return;
+
+    if (text.isEmpty && _pendingImageFile == null && _pendingFile == null)
+      return;
     if (_isSending) return;
-    
+
     setState(() => _isSending = true);
-    
+
     try {
       File? attachmentFile;
       String? fileName;
-      
+
       if (_pendingFile != null && _pendingFile!.path != null) {
         attachmentFile = File(_pendingFile!.path!);
         fileName = _pendingFile!.name;
@@ -720,7 +711,9 @@ Future<void> _showDecryptionFailureDialog() async {
       final result = await _messagingService.sendMessage(
         recipientId: widget.userId,
         recipientName: widget.name,
-        messageText: text.isEmpty ? (_pendingImageFile != null ? 'صورة' : 'ملف') : text,
+        messageText: text.isEmpty
+            ? (_pendingImageFile != null ? 'صورة' : 'ملف')
+            : text,
         imageFile: _pendingImageFile,
         attachmentFile: attachmentFile,
         fileName: fileName,
@@ -736,7 +729,6 @@ Future<void> _showDecryptionFailureDialog() async {
       } else {
         _showMessage(result['message'] ?? 'فشل الإرسال', false);
       }
-
     } catch (e) {
       _showMessage('فشل إرسال الرسالة', false);
     } finally {
@@ -747,7 +739,8 @@ Future<void> _showDecryptionFailureDialog() async {
   }
 
   void _showDeleteOptions(Map<String, dynamic> message) {
-   final failedVerificationAtRecipient = message['failedVerificationAtRecipient'] == 1;
+    final failedVerificationAtRecipient =
+        message['failedVerificationAtRecipient'] == 1;
 
     showModalBottomSheet(
       context: context,
@@ -769,60 +762,66 @@ Future<void> _showDecryptionFailureDialog() async {
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
-            
+
             Padding(
               padding: EdgeInsets.symmetric(horizontal: 20),
               child: Text('خيارات الحذف', style: AppTextStyles.h3),
             ),
-            
+
             SizedBox(height: 20),
 
-          if (failedVerificationAtRecipient) ...[
-            _buildDeleteOption(
-              icon: Icons.delete_outline,
-              iconColor: Colors.grey,
-              title: 'حذف لدي فقط',
-              subtitle: 'الرسالة محذوفة لدى المستقبل',
-              onTap: () {
-                Navigator.pop(context);
-                _deleteMessageLocally(message['id']);
-              },
-            ),
-          ] else ...[
-            
-            _buildDeleteOption(
-              icon: Icons.person_remove_outlined,
-              iconColor: Colors.orange,
-              title: 'حذف من عند المستقبل',
-              subtitle: 'ستبقى الرسالة عندك فقط',
-              onTap: () {
-                Navigator.pop(context);
-                _confirmDeleteForRecipient(message['id']);
-              },
-            ),
-            
-            Divider(height: 1),
-            
-            _buildDeleteOption(
-              icon: Icons.delete_forever_outlined,
-              iconColor: Colors.red,
-              title: 'حذف للجميع',
-              subtitle: 'سيتم حذف الرسالة نهائياً',
-              onTap: () {
-                Navigator.pop(context);
-                _confirmDeleteForEveryone(message['id']);
-              },
-            ),
-          ],
-            
+            if (failedVerificationAtRecipient) ...[
+              _buildDeleteOption(
+                icon: Icons.delete_outline,
+                iconColor: Colors.grey,
+                title: 'حذف لدي فقط',
+                subtitle: 'الرسالة محذوفة لدى المستقبل',
+                onTap: () {
+                  Navigator.pop(context);
+                  _deleteMessageLocally(message['id']);
+                },
+              ),
+            ] else ...[
+              _buildDeleteOption(
+                icon: Icons.person_remove_outlined,
+                iconColor: Colors.orange,
+                title: 'حذف من عند المستقبل',
+                subtitle: 'ستبقى الرسالة عندك فقط',
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeleteForRecipient(message['id']);
+                },
+              ),
+
+              Divider(height: 1),
+
+              _buildDeleteOption(
+                icon: Icons.delete_forever_outlined,
+                iconColor: Colors.red,
+                title: 'حذف للجميع',
+                subtitle: 'سيتم حذف الرسالة نهائياً',
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmDeleteForEveryone(message['id']);
+                },
+              ),
+            ],
+
             SizedBox(height: 10),
-            
+
             TextButton(
               onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(minimumSize: Size(double.infinity, 50)),
-              child: Text('إلغاء', style: AppTextStyles.bodyLarge.copyWith(color: AppColors.textSecondary)),
+              style: TextButton.styleFrom(
+                minimumSize: Size(double.infinity, 50),
+              ),
+              child: Text(
+                'إلغاء',
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+              ),
             ),
-            
+
             SizedBox(height: 10),
           ],
         ),
@@ -857,9 +856,19 @@ Future<void> _showDecryptionFailureDialog() async {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(title, style: AppTextStyles.bodyLarge.copyWith(fontWeight: FontWeight.w600)),
+                  Text(
+                    title,
+                    style: AppTextStyles.bodyLarge.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   SizedBox(height: 2),
-                  Text(subtitle, style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -869,18 +878,25 @@ Future<void> _showDecryptionFailureDialog() async {
     );
   }
 
-
   void _confirmDeleteForRecipient(String messageId) {
     showDialog(
       context: context,
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Text('حذف من عند المستقبل؟', style: AppTextStyles.h3),
-          content: Text('سيتم حذف هذه الرسالة من عند المستقبل فقط. ستبقى الرسالة عندك.', style: AppTextStyles.bodyMedium),
+          content: Text(
+            'سيتم حذف هذه الرسالة من عند المستقبل فقط. ستبقى الرسالة عندك.',
+            style: AppTextStyles.bodyMedium,
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text('إلغاء')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('إلغاء'),
+            ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -895,22 +911,20 @@ Future<void> _showDecryptionFailureDialog() async {
     );
   }
 
-Future<void> _deleteMessageLocally(String messageId) async {
-  try {
-    final db = await DatabaseHelper.instance.database;
-    await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
-    
-    setState(() {
-      _messages.removeWhere((msg) => msg['id'] == messageId);
-    });
-    
-    _showMessage('تم الحذف', true);
-  } catch (e) {
-    _showMessage('فشل الحذف', false);
+  Future<void> _deleteMessageLocally(String messageId) async {
+    try {
+      final db = await DatabaseHelper.instance.database;
+      await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+
+      setState(() {
+        _messages.removeWhere((msg) => msg['id'] == messageId);
+      });
+
+      _showMessage('تم الحذف', true);
+    } catch (e) {
+      _showMessage('فشل الحذف', false);
+    }
   }
-}
-
-
 
   void _confirmDeleteForEveryone(String messageId) {
     showDialog(
@@ -918,11 +932,19 @@ Future<void> _deleteMessageLocally(String messageId) async {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
           title: Text('حذف للجميع؟', style: AppTextStyles.h3),
-          content: Text('سيتم حذف هذه الرسالة من محادثتك ومحادثة المستلم نهائياً. لا يمكن التراجع عن هذا الإجراء.', style: AppTextStyles.bodyMedium),
+          content: Text(
+            'سيتم حذف هذه الرسالة من محادثتك ومحادثة المستلم نهائياً. لا يمكن التراجع عن هذا الإجراء.',
+            style: AppTextStyles.bodyMedium,
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text('إلغاء')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('إلغاء'),
+            ),
             ElevatedButton(
               onPressed: () {
                 Navigator.pop(context);
@@ -943,7 +965,7 @@ Future<void> _deleteMessageLocally(String messageId) async {
         messageId: messageId,
         deleteForEveryone: false,
       );
-      
+
       if (result['success']) {
         _showMessage('تم الحذف من عند المستقبل', true);
         await _loadMessagesFromDatabase();
@@ -961,7 +983,7 @@ Future<void> _deleteMessageLocally(String messageId) async {
         messageId: messageId,
         deleteForEveryone: true,
       );
-      
+
       if (result['success']) {
         _showMessage('تم الحذف للجميع', true);
         await _loadMessagesFromDatabase();
@@ -975,10 +997,14 @@ Future<void> _deleteMessageLocally(String messageId) async {
 
   void _showMessage(String message, bool isSuccess) {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, textAlign: TextAlign.right, style: AppTextStyles.bodyMedium.copyWith(color: Colors.white)),
+        content: Text(
+          message,
+          textAlign: TextAlign.right,
+          style: AppTextStyles.bodyMedium.copyWith(color: Colors.white),
+        ),
         backgroundColor: isSuccess ? Colors.green : Colors.red,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -991,12 +1017,12 @@ Future<void> _deleteMessageLocally(String messageId) async {
   @override
   Widget build(BuildContext context) {
     final hasAttachment = _pendingImageFile != null || _pendingFile != null;
-    
+
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
         backgroundColor: AppColors.background,
-        
+
         appBar: AppBar(
           backgroundColor: AppColors.primary,
           elevation: 0,
@@ -1004,28 +1030,51 @@ Future<void> _deleteMessageLocally(String messageId) async {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.name, style: AppTextStyles.bodyLarge.copyWith(color: Colors.white, fontWeight: FontWeight.w600)),
-              Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      color: _messagingService.isConnected ? Colors.greenAccent : Colors.grey,
-                      shape: BoxShape.circle,
+          title: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => ContactPrivacyScreen(
+                    userId: widget.userId,
+                    name: widget.name,
+                  ),
+                ),
+              );
+            },
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.name,
+                  style: AppTextStyles.bodyLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: _messagingService.isConnected
+                            ? Colors.greenAccent
+                            : Colors.grey,
+                        shape: BoxShape.circle,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    _isOtherUserOnline ? 'متصل' : 'غير متصل', 
-                    style: AppTextStyles.bodySmall.copyWith(color: Colors.white.withOpacity(0.8)),
-                  ),
-                ],
-              ),
-            ],
+                    const SizedBox(width: 6),
+                    Text(
+                      _isOtherUserOnline ? 'متصل' : 'غير متصل',
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
 
@@ -1056,43 +1105,69 @@ Future<void> _deleteMessageLocally(String messageId) async {
       children: [
         Expanded(
           child: _isLoading && _messages.isEmpty
-              ? const Center(child: CircularProgressIndicator(color: AppColors.primary))
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )
               : _messages.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.lock_outline, size: 64, color: AppColors.textHint.withOpacity(0.3)),
-                          const SizedBox(height: 16),
-                          Text('محادثة مشفرة من طرف لطرف', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint)),
-                          const SizedBox(height: 8),
-                          Text('ابدأ محادثة آمنة مع ${widget.name}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textHint)),
-                        ],
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.lock_outline,
+                        size: 64,
+                        color: AppColors.textHint.withOpacity(0.3),
                       ),
-                    )
-                  : ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(16),
-                      reverse: true,
-                      itemCount: _messages.length,
-                      itemBuilder: (context, index) {
-                        final message = _messages[_messages.length - 1 - index];
-                        return _buildMessageBubble(message);
-                      },
-                    ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'محادثة مشفرة من طرف لطرف',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'ابدأ محادثة آمنة مع ${widget.name}',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textHint,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  reverse: true,
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final message = _messages[_messages.length - 1 - index];
+                    return _buildMessageBubble(message);
+                  },
+                ),
         ),
-        
+
         if (hasAttachment) _buildAttachmentPreview(),
-        
+
         Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, -2))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
           ),
           child: Row(
             children: [
-              IconButton(onPressed: _showAttachmentOptions, icon: Icon(Icons.attach_file), color: AppColors.primary),
+              IconButton(
+                onPressed: _showAttachmentOptions,
+                icon: Icon(Icons.attach_file),
+                color: AppColors.primary,
+              ),
               Expanded(
                 child: TextField(
                   controller: _messageController,
@@ -1102,21 +1177,39 @@ Future<void> _deleteMessageLocally(String messageId) async {
                   style: AppTextStyles.bodyMedium,
                   decoration: InputDecoration(
                     hintText: 'اكتب رسالتك...',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.textHint),
+                    hintStyle: AppTextStyles.bodyMedium.copyWith(
+                      color: AppColors.textHint,
+                    ),
                     filled: true,
                     fillColor: AppColors.background,
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(25), borderSide: BorderSide.none),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(25),
+                      borderSide: BorderSide.none,
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                   ),
                   onSubmitted: (_) => _sendMessage(),
                 ),
               ),
               const SizedBox(width: 8),
               Container(
-                decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+                decoration: const BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                ),
                 child: IconButton(
                   icon: _isSending
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
                       : const Icon(Icons.send, color: Colors.white),
                   onPressed: _isSending ? null : _sendMessage,
                 ),
@@ -1138,19 +1231,32 @@ Future<void> _deleteMessageLocally(String messageId) async {
       child: Row(
         children: [
           if (_pendingImageFile != null)
-            ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.file(_pendingImageFile!, width: 60, height: 60, fit: BoxFit.cover))
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.file(
+                _pendingImageFile!,
+                width: 60,
+                height: 60,
+                fit: BoxFit.cover,
+              ),
+            )
           else if (_pendingFile != null)
             Container(
               width: 60,
               height: 60,
-              decoration: BoxDecoration(color: AppColors.primary.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
               child: Icon(Icons.insert_drive_file, color: AppColors.primary),
             ),
-          
+
           SizedBox(width: 12),
           Expanded(
             child: Text(
-              _pendingImageFile != null ? p.basename(_pendingImageFile!.path) : _pendingFile!.name,
+              _pendingImageFile != null
+                  ? p.basename(_pendingImageFile!.path)
+                  : _pendingFile!.name,
               style: AppTextStyles.bodyMedium,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -1175,18 +1281,20 @@ Future<void> _deleteMessageLocally(String messageId) async {
     final isLocked = false; // ✅ الرسائل مفكوكة التشفير بعد التحقق
     final isDeleted = message['status'] == 'deleted';
     final isDeletedForRecipient = message['deletedForRecipient'] == 1;
-    final failedVerificationAtRecipient = message['failedVerificationAtRecipient'] == 1; 
+    final failedVerificationAtRecipient =
+        message['failedVerificationAtRecipient'] == 1;
     final text = message['plaintext'] ?? '';
     final status = message['status'] ?? 'sent';
 
-    
     final attachmentData = message['attachmentData'];
     final attachmentType = message['attachmentType'];
     final attachmentName = message['attachmentName'];
     final hasAttachment = attachmentData != null && attachmentType != null;
-    
+
     final timestamp = message['createdAt'];
-    final time = timestamp != null ? DateTime.fromMillisecondsSinceEpoch(timestamp) : DateTime.now();
+    final time = timestamp != null
+        ? DateTime.fromMillisecondsSinceEpoch(timestamp)
+        : DateTime.now();
 
     return GestureDetector(
       onLongPress: () {
@@ -1194,19 +1302,21 @@ Future<void> _deleteMessageLocally(String messageId) async {
           _showDeleteOptions(message);
         }
       },
-      
+
       onTap: () {
         if (hasAttachment && !isLocked) {
           _openAttachment(attachmentData, attachmentType, attachmentName);
         }
       },
-      
+
       child: Align(
         alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
         child: Container(
           margin: const EdgeInsets.only(bottom: 12),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.75,
+          ),
           decoration: BoxDecoration(
             color: isMine ? AppColors.primary : Colors.grey.shade200,
             borderRadius: BorderRadius.only(
@@ -1215,7 +1325,13 @@ Future<void> _deleteMessageLocally(String messageId) async {
               bottomLeft: isMine ? Radius.circular(4) : Radius.circular(18),
               bottomRight: isMine ? Radius.circular(18) : Radius.circular(4),
             ),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 4, offset: Offset(0, 2))],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.1),
+                blurRadius: 4,
+                offset: Offset(0, 2),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1237,9 +1353,16 @@ Future<void> _deleteMessageLocally(String messageId) async {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                                Icon(
+                                  Icons.broken_image,
+                                  size: 48,
+                                  color: Colors.grey,
+                                ),
                                 SizedBox(height: 8),
-                                Text('فشل عرض الصورة', style: AppTextStyles.bodySmall),
+                                Text(
+                                  'فشل عرض الصورة',
+                                  style: AppTextStyles.bodySmall,
+                                ),
                               ],
                             ),
                           ),
@@ -1251,18 +1374,27 @@ Future<void> _deleteMessageLocally(String messageId) async {
                   Container(
                     padding: EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: isMine ? Colors.white.withOpacity(0.2) : Colors.grey.shade300,
+                      color: isMine
+                          ? Colors.white.withOpacity(0.2)
+                          : Colors.grey.shade300,
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.insert_drive_file, color: isMine ? Colors.white : AppColors.primary),
+                        Icon(
+                          Icons.insert_drive_file,
+                          color: isMine ? Colors.white : AppColors.primary,
+                        ),
                         SizedBox(width: 8),
                         Flexible(
                           child: Text(
                             attachmentName ?? 'ملف',
-                            style: AppTextStyles.bodySmall.copyWith(color: isMine ? Colors.white : AppColors.textPrimary),
+                            style: AppTextStyles.bodySmall.copyWith(
+                              color: isMine
+                                  ? Colors.white
+                                  : AppColors.textPrimary,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1272,13 +1404,17 @@ Future<void> _deleteMessageLocally(String messageId) async {
                   ),
                 SizedBox(height: 8),
               ],
-              
+
               if (text.isNotEmpty || isLocked)
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (isLocked) ...[
-                      Icon(Icons.lock, size: 16, color: isMine ? Colors.white : AppColors.textPrimary),
+                      Icon(
+                        Icons.lock,
+                        size: 16,
+                        color: isMine ? Colors.white : AppColors.textPrimary,
+                      ),
                       const SizedBox(width: 8),
                     ],
                     Flexible(
@@ -1286,41 +1422,49 @@ Future<void> _deleteMessageLocally(String messageId) async {
                         isLocked ? 'اضغط للمشاهدة' : text,
                         style: AppTextStyles.bodyMedium.copyWith(
                           color: isMine ? Colors.white : AppColors.textPrimary,
-                          fontStyle: isLocked ? FontStyle.italic : FontStyle.normal,
+                          fontStyle: isLocked
+                              ? FontStyle.italic
+                              : FontStyle.normal,
                         ),
                       ),
                     ),
                   ],
                 ),
-                if (failedVerificationAtRecipient && isMine) ...[
-  const SizedBox(height: 4),
-  Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Icon(Icons.warning_amber_rounded, size: 12, color: Colors.orange.shade300),
-      const SizedBox(width: 4),
-      Flexible(
-        child: Text(
-          'تم حذف هذه الرسالة لدى المستقبل لفشل التحقق',
-          style: AppTextStyles.bodySmall.copyWith(
-            color: Colors.orange.shade200,
-            fontSize: 10,
-            fontStyle: FontStyle.italic,
-          ),
-        ),
-      ),
-    ],
-  ),
-                ],
-
-
+              if (failedVerificationAtRecipient && isMine) ...[
+                const SizedBox(height: 4),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      size: 12,
+                      color: Colors.orange.shade300,
+                    ),
+                    const SizedBox(width: 4),
+                    Flexible(
+                      child: Text(
+                        'تم حذف هذه الرسالة لدى المستقبل لفشل التحقق',
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: Colors.orange.shade200,
+                          fontSize: 10,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
 
               if (isDeletedForRecipient && isMine) ...[
                 const SizedBox(height: 4),
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.block, size: 11, color: Colors.white.withOpacity(0.6)),
+                    Icon(
+                      Icons.block,
+                      size: 11,
+                      color: Colors.white.withOpacity(0.6),
+                    ),
                     const SizedBox(width: 4),
                     Text(
                       'تم الحذف لدى المستقبل',
@@ -1333,16 +1477,18 @@ Future<void> _deleteMessageLocally(String messageId) async {
                   ],
                 ),
               ],
-              
+
               const SizedBox(height: 6),
-              
+
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     _formatTime(time),
                     style: AppTextStyles.bodySmall.copyWith(
-                      color: isMine ? Colors.white.withOpacity(0.7) : AppColors.textHint,
+                      color: isMine
+                          ? Colors.white.withOpacity(0.7)
+                          : AppColors.textHint,
                       fontSize: 11,
                     ),
                   ),
@@ -1351,9 +1497,12 @@ Future<void> _deleteMessageLocally(String messageId) async {
                     Icon(
                       _getStatusIcon(status),
                       size: 14,
-                      color: (status == 'verified' || status == 'opened' || status == 'read')
-                          ? Colors.lightBlueAccent 
-                          : Colors.white.withOpacity(0.7), 
+                      color:
+                          (status == 'verified' ||
+                              status == 'opened' ||
+                              status == 'read')
+                          ? Colors.lightBlueAccent
+                          : Colors.white.withOpacity(0.7),
                     ),
                   ],
                 ],
@@ -1376,20 +1525,19 @@ Future<void> _deleteMessageLocally(String messageId) async {
     }
   }
 
-  
   IconData _getStatusIcon(String status) {
     switch (status) {
       case 'pending':
       case 'sending':
-        return Icons.access_time; 
+        return Icons.access_time;
       case 'sent':
-        return Icons.check; 
+        return Icons.check;
       case 'delivered':
-        return Icons.done_all; 
-      case 'verified': 
+        return Icons.done_all;
+      case 'verified':
       case 'opened':
       case 'read':
-        return Icons.done_all; 
+        return Icons.done_all;
       default:
         return Icons.access_time;
     }
@@ -1407,17 +1555,17 @@ Future<void> _deleteMessageLocally(String messageId) async {
       try {
         final bytes = base64Decode(base64Data);
         final tempDir = await getTemporaryDirectory();
-        final fileName = name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
+        final fileName =
+            name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
         final tempFile = File('${tempDir.path}/$fileName');
-        
+
         await tempFile.writeAsBytes(bytes);
-        
+
         final result = await OpenFilex.open(tempFile.path);
-        
+
         if (result.type != ResultType.done) {
           _showMessage('تعذر فتح الملف: ${result.message}', false);
         }
-        
       } catch (e) {
         _showMessage('فشل فتح الملف', false);
       }
@@ -1427,7 +1575,7 @@ Future<void> _deleteMessageLocally(String messageId) async {
 
 class _ImageViewerScreen extends StatelessWidget {
   final String base64Data;
-  
+
   const _ImageViewerScreen({required this.base64Data});
 
   @override
@@ -1456,7 +1604,10 @@ class _ImageViewerScreen extends StatelessWidget {
                     children: [
                       Icon(Icons.broken_image, size: 64, color: Colors.white),
                       SizedBox(height: 16),
-                      Text('فشل عرض الصورة', style: TextStyle(color: Colors.white)),
+                      Text(
+                        'فشل عرض الصورة',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ],
                   ),
                 );

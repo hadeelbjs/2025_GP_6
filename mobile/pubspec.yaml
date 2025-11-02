@@ -96,6 +96,8 @@ flutter:
      - assets/images/reg-bg-shapes.svg
      - assets/images/logo.png
      - assets/images/logo-white.svg
+     - assets/images/triangle-grey-1.svg
+     - assets/images/triangle-grey-2.svg
      - assets/icons/back_arrow_white.png
      - .env   
 

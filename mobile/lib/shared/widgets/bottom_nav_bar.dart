@@ -5,6 +5,7 @@ import '../../../features/dashboard/screens/main_dashboard.dart';
 import '/features/contact/screens/contacts_list_screen.dart';
 import '/features/massaging/screens/chat_list_screen.dart';
 import 'package:waseed/features/account/screens/manage_account_screen.dart';
+import '/features/services_hub/screens/services.dart';
 
 class BottomNavBar extends StatelessWidget {
   final int currentIndex;
@@ -204,8 +205,8 @@ class BottomNavBar extends StatelessWidget {
         destination = const ContactsListScreen();
         break;
       case 2:
-        _showDevMessage(context, 'صفحة الخدمات قيد التطوير');
-        return;
+        destination = const ServicesScreen();
+        break;
       case 3:
         destination = const ChatListScreen();
         break;

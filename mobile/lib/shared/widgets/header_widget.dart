@@ -34,7 +34,7 @@ class HeaderWidget extends StatelessWidget {
             Align(
               alignment: Alignment.topCenter,
               child: Transform.translate(
-                offset: Offset(-30, -0.40 * h),
+                offset: Offset(-30, (-0.6 * h)),
                 child: Image.asset(
                   'assets/images/Rectangle 13.png',
                   width: w * 1.25,
@@ -43,7 +43,7 @@ class HeaderWidget extends StatelessWidget {
             ),
 
             Positioned(
-              top: -0.40 * h,
+              top: -0.60 * h,
               right: 0.50 * w,
               child: Image.asset(
                 'assets/images/Rectangle 14.png',

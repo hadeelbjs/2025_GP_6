@@ -19,7 +19,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'features/authentication/screens/splash_screen.dart';
 import 'features/authentication/screens/biometric_login_screen.dart';
 import 'features/services_hub/screens/services.dart';
-
+import 'features/services_hub/screens/content_scan.dart';
 void main() async {
   await dotenv.load(fileName: ".env");
   
@@ -46,7 +46,7 @@ class MyApp extends StatelessWidget {
         '/register': (context) => const RegisterScreen(),
         '/onboard': (context) => const OnboardingScreen(),
         '/services': (context) => const ServicesScreen(),
-        
+        '/content-scan': (context) => const ContentScanScreen(),
         '/dashboard': (context) => const ProtectedRoute(
           child: MainDashboard(),
         ),

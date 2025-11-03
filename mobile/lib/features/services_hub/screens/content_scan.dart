@@ -1,6 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
-
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'qr_scan.dart';
+import 'file_scan.dart';
+import 'links_scan.dart';
 class ContentScanScreen extends StatelessWidget {
   const ContentScanScreen({Key? key}) : super(key: key);
 
@@ -59,7 +65,7 @@ class ContentScanScreen extends StatelessWidget {
                 
                 // الـ Indicator (الخلفية المتحركة)
                 indicator: BoxDecoration(
-                  color: const Color.fromARGB(198, 40, 27, 103),
+                  color:  AppColors.primary,
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
@@ -130,63 +136,6 @@ class ContentScanScreen extends StatelessWidget {
           ]
          )
       )
-    );
-  }
-}
-
-//شاشة الروابط
-class LinksScreen extends StatelessWidget {
-  const LinksScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'صفحة فحص الروابط',
-        style: TextStyle(
-          fontFamily: 'IBMPlexSansArabic',
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-        ),
-      ),
-    );
-  }
-}
-
-//شاشة الملفات
-class FilesScreen extends StatelessWidget {
-  const FilesScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'صفحة فحص الملفات',
-        style: TextStyle(
-          fontFamily: 'IBMPlexSansArabic',
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-        ),
-      ),
-    );
-  }
-}
-
-// شاشة QR
-class QRScreen extends StatelessWidget {
-  const QRScreen({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Text(
-        'صفحة فحص رموز QR',
-        style: TextStyle(
-          fontFamily: 'IBMPlexSansArabic',
-          fontWeight: FontWeight.bold,
-          fontSize: 18,
-        ),
-      ),
     );
   }
 }

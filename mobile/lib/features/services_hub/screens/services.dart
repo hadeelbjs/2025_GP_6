@@ -149,64 +149,96 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   // بطاقة الخدمة
   Widget _buildServiceCard(Map<String, dynamic> service) {
-    return GestureDetector(
-      onTap: () {
+  return InkWell(
+    onTap: () {
       // الانتقال للصفحة
       Navigator.pushNamed(context, service['route']);
-      
     },
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 20),
-      height: 220,
+    borderRadius: BorderRadius.circular(15),
+    child: Ink(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(15),
         color: service['color'],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          const SizedBox(height: 30),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: (service['icons'] as List<IconData>)
-                .map((icon) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Icon(
-                        icon,
-                        color: Colors.white,
-                        size: 40,
-                      ),
-                    ))
-                .toList(),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            service['title'],
-            style: const TextStyle(
-              fontSize: 18,
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 30),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 30),
-            child: Text(
-              service['description'],
-              style: const TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontSize: 14.5,
-                color: Colors.white,
-                fontWeight: FontWeight.w400,
-              ),
-              textAlign: TextAlign.center,
-            ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
           ),
         ],
       ),
-    )
-    );
-  }
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 20),
+        height: 230,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.start,
+          children: [
+            const SizedBox(height: 30),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: (service['icons'] as List<IconData>)
+                  .map((icon) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        child: Icon(
+                          icon,
+                          color: Colors.white,
+                          size: 40,
+                        ),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              service['title'],
+              style: const TextStyle(
+                fontSize: 18,
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 30),
+              child: Text(
+                service['description'],
+                style: const TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14.5,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w400,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const SizedBox(height: 25),
+            // نص "انقر هنا للبدء"
+            
+             Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [
+                  Text(
+                    'انقر هنا للبدء',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 16,
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(
+                    Icons.start,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ],
+             )]
+             )
+             )
+        
+    ),
+  );
+}
 }

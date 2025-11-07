@@ -45,7 +45,37 @@ class ApiContentService {
       throw Exception('Error scanning URL: $e');
     }
   }
+
+  Future<FileScanResult> scanFile(String hash) async {
+    final uri = Uri.parse('https://www.virustotal.com/api/v3/files/$hash');
+    final headers = {
+      'x-apikey': AppConfig.virustotalApiKey,
+    };
+
+    try {
+      final response = await get(uri, headers: headers);
+      
+      if (response.statusCode == 200) {
+        final jsonResponse = json.decode(response.body);
+        return FileScanResult.fromJson(jsonResponse);
+      } else if (response.statusCode == 404) {
+        // الملف غير موجود في قاعدة بيانات VirusTotal
+        return FileScanResult(
+          isSafe: true,
+          maliciousCount: 0,
+          suspiciousCount: 0,
+          harmlessCount: 0,
+          status: 'not_found',
+        );
+      } else {
+        throw Exception('Failed to scan file: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('Error scanning file: $e');
+    }
+  }
 }
+
 
 // كلاس لتخزين نتيجة الفحص
 class UrlScanResult {
@@ -77,6 +107,38 @@ class UrlScanResult {
       suspiciousCount: suspicious,
       harmlessCount: harmless,
       status: status,
+    );
+  }
+}
+
+class FileScanResult {
+  final bool isSafe;
+  final int maliciousCount;
+  final int suspiciousCount;
+  final int harmlessCount;
+  final String status;
+  
+  FileScanResult({
+    required this.isSafe,
+    required this.maliciousCount,
+    required this.suspiciousCount,
+    required this.harmlessCount,
+    required this.status,
+  });
+  
+  factory FileScanResult.fromJson(Map<String, dynamic> json) {
+    final stats = json['data']['attributes']['last_analysis_stats'] ?? {};
+    
+    final malicious = stats['malicious'] ?? 0;
+    final suspicious = stats['suspicious'] ?? 0;
+    final harmless = stats['harmless'] ?? 0;
+    
+    return FileScanResult(
+      isSafe: malicious == 0 && suspicious == 0,
+      maliciousCount: malicious,
+      suspiciousCount: suspicious,
+      harmlessCount: harmless,
+      status: 'completed',
     );
   }
 }

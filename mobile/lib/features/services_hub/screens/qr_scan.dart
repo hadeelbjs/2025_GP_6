@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:waseed/services/api_services.dart';
 import '../../../../core/constants/colors.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
@@ -6,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_zxing/flutter_zxing.dart';
 import 'package:qr_code_tools/qr_code_tools.dart';
+import '../services/api_contentScanning.dart';
 
 class QRScreen extends StatefulWidget {
   const QRScreen({Key? key}) : super(key: key);
@@ -18,6 +20,8 @@ class _QRScreenState extends State<QRScreen> {
   File? _selectedFile;
   bool _isScanning = false;
   String? _scannedResult;
+  UrlScanResult? _urlScanResult;
+  final ApiContentService _apiService = ApiContentService();
 
   void _removeImage() {
     setState(() {
@@ -70,108 +74,307 @@ class _QRScreenState extends State<QRScreen> {
   }
 
   // معالجة الكود الممسوح (مشتركة بين الطريقتين)
-  void _handleScannedCode(String code) {
+  Future<void> _handleScannedCode(String code) async {
     if (_isValidUrl(code)) {
+      // Show loading state
       setState(() {
+        _isScanning = true;
         _scannedResult = code;
+        _urlScanResult = null;
       });
-      _showResultDialog(code, isUrl: true);
+        ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('جاري فحص الرمز...'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      try {
+        final scanResult = await _apiService.scanURL(code);
+        setState(() {
+          _urlScanResult = scanResult;
+          _isScanning = false;
+        });
+        _showResultDialog(code, isUrl: true);
+      } catch (e) {
+        setState(() {
+          _isScanning = false;
+        });
+        _showErrorDialog('فشل فحص الرابط: ${e.toString()}');
+      }
     } else {
       setState(() {
         _scannedResult = code;
+        _urlScanResult = null;
       });
       _showResultDialog(code, isUrl: false);
     }
   }
 
+
   bool _isValidUrl(String text) {
+  // إزالة المسافات من البداية والنهاية
+  text = text.trim();
+  
+  // إذا كان يحتوي على بروتوكول، تحقق منه
+  if (text.contains('://')) {
     final uri = Uri.tryParse(text);
     return uri != null && 
            uri.hasScheme && 
            (uri.scheme == 'http' || uri.scheme == 'https');
   }
+  
+  final uri = Uri.tryParse('http://$text');
+  if (uri == null) return false;
+  
+  // تحقق من وجود نقطة (.) للتأكد أنه domain صحيح
+  // وأن لديه host صالح
+  return uri.hasAuthority && 
+         uri.host.isNotEmpty && 
+         uri.host.contains('.');
+}
 
   Future<void> _openUrl(String url) async {
-    try {
-      final uri = Uri.parse(url);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else {
-        _showErrorDialog('لا يمكن فتح الرابط');
-      }
-    } catch (e) {
-      _showErrorDialog('خطأ في فتح الرابط');
+  try {
+    // إضافة https:// إذا لم يكن موجود
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'https://$url';
     }
+    
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      _showErrorDialog('لا يمكن فتح الرابط');
+    }
+  } catch (e) {
+    _showErrorDialog('خطأ في فتح الرابط');
   }
+}
 
   void _showResultDialog(String result, {required bool isUrl}) {
-    showDialog(
-      context: context,
-      builder: (context) => Directionality( textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Row(
-          children: [
-            Icon(
-              isUrl ? Icons.check_circle : Icons.info,
-              color: isUrl ? Colors.green : Colors.orange,
+  showDialog(
+    context: context,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.transparent,
+        child: Container(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
+          ),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                Color(0xFF3D2B5F),
+                Color(0xFF2D1B4E),
+              ],
             ),
-            SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                isUrl ? 'تم العثور على رابط' : 'محتوى الرمز',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 18),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (isUrl)
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: EdgeInsets.all(30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Title
               Text(
-                'الرابط آمن ✓',
+                'نتائج التحليل',
                 style: TextStyle(
-                  color: Colors.green,
                   fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
+                  color: Colors.white,
                 ),
               ),
-            SizedBox(height: 10),
-            Container(
-              padding: EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(8),
+              SizedBox(height: 30),
+
+              // Icon
+              Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: isUrl && _urlScanResult != null
+                      ? Icon(
+                          _urlScanResult!.isSafe 
+                              ? Icons.verified 
+                              : Icons.warning,
+                          size: 60,
+                          color: _urlScanResult!.isSafe 
+                              ? Color(0xFF4CAF50) 
+                              : Color(0xFFE53935),
+                        )
+                      : Icon(
+                          Icons.info_outline,
+                          size: 60,
+                          color: Colors.orange,
+                        ),
+                ),
               ),
-              child: SelectableText(
-                result,
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+              SizedBox(height: 30),
+
+              // Message
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      if (isUrl && _urlScanResult != null)
+                        Text(
+                          _urlScanResult!.isSafe
+                              ? 'لم يتم تسجيل هذا الرمز حتى الآن كرابط\nخبيث وبإمكانك المتابعة مع الحذر من\nمشاركة معلومات شخصية لمن لا يحق\nله ذلك'
+                              : 'تم تسجيل هذا الرمز كرابط خبيث\nيرجى الحذر وتجنب استخدامه',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 16,
+                            color: Colors.white,
+                            height: 1.8,
+                          ),
+                        )
+                      else
+                        Text(
+                          'محتوى الرمز:\n$result',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 16,
+                            color: Colors.white,
+                            height: 1.8,
+                          ),
+                        ),
+                      
+                      // URL Display
+                      if (isUrl) ...[
+                        SizedBox(height: 20),
+                        Container(
+                          padding: EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.3),
+                            ),
+                          ),
+                          child: SelectableText(
+                            result,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontFamily: 'IBMPlexSansArabic',
+                              fontSize: 12,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ],
+              
+              SizedBox(height: 30),
+
+              // Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  // Close Button
+                  ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                      foregroundColor: Colors.white,
+                      padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(25),
+                        side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                      ),
+                    ),
+                    child: Text(
+                      'إغلاق',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  
+                  // Open Link Button (only for safe URLs)
+                  if (isUrl && _urlScanResult?.isSafe == true) ...[
+                    SizedBox(width: 15),
+                    ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        _openUrl(result);
+                      },
+                      icon: Icon(Icons.open_in_browser, size: 18),
+                      label: Text(
+                        'فتح الرابط',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Color(0xFF4CAF50),
+                        foregroundColor: Colors.white,
+                        padding: EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(25),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
         ),
-        actions: [
-          if (isUrl)
-            TextButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _openUrl(result);
-              },
-              icon: Icon(Icons.open_in_browser),
-              label: Text('فتح الرابط', style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+      ),
+    ),
+  );
+}
+
+  Widget _buildStatRow(String label, int count, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 14,
+              fontWeight: FontWeight.w500,
             ),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
+          ),
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
             child: Text(
-              'إغلاق',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic', color: AppColors.primary),
+              count.toString(),
+              style: TextStyle(
+                color: color,
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
             ),
           ),
         ],
       ),
-    )
     );
   }
 

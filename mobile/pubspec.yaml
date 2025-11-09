@@ -46,6 +46,10 @@ dependencies:
   file_picker: ^8.0.3
   open_filex: ^4.3.4
   flutter_dotenv: ^5.1.0 
+ #screen_capture
+  #flutter_windowmanager: ^0.2.0
+  screen_protector: ^1.4.5
+  screen_capture_event: ^1.2.0
 
   #Local Database
   sqflite: ^2.3.0

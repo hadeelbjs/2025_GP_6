@@ -457,5 +457,13 @@ socket.on('conversation:failed_verification', async (data) => {
     return true;
   };
 
+  socket.on('privacy:screenshots:update', (data) => {
+  const { peerUserId, allowScreenshots } = data;
+  io.sendToUser(peerUserId, 'privacy:screenshots:changed', {
+    peerUserId: socket.userId,
+    allowScreenshots
+  });
+});
+
   console.log('✅ Socket.IO messaging system initialized');
 };

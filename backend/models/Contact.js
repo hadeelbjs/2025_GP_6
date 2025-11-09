@@ -31,7 +31,14 @@ const ContactSchema = new mongoose.Schema({
   // تاريخ الرد (قبول/رفض)
   respondedAt: {
     type: Date
-  }
+  },
+
+  // سياسة السماح بلقطات الشاشة
+  allowScreenshots: {
+    type: Boolean,
+    default: false
+  },
+
 });
 
 

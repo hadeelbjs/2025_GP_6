@@ -102,6 +102,11 @@ mongoose.connect(process.env.MONGODB_URI)
 // ✅ Socket.IO - يجب أن تكون قبل Routes
 require('./sockets/messageSocket')(io);
 
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/contacts', require('./routes/contacts'));

@@ -20,6 +20,7 @@ import 'features/authentication/screens/splash_screen.dart';
 import 'features/authentication/screens/biometric_login_screen.dart';
 import 'features/services_hub/screens/services.dart';
 import 'features/services_hub/screens/content_scan.dart';
+import 'services/wifi_security_service.dart'; 
 void main() async {
   await dotenv.load(fileName: ".env");
   
@@ -131,6 +132,8 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         
         // ✅ تهيئة MessagingService (Socket + Listeners)
         await _initializeMessaging();
+          //   WiFi Security Service
+        await _initializeWifiSecurity();
         
         Navigator.of(context).pushReplacementNamed('/dashboard');
         return;
@@ -205,6 +208,24 @@ Future<void> _initializeEncryption() async {
     print('❌ خطأ في تهيئة التشفير: $e');
   }
 }
+
+/// تهيئة خدمة أمان WiFi
+  Future<void> _initializeWifiSecurity() async {
+    try {
+      print('📡 [3/3] Initializing WiFi Security Service...');
+      
+      final success = await WifiSecurityService().initialize();
+      
+      if (success) {
+        print('✅ WiFi Security Service initialized successfully');
+      } else {
+        print('⚠️  WiFi Security Service initialization returned false (permissions may be pending)');
+      }
+      
+    } catch (e) {
+      print('❌ WiFi Security Service initialization failed: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

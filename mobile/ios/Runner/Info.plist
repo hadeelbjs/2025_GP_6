@@ -54,5 +54,14 @@
 <key>NSPhotoLibraryAddUsageDescription</key>
 <string>يحتاج التطبيق لحفظ الصور في ألبوم الصور.</string>
 
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>نحتاج الموقع لفحص أمان شبكة WiFi</string>
+
+<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+<string>نحتاج الموقع لفحص أمان شبكة WiFi</string>
+
+<key>NSLocalNetworkUsageDescription</key>
+<string>نحتاج الوصول للشبكة المحلية لتحليل الأمان</string>
+
 </dict>
 </plist>

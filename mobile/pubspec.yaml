@@ -63,6 +63,10 @@ dependencies:
   google_fonts: ^6.1.0
   flutter_secure_storage: ^9.2.4
   app_settings: ^6.1.1
+  connectivity_plus: ^7.0.0
+  permission_handler: ^11.0.1
+  
+flutter_local_notifications: ^17.0.0
 
 dev_dependencies:
   flutter_test:

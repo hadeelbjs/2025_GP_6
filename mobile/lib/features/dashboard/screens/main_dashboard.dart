@@ -9,7 +9,8 @@ import '../../../services/api_services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../services/biometric_service.dart';
 import '../../../services/socket_service.dart';
-
+import '../../../services/wifi_security_service.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -21,11 +22,18 @@ class MainDashboard extends StatefulWidget {
 class _MainDashboardState extends State<MainDashboard> {
   final _apiService = ApiService();
   int _notificationCount = 0;
+  bool _hasShownWifiWarning = false;
 
   @override
   void initState() {
     super.initState();
+    
     _loadNotificationCount();
+  Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && !_hasShownWifiWarning) {
+        _checkWifi();
+      }
+    });
   }
 
 
@@ -106,6 +114,236 @@ Future<void> _initializeSocket() async {
         );
       }
     });
+  }
+
+  Future<void> _checkWifi() async {
+    try {
+      final wifiService = WifiSecurityService();
+      
+      // 1. تهيئة الخدمة
+      final initialized = await wifiService.initialize();
+      
+      if (!initialized) {
+        if (mounted) {
+          _showPermissionDeniedDialog();
+        }
+        return;
+      }
+      
+      // 2. فحص الشبكة
+      final status = await wifiService.checkCurrentNetwork();
+      
+      if (status == null) {
+        return;
+      }
+      
+      // 3. فحص إذا الشبكة غير آمنة
+    if (status.hasError && 
+        status.errorMessage == 'Permission denied' && 
+        mounted) {
+      _showPermissionDeniedDialog();
+      return;
+    }
+    
+    // ثم فحص أمان الشبكة
+    if (!status.isSecure && !status.hasError && mounted) {
+      final alreadyShown = await wifiService.wasWarningShown(status.ssid);
+      
+      if (!alreadyShown) {
+        _showSecurityAlert(status);
+        await wifiService.markWarningShown(status.ssid);
+      } else {
+        print('ℹ️ Warning already shown for this network: ${status.ssid}');
+      }
+    }
+    
+  } catch (e) {
+    if (kDebugMode) {
+      print('WiFi check error: $e');
+    }
+  }
+}
+
+  // ============================================
+  // رسالة: الصلاحيات مرفوضة
+  // ============================================
+  
+  void _showPermissionDeniedDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.location_off, color: const Color.fromARGB(255, 245, 242, 239), size: 32),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'تفعيل الموقع مطلوب',
+                style: TextStyle(
+                  color: Color.fromARGB(255, 246, 245, 245),
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: const Text(
+' لاستخدام ميزة فحص أمان الشبكات، يجب تفعيل الموقع.\n\nالذهاب إلى الإعدادات وتفعيل صلاحية الموقع للتطبيق.',
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 14,
+            height: 1.6,
+          ),
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'IBMPlexSansArabic',
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              
+              // يفتح الإعدادات
+              await openAppSettings();
+              
+             
+              await Future.delayed(const Duration(seconds: 3));
+              
+              if (mounted) {
+                _hasShownWifiWarning = false;
+                _checkWifi(); // 
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF2D1B69),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'فتح الإعدادات',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+  // ============================================
+  // فتح إعدادات التطبيق
+  // ============================================
+  
+  Future<void> _openAppSettings() async {
+  try {
+    // يفتح إعدادات التطبيق مباشرة
+    await openAppSettings();
+  } catch (e) {
+    if (kDebugMode) {
+      print('Error opening settings: $e');
+    }
+  }
+}
+
+  // ============================================
+  // رسالة: التحذير الأمني
+  // ============================================
+  
+  void _showSecurityAlert(WifiSecurityStatus status) {
+    final isAndroid = status.platform == 'Android';
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              Icon(
+                Icons.warning_amber_rounded,
+                color: isAndroid ? Colors.red.shade400 : Colors.orange.shade400,
+                size: 32,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isAndroid ? 'تحذير أمني' : 'تنبيه',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: SingleChildScrollView(
+            child: Text(
+              isAndroid
+                  ? ' شبكة "${status.ssid}" غير آمنة!\n\nنوع الحماية: ${status.securityType}\n\n التوصيات:\n• استخدم VPN للحماية الكاملة\n• تجنب إدخال معلومات حساسة\n• لا تدخل كلمات السر أو بيانات بنكية\n• اتصل بشبكة آمنة إن أمكن'
+                  : 'قد تكون شبكة "${status.ssid}" غير آمنة\n\nالتحليل: بناءً على اسم الشبكة\n\n التوصيات:\n• استخدم VPN للأمان\n• تجنب إدخال معلومات حساسة\n• لا تدخل كلمات السر\n• اتصل بشبكة موثوقة إن أمكن',
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 14,
+                height: 1.6,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              style: TextButton.styleFrom(
+                backgroundColor: Colors.white.withOpacity(0.1),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'حسناً، فهمت',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override

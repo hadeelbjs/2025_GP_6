@@ -10,9 +10,14 @@ import 'package:path_provider/path_provider.dart';
 import 'package:open_filex/open_filex.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../services/api_services.dart';
+import '../../../services/socket_service.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/local_db/database_helper.dart';
-import 'contact_privacy_screen.dart';
+// import 'package:flutter_windowmanager/flutter_windowmanager.dart';
+import 'package:screen_protector/screen_protector.dart';
+import 'package:screen_capture_event/screen_capture_event.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -34,13 +39,19 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _messagingService = MessagingService();
   final _scrollController = ScrollController();
+  final _socketService = SocketService();
+  bool _screenshotsAllowed = false;
+  bool _isLoadingScreenshotPolicy = true;
+  final _screenCapture = ScreenCaptureEvent();
+  late final void Function(String) _onShot;
+  late final void Function(bool) _onRecord;
 
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
   bool _isSending = false;
   String? _conversationId;
 
-  // ✅ إزالة متغيرات التحقق البيومتري لأنه تم التحقق قبل الدخول
+  //  إزالة متغيرات التحقق البيومتري لأنه تم التحقق قبل الدخول
   bool _isDecryptingMessages = false;
 
   int _decryptionFailureCount = 0; // عدد مرات فشل فك التشفير
@@ -59,13 +70,161 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeChat(); // ✅ مباشرة بدون فحص بايومترك
+
+    _socketService.socket?.on('privacy:screenshots:changed', (data) {
+      if (data['peerUserId'] == widget.userId) {
+        final newPolicy = data['allowScreenshots'] == true;
+
+        if (mounted) {
+          _applyScreenshotPolicy(newPolicy);
+
+          _showMessage(
+            newPolicy
+                ? '${widget.name} سمح بلقطات الشاشة'
+                : '${widget.name} منع لقطات الشاشة',
+            true,
+          );
+        }
+      }
+    });
+    // 📸 لقطة الشاشة
+    _onShot = (String filePath) {
+      if (!_screenshotsAllowed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('🚫 لا يُسمح بأخذ لقطات شاشة لهذا المحتوى'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    };
+    _screenCapture.addScreenShotListener(_onShot);
+
+    // 🎥 تسجيل الشاشة
+    _onRecord = (bool isRecording) {
+      if (isRecording && !_screenshotsAllowed) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            backgroundColor: Colors.red,
+            content: Text('🚫 لا يُسمح بتسجيل الشاشة لهذا المحتوى'),
+            duration: Duration(seconds: 1),
+          ),
+        );
+      }
+    };
+    _screenCapture.addScreenRecordListener(_onRecord);
+
+    // لازم لتفعيل المراقبة
+    _screenCapture.watch();
+
+    //امنعي اللقطات والتسجيل مباشرةً عند فتح الشاشة
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyScreenshotPolicy(false); // هذا ينادي _enableProtection()
+    });
+
+    // إضافة: جلب إعداد اللقطات من السيرفر
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _loadScreenshotPolicyFromServer();
+    });
+
+    _initializeChat(); //  مباشرة بدون فحص بايومترك
     _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
+    _printDebugInfo();
+  }
+
+  Future<void> _loadScreenshotPolicyFromServer() async {
+    try {
+      setState(() => _isLoadingScreenshotPolicy = true);
+
+      // 1️⃣ محاولة الجلب من الـ API
+      final result = await ApiService.instance.getJson(
+        '/contacts/${widget.userId}/screenshots',
+      );
+
+      if (result['success'] == true) {
+        final allowScreenshots = result['allowScreenshots'] ?? false;
+
+        await _applyScreenshotPolicy(allowScreenshots);
+
+        print('✅ Screenshot policy loaded: $allowScreenshots');
+      } else {
+        // 2️⃣ في حالة الفشل: استخدام القيمة الافتراضية (منع اللقطات)
+        await _applyScreenshotPolicy(false);
+        print('⚠️ Using default policy: screenshots disabled');
+      }
+    } catch (e) {
+      print('❌ Error loading screenshot policy: $e');
+      // في حالة الخطأ: منع اللقطات للأمان
+      await _applyScreenshotPolicy(false);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingScreenshotPolicy = false);
+      }
+    }
+  }
+
+  Future<void> _saveScreenshotPolicyToServer(bool allow) async {
+    try {
+      final result = await ApiService.instance.putJson(
+        '/contacts/${widget.userId}/screenshots',
+        {'allowScreenshots': allow},
+      );
+
+      if (result['success'] != true) {
+        print('⚠️ Failed to save screenshot policy to server');
+        _showMessage('فشل حفظ الإعداد في السيرفر', false);
+      } else {
+        print('✅ Screenshot policy saved to server');
+      }
+    } catch (e) {
+      print('❌ Error saving screenshot policy: $e');
+      _showMessage('حدث خطأ أثناء حفظ الإعداد', false);
+    }
+  }
+
+  Future<void> _applyScreenshotPolicy(bool allow) async {
+    setState(() => _screenshotsAllowed = allow);
+    if (allow) {
+      await _disableProtection();
+    } else {
+      await _enableProtection();
+    }
+  }
+
+  Future<void> _enableProtection() async {
+    try {
+      if (Platform.isAndroid) {
+        //await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
+        await ScreenProtector.preventScreenshotOn();
+      }
+      await ScreenProtector.protectDataLeakageWithColor(Colors.black);
+    } catch (e) {
+      debugPrint('❌ Screen protection failed: $e');
+    }
+  }
+
+  Future<void> _disableProtection() async {
+    try {
+      if (Platform.isAndroid) {
+        // await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
+        await ScreenProtector.preventScreenshotOff();
+      }
+      try {
+        await ScreenProtector.protectDataLeakageOff(); // الاسم الصحيح
+      } catch (_) {
+        await ScreenProtector.preventScreenshotOff(); // بديل لبعض الإصدارات
+      }
+    } catch (e) {
+      debugPrint('❌ Failed to disable protection: $e');
+    }
   }
 
   @override
   void dispose() {
+    _disableProtection();
+    _screenCapture.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _newMessageSubscription?.cancel();
@@ -74,6 +233,20 @@ class _ChatScreenState extends State<ChatScreen> {
     _userStatusSubscription?.cancel();
     _messagingService.setCurrentOpenChat(null);
     super.dispose();
+  }
+
+  Future<void> _printDebugInfo() async {
+    final storage = FlutterSecureStorage();
+    final token = await storage.read(key: 'access_token');
+
+    print('');
+    print('═══════════════════════════════════════════════════════════════');
+    print('🔑 انسخ هذا TOKEN:');
+    print(token);
+    print('═══════════════════════════════════════════════════════════════');
+    print('🆔 انسخ هذا USER ID: ${widget.userId}');
+    print('═══════════════════════════════════════════════════════════════');
+    print('');
   }
 
   Future<void> _decryptAllMessages() async {
@@ -105,7 +278,7 @@ class _ChatScreenState extends State<ChatScreen> {
         print('❌ Decryption failed: $errorType');
 
         // ========================================
-        // ✅ معالجة خاصة لـ InvalidSessionException
+        //  معالجة خاصة لـ InvalidSessionException
         // ========================================
         if (errorType == 'InvalidSessionException' ||
             errorType == 'NoSessionException' ||
@@ -118,7 +291,7 @@ class _ChatScreenState extends State<ChatScreen> {
         }
 
         // ========================================
-        // ✅ معالجة أخطاء المفاتيح الأخرى (مع العداد)
+        //  معالجة أخطاء المفاتيح الأخرى (مع العداد)
         // ========================================
         if (errorType == 'InvalidKeyException' ||
             errorType == 'InvalidMessageException' ||
@@ -1030,52 +1203,158 @@ class _ChatScreenState extends State<ChatScreen> {
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () => Navigator.pop(context),
           ),
-          title: InkWell(
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => ContactPrivacyScreen(
-                    userId: widget.userId,
-                    name: widget.name,
-                  ),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.name,
+                style: AppTextStyles.bodyLarge.copyWith(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
                 ),
-              );
-            },
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.name,
-                  style: AppTextStyles.bodyLarge.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _messagingService.isConnected
-                            ? Colors.greenAccent
-                            : Colors.grey,
-                        shape: BoxShape.circle,
-                      ),
+              ),
+              Row(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      color: _messagingService.isConnected
+                          ? Colors.greenAccent
+                          : Colors.grey,
+                      shape: BoxShape.circle,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      _isOtherUserOnline ? 'متصل' : 'غير متصل',
-                      style: AppTextStyles.bodySmall.copyWith(
-                        color: Colors.white.withOpacity(0.8),
-                      ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    _isOtherUserOnline ? 'متصل' : 'غير متصل',
+                    style: AppTextStyles.bodySmall.copyWith(
+                      color: Colors.white.withOpacity(0.8),
                     ),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                ],
+              ),
+            ],
           ),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.more_vert, color: Colors.white),
+              tooltip: 'المزيد',
+              onPressed: () {
+                showDialog(
+                  context: context,
+                  barrierColor: Colors.black12,
+                  builder: (context) {
+                    return Directionality(
+                      textDirection: TextDirection.rtl,
+                      child: Dialog(
+                        insetPadding: const EdgeInsets.only(
+                          top: 72,
+                          right: 12,
+                          left: 12,
+                        ),
+                        backgroundColor: Colors.transparent,
+                        child: Align(
+                          alignment: Alignment.topLeft,
+                          child: Container(
+                            width: 300,
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.1),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 6),
+                                ),
+                              ],
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(14),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 10,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primary.withOpacity(0.06),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: AppColors.primary.withOpacity(0.18),
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Text(
+                                      'لقطات الشاشة',
+                                      style: AppTextStyles.bodyLarge.copyWith(
+                                        color: AppColors.textPrimary,
+                                      ),
+                                    ),
+                                    // State
+                                    Switch.adaptive(
+                                      value: _screenshotsAllowed,
+                                      activeColor: Colors.white,
+                                      activeTrackColor: AppColors.primary,
+                                      onChanged: _isLoadingScreenshotPolicy
+                                          ? null // تعطيل أثناء التحميل
+                                          : (v) async {
+                                              // 1️⃣ تطبيق التغيير محلياً
+                                              await _applyScreenshotPolicy(v);
+
+                                              // 2️⃣ حفظ في السيرفر
+                                              await _saveScreenshotPolicyToServer(
+                                                v,
+                                              );
+
+                                              Navigator.of(context).pop();
+
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  backgroundColor: v
+                                                      ? Colors.green
+                                                      : Colors.red,
+                                                  content: Text(
+                                                    v
+                                                        ? 'تم السماح بلقطات الشاشة'
+                                                        : 'تم منع لقطات الشاشة',
+                                                    textAlign: TextAlign.right,
+                                                  ),
+                                                  duration: const Duration(
+                                                    seconds: 2,
+                                                  ),
+                                                  behavior:
+                                                      SnackBarBehavior.floating,
+                                                  shape: RoundedRectangleBorder(
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          10,
+                                                        ),
+                                                  ),
+                                                  margin: const EdgeInsets.all(
+                                                    12,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ],
         ),
 
         body: _buildBody(hasAttachment),

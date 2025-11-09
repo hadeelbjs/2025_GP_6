@@ -32,6 +32,7 @@ class DatabaseHelper {
       CREATE TABLE messages (
         id TEXT PRIMARY KEY,
         conversationId TEXT NOT NULL,
+        allow_screenshots INTEGER,
         senderId TEXT NOT NULL,
         receiverId TEXT NOT NULL,
         ciphertext TEXT NOT NULL,
@@ -79,7 +80,7 @@ class DatabaseHelper {
       CREATE INDEX idx_messages_status 
       ON messages(status, conversationId)
     ''');
-    
+
     await db.execute('''
       CREATE INDEX idx_messages_deleted
       ON messages(isDeleted, isDeletedForMe)
@@ -88,17 +89,19 @@ class DatabaseHelper {
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     print('🔄 Upgrading database from v$oldVersion to v$newVersion');
-    
+
     // Version 2: إضافة deletedForRecipient
     if (oldVersion < 2) {
       try {
-        await db.execute('ALTER TABLE messages ADD COLUMN deletedForRecipient INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE messages ADD COLUMN deletedForRecipient INTEGER DEFAULT 0',
+        );
         print('✅ Upgraded to v2: Added deletedForRecipient');
       } catch (e) {
         print('⚠️ Column deletedForRecipient might already exist');
       }
     }
-    
+
     // Version 3: إضافة المرفقات
     if (oldVersion < 3) {
       try {
@@ -109,7 +112,7 @@ class DatabaseHelper {
         print('⚠️ Attachment columns might already exist');
       }
     }
-    
+
     // Version 4: إضافة attachmentName
     if (oldVersion < 4) {
       try {
@@ -123,36 +126,44 @@ class DatabaseHelper {
     // Version 5: إضافة failedVerificationAtRecipient
     if (oldVersion < 5) {
       try {
-        await db.execute('ALTER TABLE messages ADD COLUMN failedVerificationAtRecipient INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE messages ADD COLUMN failedVerificationAtRecipient INTEGER DEFAULT 0',
+        );
         print('✅ Upgraded to v5: Added failedVerificationAtRecipient');
       } catch (e) {
         print('⚠️ Column failedVerificationAtRecipient might already exist');
       }
     }
-    
+
     // ✅ Version 6: إضافة أعمدة الحذف والقفل
     if (oldVersion < 6) {
       try {
-        await db.execute('ALTER TABLE messages ADD COLUMN isDeleted INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE messages ADD COLUMN isDeleted INTEGER DEFAULT 0',
+        );
         print('✅ Added isDeleted');
       } catch (e) {
         print('⚠️ Column isDeleted might already exist');
       }
-      
+
       try {
-        await db.execute('ALTER TABLE messages ADD COLUMN isDeletedForMe INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE messages ADD COLUMN isDeletedForMe INTEGER DEFAULT 0',
+        );
         print('✅ Added isDeletedForMe');
       } catch (e) {
         print('⚠️ Column isDeletedForMe might already exist');
       }
-      
+
       try {
-        await db.execute('ALTER TABLE messages ADD COLUMN isLocked INTEGER DEFAULT 0');
+        await db.execute(
+          'ALTER TABLE messages ADD COLUMN isLocked INTEGER DEFAULT 0',
+        );
         print('✅ Added isLocked');
       } catch (e) {
         print('⚠️ Column isLocked might already exist');
       }
-      
+
       // إضافة Index جديد
       try {
         await db.execute('''
@@ -163,7 +174,7 @@ class DatabaseHelper {
       } catch (e) {
         print('⚠️ Index might already exist');
       }
-      
+
       print('✅ Upgraded to v6: Added deletion and lock columns');
     }
   }
@@ -174,7 +185,7 @@ class DatabaseHelper {
 
   Future<void> saveMessage(Map<String, dynamic> message) async {
     final db = await database;
-    
+
     // ✅ التأكد من وجود جميع الأعمدة المطلوبة
     final messageToSave = {
       'id': message['id'],
@@ -194,19 +205,20 @@ class DatabaseHelper {
       'isDeleted': message['isDeleted'] ?? 0,
       'isDeletedForMe': message['isDeletedForMe'] ?? 0,
       'deletedForRecipient': message['deletedForRecipient'] ?? 0,
-      'failedVerificationAtRecipient': message['failedVerificationAtRecipient'] ?? 0,
+      'failedVerificationAtRecipient':
+          message['failedVerificationAtRecipient'] ?? 0,
       'isLocked': message['isLocked'] ?? 0,
       'attachmentData': message['attachmentData'],
       'attachmentType': message['attachmentType'],
       'attachmentName': message['attachmentName'],
     };
-    
+
     await db.insert(
       'messages',
       messageToSave,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
-    
+
     // تحديث آخر رسالة في المحادثة
     await _updateConversationLastMessage(
       message['conversationId'],
@@ -216,32 +228,41 @@ class DatabaseHelper {
   }
 
   // ✅ جلب رسائل المحادثة (مع دعم الأعمدة الجديدة)
-  Future<List<Map<String, dynamic>>> getConversationMessages(String conversationId) async {
+  Future<List<Map<String, dynamic>>> getConversationMessages(
+    String conversationId,
+  ) async {
     final db = await database;
-    
+
     final messages = await db.query(
       'messages',
       where: 'conversationId = ?',
       whereArgs: [conversationId],
       orderBy: 'createdAt ASC',
     );
-    
+
     // ✅ تحويل الرسائل إلى format يفهمه ChatScreen
-    return messages.map((msg) => {
-      'id': msg['id'],
-      'content': msg['plaintext'] ?? msg['ciphertext'],
-      'timestamp': DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int).toIso8601String(),
-      'isMine': msg['isMine'] == 1,
-      'status': msg['status'],
-      'isDeleted': msg['isDeleted'] == 1,
-      'isDeletedForMe': msg['isDeletedForMe'] == 1,
-      'isDeletedForRecipient': msg['deletedForRecipient'] == 1,
-      'isLocked': msg['isLocked'] == 1,
-      'failedVerificationAtRecipient': msg['failedVerificationAtRecipient'] == 1,
-      'attachmentType': msg['attachmentType'],
-      'attachmentData': msg['attachmentData'],
-      'attachmentName': msg['attachmentName'],
-    }).toList();
+    return messages
+        .map(
+          (msg) => {
+            'id': msg['id'],
+            'content': msg['plaintext'] ?? msg['ciphertext'],
+            'timestamp': DateTime.fromMillisecondsSinceEpoch(
+              msg['createdAt'] as int,
+            ).toIso8601String(),
+            'isMine': msg['isMine'] == 1,
+            'status': msg['status'],
+            'isDeleted': msg['isDeleted'] == 1,
+            'isDeletedForMe': msg['isDeletedForMe'] == 1,
+            'isDeletedForRecipient': msg['deletedForRecipient'] == 1,
+            'isLocked': msg['isLocked'] == 1,
+            'failedVerificationAtRecipient':
+                msg['failedVerificationAtRecipient'] == 1,
+            'attachmentType': msg['attachmentType'],
+            'attachmentData': msg['attachmentData'],
+            'attachmentName': msg['attachmentName'],
+          },
+        )
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> getMessages(
@@ -250,15 +271,15 @@ class DatabaseHelper {
     int? before,
   }) async {
     final db = await database;
-    
+
     String whereClause = 'conversationId = ?';
     List<dynamic> whereArgs = [conversationId];
-    
+
     if (before != null) {
       whereClause += ' AND createdAt < ?';
       whereArgs.add(before);
     }
-    
+
     return await db.query(
       'messages',
       where: whereClause,
@@ -268,42 +289,45 @@ class DatabaseHelper {
     );
   }
 
-  Future<List<Map<String, dynamic>>> getEncryptedMessages(String conversationId) async {
+  Future<List<Map<String, dynamic>>> getEncryptedMessages(
+    String conversationId,
+  ) async {
     final db = await database;
-    
+
     final result = await db.query(
       'messages',
-      where: 'conversationId = ? AND isMine = ? AND isDecrypted = ? AND plaintext IS NULL',
+      where:
+          'conversationId = ? AND isMine = ? AND isDecrypted = ? AND plaintext IS NULL',
       whereArgs: [conversationId, 0, 0],
       orderBy: 'createdAt ASC',
     );
-    
+
     return result;
   }
 
   Future<List<Map<String, dynamic>>> getPendingMessages() async {
     final db = await database;
-    
+
     final result = await db.query(
       'messages',
       where: 'status IN (?, ?)',
       whereArgs: ['sending', 'pending'],
       orderBy: 'createdAt ASC',
     );
-    
+
     return result;
   }
 
   Future<Map<String, dynamic>?> getMessage(String messageId) async {
     final db = await database;
-    
+
     final result = await db.query(
       'messages',
       where: 'id = ?',
       whereArgs: [messageId],
       limit: 1,
     );
-    
+
     if (result.isEmpty) return null;
     return result.first;
   }
@@ -312,19 +336,15 @@ class DatabaseHelper {
   // ✅ تحديث حالة الرسائل
   // ============================================
 
-  Future<void> updateMessageStatus(
-    String messageId,
-    String status,
-  ) async {
+  Future<void> updateMessageStatus(String messageId, String status) async {
     final db = await database;
     await db.update(
       'messages',
       {
         'status': status,
-        if (status == 'delivered') 
+        if (status == 'delivered')
           'deliveredAt': DateTime.now().millisecondsSinceEpoch,
-        if (status == 'read') 
-          'readAt': DateTime.now().millisecondsSinceEpoch,
+        if (status == 'read') 'readAt': DateTime.now().millisecondsSinceEpoch,
       },
       where: 'id = ?',
       whereArgs: [messageId],
@@ -342,7 +362,7 @@ class DatabaseHelper {
       where: 'id = ?',
       whereArgs: [messageId],
     );
-    
+
     if (updates.containsKey('plaintext')) {
       final message = await getMessage(messageId);
       if (message != null) {
@@ -356,9 +376,12 @@ class DatabaseHelper {
   }
 
   // ✅ تحديث حالة الحذف
-  Future<void> markMessageAsDeleted(String messageId, {bool forMe = false}) async {
+  Future<void> markMessageAsDeleted(
+    String messageId, {
+    bool forMe = false,
+  }) async {
     final db = await database;
-    
+
     if (forMe) {
       await db.update(
         'messages',
@@ -392,31 +415,31 @@ class DatabaseHelper {
 
   Future<int> getUnreadCount(String conversationId) async {
     final db = await database;
-    
-    final result = await db.rawQuery('''
+
+    final result = await db.rawQuery(
+      '''
       SELECT COUNT(*) as count FROM messages
       WHERE conversationId = ? 
       AND isMine = 0
       AND status != 'read'
       AND isDeletedForMe = 0
-    ''', [conversationId]);
-    
+    ''',
+      [conversationId],
+    );
+
     return Sqflite.firstIntValue(result) ?? 0;
   }
 
   Future<void> markConversationAsRead(String conversationId) async {
     final db = await database;
-    
+
     await db.update(
       'messages',
-      {
-        'status': 'read',
-        'readAt': DateTime.now().millisecondsSinceEpoch,
-      },
+      {'status': 'read', 'readAt': DateTime.now().millisecondsSinceEpoch},
       where: 'conversationId = ? AND isMine = 0 AND status != ?',
       whereArgs: [conversationId, 'read'],
     );
-    
+
     await db.update(
       'conversations',
       {'unreadCount': 0},
@@ -427,16 +450,13 @@ class DatabaseHelper {
 
   Future<List<Map<String, dynamic>>> getConversations() async {
     final db = await database;
-    
-    return await db.query(
-      'conversations',
-      orderBy: 'lastMessageTime DESC',
-    );
+
+    return await db.query('conversations', orderBy: 'lastMessageTime DESC');
   }
 
   Future<void> saveConversation(Map<String, dynamic> conversation) async {
     final db = await database;
-    
+
     await db.insert(
       'conversations',
       conversation,
@@ -450,14 +470,14 @@ class DatabaseHelper {
     int timestamp,
   ) async {
     final db = await database;
-    
+
     final conversation = await db.query(
       'conversations',
       where: 'id = ?',
       whereArgs: [conversationId],
       limit: 1,
     );
-    
+
     if (conversation.isNotEmpty) {
       await db.update(
         'conversations',
@@ -474,12 +494,15 @@ class DatabaseHelper {
 
   Future<void> incrementUnreadCount(String conversationId) async {
     final db = await database;
-    
-    await db.rawUpdate('''
+
+    await db.rawUpdate(
+      '''
       UPDATE conversations 
       SET unreadCount = unreadCount + 1
       WHERE id = ?
-    ''', [conversationId]);
+    ''',
+      [conversationId],
+    );
   }
 
   // ============================================
@@ -502,11 +525,7 @@ class DatabaseHelper {
 
   Future<int> deleteMessage(String messageId) async {
     final db = await database;
-    return await db.delete(
-      'messages',
-      where: 'id = ?',
-      whereArgs: [messageId],
-    );
+    return await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
   }
 
   Future<void> clearAllData() async {
@@ -528,34 +547,61 @@ class DatabaseHelper {
 
   Future<void> printDatabaseSchema() async {
     final db = await database;
-    
+
     final tables = await db.rawQuery(
-      "SELECT name FROM sqlite_master WHERE type='table'"
+      "SELECT name FROM sqlite_master WHERE type='table'",
     );
-    
+
     print('📊 Database Tables:');
     for (var table in tables) {
       final tableName = table['name'];
       print('\n📋 Table: $tableName');
-      
-      final columns = await db.rawQuery(
-        "PRAGMA table_info($tableName)"
-      );
-      
+
+      final columns = await db.rawQuery("PRAGMA table_info($tableName)");
+
       for (var col in columns) {
-        print('   - ${col['name']}: ${col['type']} (${col['notnull'] == 1 ? 'NOT NULL' : 'NULL'})');
+        print(
+          '   - ${col['name']}: ${col['type']} (${col['notnull'] == 1 ? 'NOT NULL' : 'NULL'})',
+        );
       }
     }
   }
 
   Future<int> getMessagesCount(String conversationId) async {
     final db = await database;
-    
-    final result = await db.rawQuery('''
+
+    final result = await db.rawQuery(
+      '''
       SELECT COUNT(*) as count FROM messages
       WHERE conversationId = ?
-    ''', [conversationId]);
-    
+    ''',
+      [conversationId],
+    );
+
     return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  Future<void> setConversationScreenshotsAllowed(
+    String conversationId,
+    bool allowed,
+  ) async {
+    final db = await database;
+    await db.insert('conversation_settings', {
+      'conversation_id': conversationId,
+      'allow_screenshots': allowed ? 1 : 0,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<bool> getConversationScreenshotsAllowed(String conversationId) async {
+    final db = await database;
+    final result = await db.query(
+      'conversation_settings',
+      where: 'conversation_id = ?',
+      whereArgs: [conversationId],
+    );
+    if (result.isNotEmpty) {
+      return result.first['allow_screenshots'] == 1;
+    }
+    return false;
   }
 }

@@ -487,4 +487,106 @@ router.delete('/:contactId',
   }
 );
 
+// ============================================
+// 8. جلب سياسة لقطات الشاشة
+// ============================================
+router.get('/:peerUserId/screenshots', auth, async (req, res) => {
+  try {
+    const currentUserId = req.user.id;
+    const { peerUserId } = req.params;
+
+    console.log('📥 GET /screenshots request');
+    console.log('   Current User:', currentUserId);
+    console.log('   Peer User:', peerUserId);
+
+    const contact = await Contact.findOne({
+      $or: [
+        { requester: currentUserId, recipient: peerUserId },
+        { requester: peerUserId, recipient: currentUserId }
+      ],
+      status: 'accepted'
+    });
+
+    if (!contact) {
+      console.log('❌ Contact not found');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'العلاقة غير موجودة',
+        allowScreenshots: false
+      });
+    }
+
+    console.log('✅ Contact found, allowScreenshots:', contact.allowScreenshots);
+
+    res.json({
+      success: true,
+      allowScreenshots: contact.allowScreenshots || false
+    });
+
+  } catch (err) {
+    console.error('❌ Get screenshot policy error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'خطأ في جلب السياسة',
+      allowScreenshots: false
+    });
+  }
+});
+
+// ============================================
+// 9. تحديث سياسة لقطات الشاشة
+// ============================================
+router.put('/:peerUserId/screenshots', auth, async (req, res) => {
+  try {
+    const { allowScreenshots } = req.body;
+    const currentUserId = req.user.id;
+    const { peerUserId } = req.params;
+
+    console.log('📥 PUT /screenshots request');
+    console.log('   Current User:', currentUserId);
+    console.log('   Peer User:', peerUserId);
+    console.log('   Allow:', allowScreenshots);
+
+    const contact = await Contact.findOne({
+      $or: [
+        { requester: currentUserId, recipient: peerUserId },
+        { requester: peerUserId, recipient: currentUserId }
+      ],
+      status: 'accepted'
+    });
+
+    if (!contact) {
+      console.log('❌ Contact not found');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'العلاقة غير موجودة' 
+      });
+    }
+
+    contact.allowScreenshots = allowScreenshots;
+    await contact.save();
+
+    console.log('✅ Updated successfully');
+
+    // إرسال عبر Socket
+    req.io?.sendToUser?.(peerUserId, 'privacy:screenshots:changed', {
+      peerUserId: currentUserId,
+      allowScreenshots
+    });
+
+    res.json({
+      success: true,
+      message: allowScreenshots
+        ? 'تم السماح بلقطات الشاشة'
+        : 'تم منع لقطات الشاشة'
+    });
+  } catch (err) {
+    console.error('❌ Privacy update error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'خطأ في تحديث السياسة' 
+    });
+  }
+});
+
 module.exports = router;

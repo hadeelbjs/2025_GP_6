@@ -3,7 +3,7 @@ import Flutter
 import NetworkExtension
 import SystemConfiguration.CaptiveNetwork
 
-@UIApplicationMain
+@main
 @objc class AppDelegate: FlutterAppDelegate {
     
     private let CHANNEL = "com.waseed.app/wifi_security"

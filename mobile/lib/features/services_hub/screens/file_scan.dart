@@ -99,7 +99,7 @@ class _FileScreenState extends State<FilesScreen> {
     }
   }
 
-  void _showFileResultDialog(FileScanResult result) {
+  void _showFileResultDialog(ScanResult result) {
   showDialog(
     context: context,
     builder: (context) => Directionality(

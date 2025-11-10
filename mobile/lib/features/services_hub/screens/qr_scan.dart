@@ -20,7 +20,7 @@ class _QRScreenState extends State<QRScreen> {
   File? _selectedFile;
   bool _isScanning = false;
   String? _scannedResult;
-  UrlScanResult? _urlScanResult;
+  ScanResult? _urlScanResult;
   final ApiContentService _apiService = ApiContentService();
 
   void _removeImage() {

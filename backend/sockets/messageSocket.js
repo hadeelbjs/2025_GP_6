@@ -456,7 +456,7 @@ socket.on('conversation:failed_verification', async (data) => {
     console.log(`📨 Sent '${event}' to user ${userId}`);
     return true;
   };
-
+   const socket = io.sockets.sockets.get(socketId);
   socket.on('privacy:screenshots:update', (data) => {
   const { peerUserId, allowScreenshots } = data;
   io.sendToUser(peerUserId, 'privacy:screenshots:changed', {

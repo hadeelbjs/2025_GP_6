@@ -21,6 +21,8 @@ import 'features/authentication/screens/biometric_login_screen.dart';
 import 'features/services_hub/screens/services.dart';
 import 'features/services_hub/screens/content_scan.dart';
 import 'services/wifi_security_service.dart'; 
+import 'package:geolocator/geolocator.dart';
+
 void main() async {
   await dotenv.load(fileName: ".env");
   

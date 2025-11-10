@@ -18,7 +18,7 @@ class _LinksScreenState extends State<LinksScreen> {
   File? _selectedFile;
   bool _isScanning = false;
   String? _scannedResult;
-  UrlScanResult? _urlScanResult;
+  ScanResult? _urlScanResult;
   ApiContentService _apiService = ApiContentService();
 
   @override

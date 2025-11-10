@@ -5,7 +5,7 @@ import 'dart:convert';
 class ApiContentService {
   static String virustotalURL = 'https://www.virustotal.com/api/v3/files'; 
 
-  Future<UrlScanResult> scanURL(String url) async {
+  Future<ScanResult> scanURL(String url) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/urls');
     final headers = {
       'x-apikey': AppConfig.virustotalApiKey,
@@ -39,14 +39,14 @@ class ApiContentService {
       }
       
       final analysisData = json.decode(analysisResponse.body);
-      return UrlScanResult.fromJson(analysisData);
+      return ScanResult.fromJson(analysisData);
       
     } catch (e) {
       throw Exception('Error scanning URL: $e');
     }
   }
 
-  Future<FileScanResult> scanFile(String hash) async {
+  Future<ScanResult> scanFile(String hash) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/files/$hash');
     final headers = {
       'x-apikey': AppConfig.virustotalApiKey,
@@ -57,10 +57,10 @@ class ApiContentService {
       
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        return FileScanResult.fromJson(jsonResponse);
+        return ScanResult.fromJson(jsonResponse);
       } else if (response.statusCode == 404) {
         // الملف غير موجود في قاعدة بيانات VirusTotal
-        return FileScanResult(
+        return ScanResult(
           isSafe: true,
           maliciousCount: 0,
           suspiciousCount: 0,
@@ -78,14 +78,14 @@ class ApiContentService {
 
 
 // كلاس لتخزين نتيجة الفحص
-class UrlScanResult {
+class ScanResult {
   final bool isSafe;
   final int maliciousCount;
   final int suspiciousCount;
   final int harmlessCount;
   final String status;
   
-  UrlScanResult({
+  ScanResult({
     required this.isSafe,
     required this.maliciousCount,
     required this.suspiciousCount,
@@ -93,7 +93,7 @@ class UrlScanResult {
     required this.status,
   });
   
-  factory UrlScanResult.fromJson(Map<String, dynamic> json) {
+  factory ScanResult.fromJson(Map<String, dynamic> json) {
     final stats = json['data']['attributes']['stats'] ?? {};
     
     final malicious = stats['malicious'] ?? 0;
@@ -101,44 +101,12 @@ class UrlScanResult {
     final harmless = stats['harmless'] ?? 0;
     final status = json['data']['attributes']['status'] ?? 'unknown';
     
-    return UrlScanResult(
+    return ScanResult(
       isSafe: malicious == 0 && suspicious == 0,
       maliciousCount: malicious,
       suspiciousCount: suspicious,
       harmlessCount: harmless,
       status: status,
-    );
-  }
-}
-
-class FileScanResult {
-  final bool isSafe;
-  final int maliciousCount;
-  final int suspiciousCount;
-  final int harmlessCount;
-  final String status;
-  
-  FileScanResult({
-    required this.isSafe,
-    required this.maliciousCount,
-    required this.suspiciousCount,
-    required this.harmlessCount,
-    required this.status,
-  });
-  
-  factory FileScanResult.fromJson(Map<String, dynamic> json) {
-    final stats = json['data']['attributes']['last_analysis_stats'] ?? {};
-    
-    final malicious = stats['malicious'] ?? 0;
-    final suspicious = stats['suspicious'] ?? 0;
-    final harmless = stats['harmless'] ?? 0;
-    
-    return FileScanResult(
-      isSafe: malicious == 0 && suspicious == 0,
-      maliciousCount: malicious,
-      suspiciousCount: suspicious,
-      harmlessCount: harmless,
-      status: 'completed',
     );
   }
 }

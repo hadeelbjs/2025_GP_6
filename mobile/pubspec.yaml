@@ -67,6 +67,8 @@ dependencies:
   flutter_zxing: ^1.5.2
   qr_code_tools: ^0.2.0
 
+  geolocator: ^14.0.2
+
   
   
   # The following adds the Cupertino Icons font to your application.

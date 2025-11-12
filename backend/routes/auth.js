@@ -52,16 +52,16 @@ const sendEmailWithTimeout = async (emailFunc, timeoutMs = 10000) => {
 };
 
 const validatePasswordMiddleware = (req, res, next) => {
-  const { password } = req.body;
+  const { newPassword } = req.body;
   
-  if (!password) {
+  if (!newPassword) {
     return res.status(400).json({
       success: false,
       message: 'الرجاء إدخال كلمة المرور'
     });
   }
   
-  const errors = User.validatePasswordStrength(password);
+  const errors = User.validatePasswordStrength(newPassword);
   
   if (errors.length > 0) {
     return res.status(400).json({
@@ -264,7 +264,7 @@ router.post('/verify-email-and-create', async (req, res) => {
       phone: pendingData.phone,
       password: pendingData.password,
       passwordChangedAt: new Date(),
-      passwordHistory: [{ hash: pendingData.password, changedAt: new Date() }],
+      passwordHistory: [{ hash: pendingData.password}],
       isEmailVerified: true,
       isPhoneVerified: false
     });
@@ -752,9 +752,6 @@ router.post('/login', async (req, res) => {
 
     // التحقق من انتهاء صلاحية الباسورد (90 يوم)
     if (user.isPasswordExpired()) {
-      user.passwordResetRequired = true;
-      await user.save();
-      
       return res.status(403).json({
         success: false,
         code: 'PASSWORD_EXPIRED',
@@ -949,7 +946,6 @@ router.post('/reset-password', validatePasswordMiddleware, async (req, res) => {
     
     user.password = hashedPassword;
     user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
-    user.passwordResetRequired = false; // إلغاء إجبار التغيير
     user.passwordResetCode = undefined;
     user.passwordResetExpires = undefined;
     await user.save();
@@ -1011,7 +1007,6 @@ router.post('/change-password', authMiddleware, validatePasswordMiddleware, asyn
     
     user.password = hashedPassword;
     user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
-    user.passwordResetRequired = false; // إلغاء إجبار التغيير
     await user.save();
 
     res.json({
@@ -1080,8 +1075,7 @@ router.get('/password-status', authMiddleware, async (req, res) => {
       passwordChangedAt: user.passwordChangedAt,
       daysSinceChange,
       daysUntilExpiry: daysUntilExpiry > 0 ? daysUntilExpiry : 0,
-      isExpired,
-      passwordResetRequired: user.passwordResetRequired || false
+      isExpired
     });
 
   } catch (err) {
@@ -1207,9 +1201,6 @@ router.post('/biometric-login', async (req, res) => {
 
     // التحقق من انتهاء صلاحية الباسورد حتى مع البايومتركس
     if (user.isPasswordExpired()) {
-      user.passwordResetRequired = true;
-      await user.save();
-      
       return res.status(403).json({
         success: false,
         code: 'PASSWORD_EXPIRED',

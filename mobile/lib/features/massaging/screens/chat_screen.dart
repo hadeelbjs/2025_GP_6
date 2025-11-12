@@ -394,7 +394,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   // ========================================
-  // ✅ تحديث: _recreateSession() للاستخدام اليدوي من Dialog
+  // تحديث: _recreateSession() للاستخدام اليدوي من Dialog
   // ========================================
   Future<void> _recreateSession() async {
     try {

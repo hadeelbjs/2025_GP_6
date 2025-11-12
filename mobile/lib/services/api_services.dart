@@ -1120,7 +1120,7 @@ class ApiService {
   }
 
   // ===================================
-  // 🔑 رفع Bundle كامل مع النسخة
+  // رفع Bundle كامل مع النسخة
   // ===================================
   Future<Map<String, dynamic>> uploadPreKeyBundle(
     Map<String, dynamic> bundle,
@@ -1138,7 +1138,7 @@ class ApiService {
         return {
           'success': true,
           'message': data['message'],
-          'version': data['version'], // ✅ استقبال النسخة
+          'version': data['version'], 
           'totalKeys': data['totalKeys'],
           'availableKeys': data['availableKeys'],
         };
@@ -1146,13 +1146,13 @@ class ApiService {
 
       return {'success': false, 'message': data['message'] ?? 'Upload failed'};
     } catch (e) {
-      print('❌ Error uploading bundle: $e');
+      print('Error uploading bundle: $e');
       return {'success': false, 'message': e.toString()};
     }
   }
 
   // ===================================
-  // 📥 جلب PreKey Bundle
+  // جلب PreKey Bundle
   // ===================================
   Future<Map<String, dynamic>> getPreKeyBundle(String userId) async {
     try {

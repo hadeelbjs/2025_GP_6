@@ -193,7 +193,8 @@ Future<void> _initializeEncryption() async {
     
     // ✅ 2. تهيئة SignalProtocolManager
     final signalManager = SignalProtocolManager();
-    await signalManager.initialize();
+    await signalManager.initialize(userId: userId);
+
     
     // ✅ 3. الفحص باستخدام userId
     final userIdentityKey = await storage.read(key: 'identity_key_$userId');

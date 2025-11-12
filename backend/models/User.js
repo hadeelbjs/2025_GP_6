@@ -13,15 +13,11 @@ const UserSchema = new mongoose.Schema({
   
   // تتبع آخر 12 باسورد
   passwordHistory: [{
-    hash: String,
-    changedAt: { type: Date, default: Date.now }
+    hash: String
   }],
   
   // تاريخ آخر تغيير للباسورد
   passwordChangedAt: { type: Date, default: Date.now },
-  
-  // هل يحتاج تغيير الباسورد (كل 90 يوم)
-  passwordResetRequired: { type: Boolean, default: false },
   
   isEmailVerified: { type: Boolean, default: false },
   isPhoneVerified: { type: Boolean, default: false },
@@ -39,9 +35,7 @@ const UserSchema = new mongoose.Schema({
   biometricEnabled: { type: Boolean, default: false },
   biometricVerificationCode: String,
   biometricVerificationExpires: Date,
-  
-  memoji: { type: String, default: '😊' },
-  
+    
   identityPublicKey: String,
   signedPreKey: {
     keyId: Number,
@@ -122,8 +116,7 @@ UserSchema.methods.addToPasswordHistory = function(passwordHash) {
   }
   
   this.passwordHistory.push({
-    hash: passwordHash,
-    changedAt: new Date()
+    hash: passwordHash
   });
   
   // الاحتفاظ بآخر 12 فقط

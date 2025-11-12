@@ -18,6 +18,7 @@ import '../../../services/local_db/database_helper.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:waseed/widgets/screenshot_blocker.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -42,9 +43,9 @@ class _ChatScreenState extends State<ChatScreen> {
   final _socketService = SocketService();
   bool _screenshotsAllowed = false;
   bool _isLoadingScreenshotPolicy = true;
-  final _screenCapture = ScreenCaptureEvent();
-  late final void Function(String) _onShot;
-  late final void Function(bool) _onRecord;
+  //final _screenCapture = ScreenCaptureEvent();
+  //late final void Function(String) _onShot;
+  //late final void Function(bool) _onRecord;
 
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
@@ -88,7 +89,7 @@ class _ChatScreenState extends State<ChatScreen> {
       }
     });
     // 📸 لقطة الشاشة
-    _onShot = (String filePath) {
+    /*_onShot = (String filePath) {
       if (!_screenshotsAllowed) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -116,7 +117,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _screenCapture.addScreenRecordListener(_onRecord);
 
     // لازم لتفعيل المراقبة
-    _screenCapture.watch();
+    _screenCapture.watch();*/
 
     //امنعي اللقطات والتسجيل مباشرةً عند فتح الشاشة
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -186,14 +187,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _applyScreenshotPolicy(bool allow) async {
     setState(() => _screenshotsAllowed = allow);
+  }
+
+  /* mod to ^^
+  Future<void> _applyScreenshotPolicy(bool allow) async {
+    setState(() => _screenshotsAllowed = allow);
     if (allow) {
       await _disableProtection();
     } else {
       await _enableProtection();
     }
-  }
+  }*/
 
-  Future<void> _enableProtection() async {
+  /*Future<void> _enableProtection() async {
     try {
       if (Platform.isAndroid) {
         //await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
@@ -219,12 +225,12 @@ class _ChatScreenState extends State<ChatScreen> {
     } catch (e) {
       debugPrint('❌ Failed to disable protection: $e');
     }
-  }
+  }*/
 
   @override
   void dispose() {
-    _disableProtection();
-    _screenCapture.dispose();
+    // _disableProtection();
+    // _screenCapture.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _newMessageSubscription?.cancel();
@@ -1357,7 +1363,10 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
 
-        body: _buildBody(hasAttachment),
+        body: ScreenshotBlocker(
+          enabled: !_screenshotsAllowed, // إذا منعين اللقطات فعّل الحماية
+          child: _buildBody(hasAttachment),
+        ),
       ),
     );
   }

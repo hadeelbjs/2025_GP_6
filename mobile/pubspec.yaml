@@ -50,6 +50,9 @@ dependencies:
   #flutter_windowmanager: ^0.2.0
   screen_protector: ^1.4.5
   screen_capture_event: ^1.2.0
+  #image_gallery_saver: ^2.0.3
+  path_provider: ^2.1.5 
+
 
   #Local Database
   sqflite: ^2.3.0
@@ -79,6 +82,7 @@ dependencies:
   app_settings: ^6.1.1
   connectivity_plus: ^7.0.0
   permission_handler: ^11.0.1
+  gal: ^2.3.2
   
 flutter_local_notifications: ^17.0.0
 
@@ -117,7 +121,8 @@ flutter:
      - assets/images/triangle-grey-1.svg
      - assets/images/triangle-grey-2.svg
      - assets/icons/back_arrow_white.png
-     - .env   
+     - .env 
+     - assets/images/screenshot_blocked.png  
 
 
   #   - images/a_dot_ham.jpeg

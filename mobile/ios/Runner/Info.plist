@@ -65,5 +65,8 @@
 <key>NSLocalNetworkUsageDescription</key>
 <string>نحتاج الوصول للشبكة المحلية لتحليل الأمان</string>
 
+<key>NSPhotoLibraryAddUsageDescription</key>
+<string>We save a warning image when a screenshot is attempted.</string>
+
 </dict>
 </plist>

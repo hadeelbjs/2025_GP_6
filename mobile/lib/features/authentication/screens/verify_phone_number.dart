@@ -162,84 +162,6 @@ void _showMessage(String message, {required bool isError}) {
   );
 }
 
-// تخطي التحقق
-Future<void> _skipVerification() async {
-  final skip = await showDialog<bool>(
-    context: context,
-    builder: (context) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        title: const Text(
-          'تخطي التحقق من الجوال؟',
-          style: TextStyle(
-            fontFamily: 'IBMPlexSansArabic',
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        content: const Text(
-          'يمكنك التحقق من رقم جوالك لاحقاً من الإعدادات',
-          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'إلغاء',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2D1B69),
-            ),
-            child: const Text(
-              'تخطي',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-
-  if (skip != true) return;
-
-  setState(() => _isLoading = true);
-
-  final result = await _apiService.skipPhoneVerification(
-    email: widget.email, // استخدام الإيميل من الـ widget
-  );
-
-  setState(() => _isLoading = false);
-
-  if (!mounted) return;
-
-  if (result['success']) {
-    Navigator.pushAndRemoveUntil(
-      context,
-      MaterialPageRoute(builder: (_) => const MainDashboard()),
-      (route) => false,
-    );
-  } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          result['message'] ?? 'حدث خطأ',
-          style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-        ),
-        backgroundColor: Colors.red,
-      ),
-    );
-  }
-}
-
   //  الواجهة
 
   @override
@@ -401,18 +323,7 @@ Future<void> _skipVerification() async {
               ),
               const SizedBox(height: 16),
 
-              TextButton(
-                onPressed: _isLoading ? null : _skipVerification,
-                child: const Text(
-                  'التحقق لاحقاً',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontFamily: 'IBMPlexSansArabic',
-                    color: Colors.grey,
-                  ),
-                ),
-              ),           
-
+            
               const SizedBox(height: 20),
 
               // إعادة إرسال الرمز

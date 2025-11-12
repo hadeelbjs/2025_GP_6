@@ -35,6 +35,7 @@ class MessagingService {
   StreamSubscription? _statusSubscription;
   StreamSubscription? _deleteSubscription;
   Timer? _cleanupTimer;
+  static int decryptionFailure = 0;
 
   final _newMessageController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -131,6 +132,15 @@ class MessagingService {
         attachmentType = 'file';
         attachmentName = fileName ?? attachmentFile.path.split('/').last;
         attachmentMimeType = 'application/octet-stream';
+      }
+
+      final hasSession = await _signalProtocol.sessionExists(recipientId);
+      if (!hasSession) {
+        print('⚠️ No session found with $recipientId. Creating one...');
+        final sessionCreated = await createNewSession(recipientId);
+        if (!sessionCreated) {
+          throw Exception('Failed to create new session with $recipientId');
+        }
       }
 
       //  تشفير الرسالة
@@ -411,11 +421,24 @@ class MessagingService {
             print('✅ Message $messageId decrypted successfully');
           } else {
             lastError = 'Decryption returned null';
+            decryptionFailure++;
+            if (decryptionFailure >= 3) {
+              await _signalProtocol.deleteSession(senderId);
+              await deleteConversation(conversationId);
+              return {
+                'success': false,
+                'error': 'SessionReset',
+                'message': 'Session reset due to decryption errors',
+              };
+              print ('session reset due to decryption failuer');
+            }
             lastErrorType = 'DecryptionFailure';
             print('❌ Decryption returned null for message $messageId');
           }
         } catch (e) {
           lastError = e.toString();
+
+          decryptionFailure++;
 
           // ✅ استخراج نوع الخطأ بشكل أفضل
           if (e.toString().contains('InvalidKeyException')) {

@@ -47,6 +47,9 @@ class _ChatScreenState extends State<ChatScreen> {
   //late final void Function(String) _onShot;
   //late final void Function(bool) _onRecord;
 
+   int _sessionResetAttempts = 0;
+  static const int _maxSessionResetAttempts = 2;
+
   final List<Map<String, dynamic>> _messages = [];
   bool _isLoading = false;
   bool _isSending = false;
@@ -244,15 +247,6 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _printDebugInfo() async {
     final storage = FlutterSecureStorage();
     final token = await storage.read(key: 'access_token');
-
-    print('');
-    print('═══════════════════════════════════════════════════════════════');
-    print('🔑 انسخ هذا TOKEN:');
-    print(token);
-    print('═══════════════════════════════════════════════════════════════');
-    print('🆔 انسخ هذا USER ID: ${widget.userId}');
-    print('═══════════════════════════════════════════════════════════════');
-    print('');
   }
 
   Future<void> _decryptAllMessages() async {
@@ -264,6 +258,15 @@ class _ChatScreenState extends State<ChatScreen> {
       final result = await _messagingService.decryptAllConversationMessages(
         _conversationId!,
       );
+
+      if (result['error'] == 'SessionReset' && mounted) {
+        Navigator.pushReplacementNamed(context, '/chats');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تمت إعادة تعيين الجلسة لتغير مفاتيح التشفير يرجى إعادة الدخول للمحادثة'),
+          ),
+        );
+      }
 
       if (result['success'] == true) {
         final count = result['count'] ?? 0;
@@ -342,56 +345,61 @@ class _ChatScreenState extends State<ChatScreen> {
   // ✅ جديد: إعادة إنشاء Session تلقائياً (بدون Dialog)
   // ========================================
   Future<void> _autoRecreateSession() async {
-    try {
-      print('🔄 Auto-recreating session for ${widget.userId}');
+  try {
+    print('🔄 Auto-recreating session for ${widget.userId}');
 
-      // عرض رسالة للمستخدم
-      _showMessage('جاري إصلاح جلسة التشفير...', true);
-
-      // 1. حذف Session القديم (إن وُجد)
-      await _messagingService.deleteSession(widget.userId);
-      print('🗑️ Old session deleted (if existed)');
-
-      // 2. إنشاء Session جديد
-      final success = await _messagingService.createNewSession(widget.userId);
-
-      if (success) {
-        print('✅ New session created automatically');
-
-        // إعادة تعيين العدادات
-        _decryptionFailureCount = 0;
-        _hasShownDecryptionDialog = false;
-
-        // إعادة تحميل الرسائل
-        await _loadMessagesFromDatabase();
-
-        // عرض رسالة نجاح
-        _showMessage('تم إصلاح جلسة التشفير بنجاح', true);
-
-        // محاولة فك التشفير مرة أخرى بعد ثانية
-        await Future.delayed(Duration(seconds: 1));
-        await _decryptAllMessages();
-      } else {
-        print('❌ Failed to auto-create session');
-        _showMessage('فشل إصلاح جلسة التشفير', false);
-
-        // إذا فشل الإنشاء التلقائي، عرض Dialog للمستخدم
-        if (mounted && !_hasShownDecryptionDialog) {
-          _hasShownDecryptionDialog = true;
-          await _showDecryptionFailureDialog();
-        }
-      }
-    } catch (e) {
-      print('❌ Error in auto-recreate session: $e');
-      _showMessage('حدث خطأ أثناء إصلاح الجلسة', false);
-
-      // في حالة الخطأ، عرض Dialog للمستخدم
-      if (mounted && !_hasShownDecryptionDialog) {
-        _hasShownDecryptionDialog = true;
-        await _showDecryptionFailureDialog();
+    // ✅ التحقق من آخر محاولة
+    final lastAttemptKey = 'last_session_reset_${widget.userId}';
+    final lastAttemptStr = await FlutterSecureStorage().read(key: lastAttemptKey);
+    
+    if (lastAttemptStr != null) {
+      final lastAttempt = DateTime.parse(lastAttemptStr);
+      final timeSince = DateTime.now().difference(lastAttempt);
+      
+      if (timeSince.inMinutes < 2) {
+        print('⚠️ Session reset blocked - attempted ${timeSince.inSeconds}s ago');
+        _showMessage('يرجى الانتظار قبل إعادة المحاولة', false);
+        return;
       }
     }
+    
+    // حفظ وقت المحاولة
+    await FlutterSecureStorage().write(
+      key: lastAttemptKey,
+      value: DateTime.now().toIso8601String(),
+    );
+
+    _showMessage('جاري إصلاح جلسة التشفير...', true);
+
+    // حذف Session القديم
+    await _messagingService.deleteSession(widget.userId);
+    print('🗑️ Old session deleted');
+
+    // إنشاء Session جديد
+    final success = await _messagingService.createNewSession(widget.userId);
+
+    if (success) {
+      print('✅ New session created automatically');
+
+      _decryptionFailureCount = 0;
+      _hasShownDecryptionDialog = false;
+
+      await _loadMessagesFromDatabase();
+      _showMessage('تم إصلاح جلسة التشفير بنجاح', true);
+
+      // ✅ لا نعيد محاولة فك التشفير تلقائياً - ننتظر رسالة جديدة
+      // await Future.delayed(Duration(seconds: 1));
+      // await _decryptAllMessages();
+      
+    } else {
+      print('❌ Failed to auto-create session');
+      _showMessage('فشل إصلاح جلسة التشفير', false);
+    }
+  } catch (e) {
+    print('❌ Error in auto-recreate session: $e');
+    _showMessage('حدث خطأ أثناء إصلاح الجلسة', false);
   }
+}
 
   // ========================================
   // تحديث: _recreateSession() للاستخدام اليدوي من Dialog

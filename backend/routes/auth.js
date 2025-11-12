@@ -100,7 +100,7 @@ router.post(
       });
     }
 
-    const { fullName, username, email, phone, password } = req.body;
+    const { fullName, username, email, phone, newPassword } = req.body;
     const normalizedPhone = normalizePhone(phone);
 
     try {
@@ -131,7 +131,7 @@ router.post(
 
       // تشفير كلمة المرور
       const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(password, salt);
+      const hashedPassword = await bcrypt.hash(newPassword, salt);
 
       // حفظ البيانات مؤقتاً في الذاكرة
       pendingRegistrations.set(newRegistrationId, {

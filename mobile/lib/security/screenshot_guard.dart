@@ -1,6 +1,5 @@
-
 // lib/security/screenshot_guard.dart
-import 'dart:io' show Platform;
+/*import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:screen_protector/screen_protector.dart';
 
@@ -34,4 +33,4 @@ class ScreenshotGuard {
       debugPrint('ScreenshotGuard error: $e');
     }
   }
-}
+}*/

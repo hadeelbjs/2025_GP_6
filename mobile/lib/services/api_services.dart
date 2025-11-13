@@ -122,7 +122,7 @@ class ApiService {
           'username': username,
           'email': email,
           'phone': phone,
-          'password': password,
+          'newPassword': password,
         }),
       );
 

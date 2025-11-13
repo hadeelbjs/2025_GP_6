@@ -129,6 +129,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       print('Is authenticated? $isAuth');
       
       if (isAuth) {
+        BiometricService.setJustLoggedOut(false);
         // ✅ تهيئة التشفير
         await _initializeEncryption();
         
@@ -170,6 +171,29 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     }
   }
 
+  Future<void> clearOldKeys() async {
+  final storage = FlutterSecureStorage();
+  
+  print('🗑️ Clearing all old encryption keys...');
+  
+  // حذف جميع المفاتيح
+  final allKeys = await storage.readAll();
+  
+  for (var key in allKeys.keys) {
+    if (key.contains('identity_key') || 
+        key.contains('registration_id') ||
+        key.contains('prekey_') ||
+        key.contains('signed_prekey_') ||
+        key.contains('session_') ||
+        key.contains('peer_identity')) {
+      await storage.delete(key: key);
+      print('🗑️ Deleted: $key');
+    }
+  }
+  
+  print('✅ All old keys cleared!');
+}
+
   /// تهيئة التشفير للمستخدم المسجل دخول
 Future<void> _initializeEncryption() async {
   try {
@@ -194,7 +218,7 @@ Future<void> _initializeEncryption() async {
     // ✅ 2. تهيئة SignalProtocolManager
     final signalManager = SignalProtocolManager();
     await signalManager.initialize(userId: userId);
-
+    await signalManager.ensureSignedPreKeyRotation(userId);
     
     // ✅ 3. الفحص باستخدام userId
     final userIdentityKey = await storage.read(key: 'identity_key_$userId');

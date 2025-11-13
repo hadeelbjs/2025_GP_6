@@ -16,6 +16,9 @@ class SignalProtocolManager {
 
   final ApiService _apiService = ApiService();
   final _storage = const FlutterSecureStorage();
+  final Map<String, int> _sessionVersions = {};
+  final Map<String, DateTime> _lastSessionReset = {};
+
   
   late MyIdentityKeyStore _identityStore;
   late MyPreKeyStore _preKeyStore;
@@ -54,6 +57,23 @@ class SignalProtocolManager {
 
     _isInitialized = true;
   }
+
+  bool _canResetSession(String userId) {
+  final lastReset = _lastSessionReset[userId];
+  
+  // السماح بإعادة الإنشاء مرة واحدة كل دقيقتين فقط
+  if (lastReset != null) {
+    final timeSince = DateTime.now().difference(lastReset);
+    if (timeSince.inMinutes < 2) {
+      print('⚠️ Session reset blocked - too soon (${timeSince.inSeconds}s ago)');
+      return false;
+    }
+  }
+  
+  return true;
+}
+
+
 
   // ===================================
   // 📊 التحقق من حالة المفاتيح
@@ -253,7 +273,7 @@ class SignalProtocolManager {
       final newId = DateTime.now().millisecondsSinceEpoch % 100000;
       final newSignedPreKey = generateSignedPreKey(identityKeyPair, newId);
 
-      // ✅ استخدام storeSignedPreKey العادية (موجودة في Store)
+      //  استخدام storeSignedPreKey العادية (موجودة في Store)
       await _signedPreKeyStore.storeSignedPreKey(newId, newSignedPreKey);
 
       // رفع SignedPreKey الجديد للسيرفر
@@ -333,48 +353,7 @@ class SignalProtocolManager {
   // ===================================
   // فك تشفير مع معالجة الأخطاء
   // ===================================
-  Future<DecryptionResult> decryptMessageSafe(
-    String senderId,
-    int type,
-    String body,
-  ) async {
-    try {
-      final plaintext = await decryptMessage(senderId, type, body);
-      
-      if (plaintext != null) {
-        return DecryptionResult(
-          success: true,
-          message: plaintext,
-        );
-      }
-      
-      return DecryptionResult(
-        success: false,
-        needsKeySync: true,
-        error: 'Failed to decrypt - keys may be outdated',
-      );
-      
-    } catch (e) {
-      if (e.toString().contains('InvalidKeyException') || 
-          e.toString().contains('InvalidMessageException') ||
-          e.toString().contains('DuplicateMessageException')) {
-        
-        print('Decryption failed - Keys may need sync');
-        
-        return DecryptionResult(
-          success: false,
-          needsKeySync: true,
-          error: 'Decryption failed: ${e.toString()}',
-        );
-      }
-      
-      return DecryptionResult(
-        success: false,
-        needsKeySync: false,
-        error: e.toString(),
-      );
-    }
-  }
+  
 
   // ===================================
   // فك التشفير (الطريقة الأصلية)
@@ -455,72 +434,83 @@ class SignalProtocolManager {
   // إنشاء Session
   // ===================================
   Future<bool> createSession(String recipientId) async {
-    try {
-      await initialize();
+  try {
+    await initialize();
 
-      final userData = await _storage.read(key: 'user_data');
-      if (userData != null) {
-        final currentUserId = jsonDecode(userData)['id'];
-        if (recipientId == currentUserId) {
-          return false;
-        }
+    final userData = await _storage.read(key: 'user_data');
+    if (userData != null) {
+      final currentUserId = jsonDecode(userData)['id'];
+      if (recipientId == currentUserId) {
+        return false;
       }
-
-      final response = await _apiService.getPreKeyBundle(recipientId);
-      
-      if (!response['success']) {
-        throw Exception(response['message']);
-      }
-
-      final bundleData = response['bundle'];
-      final recipientAddress = SignalProtocolAddress(recipientId, 1);
-      
-      ECPublicKey? preKeyPublic;
-      int? preKeyId;
-      
-      if (bundleData['preKey'] != null) {
-        final preKeyBytes = base64Decode(bundleData['preKey']['publicKey']);
-        preKeyPublic = Curve.decodePoint(preKeyBytes, 0);
-        preKeyId = bundleData['preKey']['keyId'];
-      }
-      
-      final signedPreKeyBytes = base64Decode(
-        bundleData['signedPreKey']['publicKey']
-      );
-      final signedPreKeyPublic = Curve.decodePoint(signedPreKeyBytes, 0);
-      
-      final identityKeyBytes = base64Decode(bundleData['identityKey']);
-      final identityKeyPublic = Curve.decodePoint(identityKeyBytes, 0);
-      
-      final bundle = PreKeyBundle(
-        bundleData['registrationId'],
-        1,
-        preKeyId,
-        preKeyPublic,
-        bundleData['signedPreKey']['keyId'],
-        signedPreKeyPublic,
-        base64Decode(bundleData['signedPreKey']['signature']),
-        IdentityKey(identityKeyPublic),
-      );
-      
-      final sessionBuilder = SessionBuilder(
-        _sessionStore,
-        _preKeyStore,
-        _signedPreKeyStore,
-        _identityStore,
-        recipientAddress,
-      );
-
-      await sessionBuilder.processPreKeyBundle(bundle);
-      
-      print('✅ Session created successfully with recipient: $recipientId');
-      return true;
-      
-    } catch (e) {
-      print('❌ Error creating session: $e');
-      return false;
     }
+
+    final response = await _apiService.getPreKeyBundle(recipientId);
+    
+    if (!response['success']) {
+      throw Exception(response['message']);
+    }
+
+    final bundleData = response['bundle'];
+    final recipientAddress = SignalProtocolAddress(recipientId, 1);
+    
+    ECPublicKey? preKeyPublic;
+    int? preKeyId;
+    
+    if (bundleData['preKey'] != null) {
+      final preKeyBytes = base64Decode(bundleData['preKey']['publicKey']);
+      preKeyPublic = Curve.decodePoint(preKeyBytes, 0);
+      preKeyId = bundleData['preKey']['keyId'];
+    }
+    
+    final signedPreKeyBytes = base64Decode(
+      bundleData['signedPreKey']['publicKey']
+    );
+    final signedPreKeyPublic = Curve.decodePoint(signedPreKeyBytes, 0);
+    
+    final identityKeyBytes = base64Decode(bundleData['identityKey']);
+    final identityKeyPublic = Curve.decodePoint(identityKeyBytes, 0);
+    
+    final bundle = PreKeyBundle(
+      bundleData['registrationId'],
+      1,
+      preKeyId,
+      preKeyPublic,
+      bundleData['signedPreKey']['keyId'],
+      signedPreKeyPublic,
+      base64Decode(bundleData['signedPreKey']['signature']),
+      IdentityKey(identityKeyPublic),
+    );
+    
+    final sessionBuilder = SessionBuilder(
+      _sessionStore,
+      _preKeyStore,
+      _signedPreKeyStore,
+      _identityStore,
+      recipientAddress,
+    );
+
+    await sessionBuilder.processPreKeyBundle(bundle);
+    
+    // ✅ حفظ معلومات الـ session
+    _sessionVersions[recipientId] = DateTime.now().millisecondsSinceEpoch;
+    _lastSessionReset[recipientId] = DateTime.now();
+    
+    await _storage.write(
+      key: 'session_version_$recipientId',
+      value: _sessionVersions[recipientId].toString(),
+    );
+    
+    print('✅ Session created successfully with recipient: $recipientId');
+    print('📝 Session version: ${_sessionVersions[recipientId]}');
+    
+    return true;
+    
+  } catch (e) {
+    print('❌ Error creating session: $e');
+    return false;
   }
+}
 
   // ===================================
   // 🧹 حذف المفاتيح المحلية فقط
@@ -666,6 +656,110 @@ class SignalProtocolManager {
     return null;
   }
 
+  Future<DecryptionResult> decryptMessageSafe(
+  String senderId,
+  int type,
+  String body,
+) async {
+  try {
+    final plaintext = await decryptMessage(senderId, type, body);
+
+    if (plaintext != null) {
+      return DecryptionResult(
+        success: true,
+        message: plaintext,
+      );
+    }
+
+    return DecryptionResult(
+      success: false,
+      needsKeySync: true,
+      error: 'Failed to decrypt - keys may be outdated',
+    );
+  } catch (e) {
+    final errorStr = e.toString();
+
+    if (errorStr.contains('DuplicateMessageException')) {
+      print('⚠️ Duplicate message detected from $senderId, ignoring.');
+      return DecryptionResult(
+        success: false,
+        needsKeySync: false,
+        error: 'Duplicate message, ignored.',
+      );
+    }
+
+    if (errorStr.contains('InvalidKeyException') ||
+        errorStr.contains('InvalidMessageException') ||
+        errorStr.contains('Bad Mac')) {
+      print('⚠️ Session corruption detected from $senderId');
+
+      // حذف session القديم وإنشاء جديد
+      await deleteSession(senderId);
+      final resetResult = await createSession(senderId);
+
+      return DecryptionResult(
+        success: false,
+        needsSessionReset: true,
+        needsKeySync: true,
+        error: 'Session reset. Please resend message. '
+               '${resetResult ? "New session created." : "Failed to create session."}',
+      );
+    }
+
+    return DecryptionResult(
+      success: false,
+      needsKeySync: false,
+      error: errorStr,
+    );
+  }
+}
+Future<bool> sessionExists(String userId) async {
+  final address = SignalProtocolAddress(userId, 1);
+  return await _sessionStore.containsSession(address);
+}
+
+// =======================================
+// محاولة فك التشفير مع استرجاع تلقائي
+// =======================================
+Future<DecryptionResult> decryptMessageWithAutoRecovery(
+  String senderId,
+  int type,
+  String body,
+) async {
+  try {
+    print('🔐 Attempting to decrypt message from $senderId');
+    
+    final result = await decryptMessageSafe(senderId, type, body);
+
+    if (result.success) {
+      print('✅ Decryption successful');
+      return result;
+    }
+
+    if (result.needsSessionReset) {
+      print('♻️ Attempting to recover session with $senderId');
+      final resetResult = await resetSessionWithUser(senderId);
+
+      return DecryptionResult(
+        success: false,
+        needsSessionReset: true,
+        needsKeySync: true,
+        error: 'Session reset. Please resend message. '
+               '${resetResult.success ? "New session created." : resetResult.error}',
+      );
+    }
+
+    return result;
+  } catch (e) {
+    print('❌ Unexpected error in auto-recovery: $e');
+    return DecryptionResult(
+      success: false,
+      error: 'خطأ غير متوقع في فك التشفير',
+    );
+  }
+}
+
+
   // ===================================
   // معالجة فشل فك التشفير التلقائية
   // ===================================
@@ -694,82 +788,48 @@ class SignalProtocolManager {
       );
     }
   }
-
-  /// محاولة فك التشفير مع معالجة الأخطاء التلقائية
-  Future<DecryptionResult> decryptMessageWithAutoRecovery(
-    String senderId,
-    int type,
-    String body,
-  ) async {
-    try {
-      print('🔐 Attempting to decrypt message from $senderId');
-      
-      final result = await decryptMessageSafe(senderId, type, body);
-      
-      if (result.success) {
-        print('✅ Decryption successful');
-        return result;
-      }
-      
-      if (result.error?.contains('InvalidKeyIdException') == true ||
-          result.error?.contains('InvalidMessageException') == true ||
-          result.error?.contains('Bad Mac') == true) {
-        
-        print('⚠️ Session corruption detected - attempting recovery');
-        
-        await deleteSession(senderId);
-        print('🗑️ Corrupted session deleted');
-        
-        return DecryptionResult(
-          success: false,
-          needsSessionReset: true,
-          error: 'تم اكتشاف خلل في المفاتيح. يرجى إرسال رسالة جديدة.',
-        );
-      }
-      
-      return result;
-      
-    } catch (e) {
-      print('❌ Unexpected error in auto-recovery: $e');
-      return DecryptionResult(
-        success: false,
-        error: 'خطأ غير متوقع في فك التشفير',
-      );
-    }
-  }
-
-  /// إنشاء Session جديد مع المستخدم (بعد حذف القديم)
+ /// إنشاء Session جديد مع المستخدم (بعد حذف القديم)
   Future<SessionResetResult> resetSessionWithUser(String userId) async {
-    try {
-      print('🔄 Resetting session with user: $userId');
-      
-      await deleteSession(userId);
-      print('🗑️ Old session deleted');
-      
-      final success = await createSession(userId);
-      
-      if (success) {
-        print('✅ New session created successfully');
-        return SessionResetResult(
-          success: true,
-          message: 'تم إعادة إنشاء المفاتيح بنجاح',
-        );
-      } else {
-        print('❌ Failed to create new session');
-        return SessionResetResult(
-          success: false,
-          error: 'فشل إنشاء مفاتيح جديدة',
-        );
-      }
-      
-    } catch (e) {
-      print('❌ Error resetting session: $e');
+  try {
+    print('🔄 Attempting to reset session with user: $userId');
+    
+    // ✅ التحقق من إمكانية إعادة الإنشاء
+    if (!_canResetSession(userId)) {
       return SessionResetResult(
         success: false,
-        error: 'خطأ في إعادة تعيين المفاتيح',
+        error: 'يرجى الانتظار قبل إعادة المحاولة',
       );
     }
+    
+    // حذف الـ session القديم
+    await deleteSession(userId);
+    print('🗑️ Old session deleted');
+    
+    // إنشاء session جديد
+    final success = await createSession(userId);
+    
+    if (success) {
+      print('✅ New session created successfully');
+      return SessionResetResult(
+        success: true,
+        message: 'تم إعادة إنشاء المفاتيح بنجاح',
+      );
+    } else {
+      print('❌ Failed to create new session');
+      return SessionResetResult(
+        success: false,
+        error: 'فشل إنشاء مفاتيح جديدة',
+      );
+    }
+    
+  } catch (e) {
+    print('❌ Error resetting session: $e');
+    return SessionResetResult(
+      success: false,
+      error: 'خطأ في إعادة تعيين المفاتيح',
+    );
   }
+}
 
   // ===================================
   // دوال مساعدة أخرى

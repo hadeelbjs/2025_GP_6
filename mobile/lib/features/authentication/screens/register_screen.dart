@@ -136,25 +136,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
             content: const Text(
-              'هل تريد تأكيد رقم جوالك الآن أم لاحقاً؟',
+              'لإكمال التسجيل، يجب التحقق من رقم جوالك',
               style: TextStyle(
                 fontFamily: 'IBMPlexSansArabic',
               ),
             ),
             actions: [
-              TextButton(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  _skipPhoneVerification();
-                },
-                child: const Text(
-                  'لاحقاً',
-                  style: TextStyle(
-                    fontFamily: 'IBMPlexSansArabic',
-                    color: Colors.grey,
-                  ),
-                ),
-              ),
               ElevatedButton(
                 onPressed: () {
                   Navigator.of(context).pop();
@@ -167,7 +154,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                 ),
                 child: const Text(
-                  'تأكيد الآن',
+                  'متابعة',
                   style: TextStyle(
                     fontFamily: 'IBMPlexSansArabic',
                     color: Colors.white,
@@ -242,8 +229,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     }
   }
-
-  // تخطي تحقق الجوال
+/*
+  // تخطي تحقق الجوال - مافيه احد مستدعيه مسكينه يمكن تنحذف
   Future<void> _skipPhoneVerification() async {
     setState(() => _isLoading = true);
 
@@ -281,7 +268,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _isLoading = false);
       _showMessage(result['message'], isError: true);
     }
-  }
+  }*/
 
   @override
   Widget build(BuildContext context) {

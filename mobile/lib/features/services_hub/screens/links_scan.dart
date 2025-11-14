@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../services/api_contentScanning.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
 class LinksScreen extends StatefulWidget {
   const LinksScreen({Key? key}) : super(key: key);
@@ -68,6 +69,14 @@ class _LinksScreenState extends State<LinksScreen> {
           backgroundColor: Colors.green,
         ),
       );
+
+      if (_selectedFile != null ) {
+
+      await extractLinkFromImage(_selectedFile);
+      code = _linkController.text;
+      _linkController.text = '';
+
+      }
 
       if (_isValidUrl(code)) {
       setState(() {
@@ -612,4 +621,51 @@ bool _isValidUrl(String text) {
       ),
     );
   }
+  
+  Future<void> extractLinkFromImage(File? file) async {
+  if (file == null) return;
+
+  try {
+    final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+    final inputImage = InputImage.fromFile(file);
+
+    final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+    final String fullText = recognizedText.text;
+
+    // Regex لاستخراج الروابط من النص
+    final urlRegex = RegExp(
+      r'((https?:\/\/)?[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}(\/\S*)?)',
+      caseSensitive: false,
+    );
+
+    final match = urlRegex.firstMatch(fullText);
+
+    if (match != null) {
+      String foundUrl = match.group(0)!;
+
+      // إذا الرابط ما فيه http نضيفه
+      if (!foundUrl.startsWith("http")) {
+        foundUrl = "http://$foundUrl";
+      }
+
+      setState(() {
+        _linkController.text = foundUrl;
+      });
+
+      print("URL FOUND IN IMAGE: $foundUrl");
+    } else {
+      _showErrorDialog("لم يتم العثور على أي رابط داخل الصورة.");
+    }
+
+    await textRecognizer.close();
+  } catch (e) {
+    print("❌ Error extracting text: $e");
+    _showErrorDialog("فشل استخراج الرابط من الصورة.");
+  }
+
+  setState(() {
+    _isScanning = false;
+  });
+}
+
 }

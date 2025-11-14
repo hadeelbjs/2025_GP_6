@@ -103,7 +103,7 @@ class _LinksScreenState extends State<LinksScreen> {
         _scannedResult = code;
         _urlScanResult = null;
       });
-      _showResultDialog(code, isUrl: false);
+     // _showResultDialog(code, isUrl: false);
     }
 
     } else {

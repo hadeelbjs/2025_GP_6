@@ -21,17 +21,23 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> {
   final _apiService = ApiService();
+    final _wifiService = WifiSecurityService();
+
   int _notificationCount = 0;
-  bool _hasShownWifiWarning = false;
+  bool _hasCheckedWifiThisSession = false;
+  bool _userCanceledPermissionDenialAlert = false;
+
 
   @override
   void initState() {
     super.initState();
-    
+    // للواي فاي تاخير بسيط
     _loadNotificationCount();
-  Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted && !_hasShownWifiWarning) {
-        _checkWifi();
+
+    
+   Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && !_hasCheckedWifiThisSession) {
+        _checkWifiOnDashboardOpen();
       }
     });
   }
@@ -116,159 +122,217 @@ Future<void> _initializeSocket() async {
     });
   }
 
-  Future<void> _checkWifi() async {
-    try {
-      final wifiService = WifiSecurityService();
-      
-      // 1. تهيئة الخدمة
-      final initialized = await wifiService.initialize();
-      
-      if (!initialized) {
-        if (mounted) {
-          _showPermissionDeniedDialog();
-        }
-        return;
-      }
-      
-      // 2. فحص الشبكة
-      final status = await wifiService.checkCurrentNetwork();
-      
-      if (status == null) {
-        return;
-      }
-      
-      // 3. فحص إذا الشبكة غير آمنة
-    if (status.hasError && 
-        status.errorMessage == 'Permission denied' && 
-        mounted) {
-      _showPermissionDeniedDialog();
+
+ /// فحص الشبكة عند فتح Dashboard - مرة واحدة فقط
+  Future<void> _checkWifiOnDashboardOpen() async {
+    if (_hasCheckedWifiThisSession) {
+      print('ℹ️ WiFi already checked in this dashboard session');
       return;
     }
-    
-    // ثم فحص أمان الشبكة
-    if (!status.isSecure && !status.hasError && mounted) {
-      final alreadyShown = await wifiService.wasWarningShown(status.ssid);
+
+    _hasCheckedWifiThisSession = true;
+
+    try {
+      final result = await _wifiService.checkNetworkOnAppLaunch();
       
-      if (!alreadyShown) {
-        _showSecurityAlert(status);
-        await wifiService.markWarningShown(status.ssid);
-      } else {
-        print('ℹ️ Warning already shown for this network: ${status.ssid}');
+      if (!mounted) return;
+      
+      switch (result.type) {
+        case WifiCheckResultType.needsPermission:
+          // أول مرة - نطلب الصلاحيات
+          _showPermissionRequestDialog();
+          break;
+          
+        case WifiCheckResultType.permissionDenied:
+          // الصلاحيات مرفوضة - نعرض dialog لفتح الإعدادات
+          _showPermissionDeniedDialog();
+          break;
+          
+        case WifiCheckResultType.success:
+          // نجح الفحص - نعرض التحذير إذا لزم الأمر
+          if (result.status != null && result.status!.shouldShowWarning) {
+            _showSecurityAlert(result.status!);
+          }
+          break;
+          
+        case WifiCheckResultType.notConnected:
+          print('ℹ️ User is not connected to WiFi');
+          break;
+          
+        case WifiCheckResultType.alreadyChecked:
+          print('ℹ️ Already checked in this app session');
+          break;
+          
+        case WifiCheckResultType.error:
+          print('❌ Error: ${result.errorMessage}');
+          break;
+      }
+      
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ WiFi check error: $e');
       }
     }
-    
-  } catch (e) {
-    if (kDebugMode) {
-      print('WiFi check error: $e');
-    }
   }
-}
-
-  // ============================================
-  // رسالة: الصلاحيات مرفوضة
-  // ============================================
   
-  void _showPermissionDeniedDialog() {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        backgroundColor: const Color(0xFF2D1B69),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: Row(
-          children: [
-            Icon(Icons.location_off, color: const Color.fromARGB(255, 245, 242, 239), size: 32),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Text(
-                'تفعيل الموقع مطلوب',
+// Dialog لطلب الصلاحيات لأول مرة
+  void _showPermissionRequestDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.shield_outlined, color: Colors.white, size: 32),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'فحص أمان الشبكات',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.\n\nهذا الفحص يتم مرة واحدة فقط عند الاتصال بشبكة جديدة.',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 14,
+              height: 1.6,
+            ),
+            textAlign: TextAlign.right,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'ليس الآن',
                 style: TextStyle(
-                  color: Color.fromARGB(255, 246, 245, 245),
+                  color: Colors.white70,
                   fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 20,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                final granted = await _wifiService.requestPermissions();
+                if (granted && mounted) {
+                  // أعد الفحص بعد منح الصلاحيات
+                  _hasCheckedWifiThisSession = false;
+                  _checkWifiOnDashboardOpen();
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF2D1B69),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'منح الصلاحية',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
-        content: const Text(
-' لاستخدام ميزة فحص أمان الشبكات، يجب تفعيل الموقع.\n\nالذهاب إلى الإعدادات وتفعيل صلاحية الموقع للتطبيق.',
-          style: TextStyle(
-            color: Colors.white,
-            fontFamily: 'IBMPlexSansArabic',
-            fontSize: 14,
-            height: 1.6,
-          ),
-          textAlign: TextAlign.right,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'إلغاء',
-              style: TextStyle(
-                color: Colors.white70,
-                fontFamily: 'IBMPlexSansArabic',
-              ),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              
-              // يفتح الإعدادات
-              await openAppSettings();
-              
-             
-              await Future.delayed(const Duration(seconds: 3));
-              
-              if (mounted) {
-                _hasShownWifiWarning = false;
-                _checkWifi(); // 
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF2D1B69),
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-            ),
-            child: const Text(
-              'فتح الإعدادات',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ],
       ),
-    ),
-  );
-}
-
-  // ============================================
-  // فتح إعدادات التطبيق
-  // ============================================
-  
-  Future<void> _openAppSettings() async {
-  try {
-    // يفتح إعدادات التطبيق مباشرة
-    await openAppSettings();
-  } catch (e) {
-    if (kDebugMode) {
-      print('Error opening settings: $e');
-    }
+    );
   }
-}
 
+  /// Dialog عند رفض الصلاحيات
+  void _showPermissionDeniedDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: [
+              const Icon(Icons.location_on, color: Colors.white, size: 32),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'تفعيل الموقع مطلوب',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'لاستخدام ميزة فحص أمان الشبكات، يجب تفعيل الموقع.\n\nالذهاب إلى الإعدادات وتفعيل صلاحية الموقع للتطبيق.',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 14,
+              height: 1.6,
+            ),
+            textAlign: TextAlign.right,
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontFamily: 'IBMPlexSansArabic',
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await openAppSettings();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: const Color(0xFF2D1B69),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'فتح الإعدادات',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   // ============================================
   // رسالة: التحذير الأمني
   // ============================================

@@ -6,38 +6,6 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 
-
-Future<void> requestLocationPermission() async {
-  bool serviceEnabled;
-  LocationPermission permission;
-
-  // Check if location services are enabled
-  serviceEnabled = await Geolocator.isLocationServiceEnabled();
-  if (!serviceEnabled) {
-    // Location services are not enabled, handle this case (e.g., show a dialog)
-    return Future.error('Location services are disabled.');
-  }
-
-  // Check current permission status
-  permission = await Geolocator.checkPermission();
-  if (permission == LocationPermission.denied) {
-    // Request permission if denied
-    permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied) {
-      // Permission denied, handle this case
-      return Future.error('Location permissions are denied.');
-    }
-  }
-
-  if (permission == LocationPermission.deniedForever) {
-    // Permissions are permanently denied, direct user to settings
-    return Future.error('Location permissions are permanently denied, we cannot request permissions.');
-  }
-
-  // Permissions are granted, proceed with getting location
-  // Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-}
-
 /// خدمة فحص أمان شبكات WiFi
 class WifiSecurityService {
   static final WifiSecurityService _instance = WifiSecurityService._internal();
@@ -46,41 +14,34 @@ class WifiSecurityService {
 
   static const platform = MethodChannel('com.waseed.app/wifi_security');
   final Connectivity _connectivity = Connectivity();
-  static const String _lastWarningKey = 'last_wifi_warning_ssid';
-
+  
+  // مفاتيح التخزين
+  static const String _permissionsAskedKey = 'wifi_permissions_asked';
+  static const String _permissionsGrantedKey = 'wifi_permissions_granted';
+  static const String _userDeclinedPermanentlyKey = 'wifi_user_declined_permanently';
+  static const String _lastCheckedSSIDKey = 'last_checked_ssid';
+  static const String _lastCheckedBSSIDKey = 'last_checked_bssid';
+  static const String _lastWarningSSIDKey = 'last_warning_ssid';
   
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  String? _lastCheckedSSID;
-  String? _lastCheckedBSSID;
   bool _isInitialized = false;
-  bool _permissionsGranted = false;
   bool _isCheckingNetwork = false;
-
 
   bool get isInitialized => _isInitialized;
 
-  /// تهيئة الخدمة
+  /// تهيئة الخدمة - تُستدعى مرة واحدة عند تشغيل التطبيق
   Future<bool> initialize() async {
     if (_isInitialized) {
       print('✅ WiFi Security Service already initialized');
       return true;
-    } else {
-      requestLocationPermission();
     }
 
     try {
-      
-      _permissionsGranted = await _requestPlatformPermissions();
-      
-      if (!_permissionsGranted) {
-        print('⚠️ Permissions not granted - service will have limited functionality');
-        return false;
-      }
-      
+      // بدء مراقبة تغييرات الشبكة
       _startNetworkMonitoring();
       
       _isInitialized = true;
-      print('✅ WiFi Security Service initialized successfully');
+      print('✅ WiFi Security Service initialized');
       return true;
       
     } catch (e) {
@@ -89,29 +50,218 @@ class WifiSecurityService {
     }
   }
 
-  ///  فحص الشبكة الحالية - 
-  Future<WifiSecurityStatus?> checkCurrentNetwork() async {
-    if (_isCheckingNetwork) {
-      print('Already checking network...');
-      return null;
+  /// التحقق من حالة الصلاحيات المحفوظة
+  Future<PermissionState> getPermissionState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // هل تم السؤال من قبل؟
+      final wasAsked = prefs.getBool(_permissionsAskedKey) ?? false;
+      
+      if (!wasAsked) {
+        return PermissionState.neverAsked;
+      }
+      
+      // هل تم منح الصلاحيات؟
+      final wasGranted = prefs.getBool(_permissionsGrantedKey) ?? false;
+      
+      // التحقق من الحالة الفعلية (قد يكون المستخدم غيّرها من الإعدادات)
+      final currentlyGranted = await _checkPlatformPermissions();
+      
+      // تحديث الحالة المحفوظة
+      if (currentlyGranted != wasGranted) {
+        await prefs.setBool(_permissionsGrantedKey, currentlyGranted);
+      }
+      
+      if (currentlyGranted) {
+        return PermissionState.granted;
+      } else {
+        return PermissionState.denied;
+      }
+      
+    } catch (e) {
+      print('❌ Error getting permission state: $e');
+      return PermissionState.neverAsked;
+    }
+  }
+  
+
+  /// طلب الصلاحيات (يُستدعى مرة واحدة فقط)
+  Future<bool> requestPermissions() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // تسجيل أننا سألنا
+      await prefs.setBool(_permissionsAskedKey, true);
+      
+      // طلب صلاحية الموقع من Flutter plugin
+      await _requestLocationPermission();
+      
+      // طلب صلاحيات من Native code
+      final result = await platform.invokeMethod<bool>('requestPermissions');
+      final granted = result ?? false;
+      
+      // حفظ النتيجة
+      await prefs.setBool(_permissionsGrantedKey, granted);
+      
+      print('✅ Permissions requested: $granted');
+      return granted;
+      
+    } catch (e) {
+      print('❌ Error requesting permissions: $e');
+      return false;
+    }
+  }
+
+  /// فحص الشبكة الحالية - يُستدعى عند فتح Dashboard
+  Future<WifiCheckResult> checkNetworkOnAppLaunch() async {
+    try {
+      // التحقق من الصلاحيات
+      final permissionState = await getPermissionState();
+      
+      if (permissionState == PermissionState.neverAsked) {
+        return WifiCheckResult.needsPermission();
+      }
+      
+      if (permissionState == PermissionState.denied) {
+        return WifiCheckResult.permissionDenied();
+      }
+      
+      // إجراء الفحص
+      final status = await _performNetworkCheck();
+      
+      if (status == null) {
+        return WifiCheckResult.notConnected();
+      }
+      
+      // التحقق: هل سبق وفحصنا هذه الشبكة؟
+      final alreadyChecked = await _isNetworkAlreadyChecked(status.ssid, status.bssid);
+      
+      if (alreadyChecked) {
+        print('ℹ️ Network "${status.ssid}" already checked - skipping alert');
+        return WifiCheckResult.alreadyChecked();
+      }
+      
+      // تسجيل أننا فحصنا هذه الشبكة
+      await _markNetworkAsChecked(status.ssid, status.bssid, status.isSecure);
+      
+      return WifiCheckResult.success(status);
+      
+    } catch (e) {
+      print('❌ Error checking network on app launch: $e');
+      return WifiCheckResult.error(e.toString());
+    }
+  }
+
+  /// التحقق من أن الشبكة تم فحصها من قبل
+  Future<bool> _isNetworkAlreadyChecked(String ssid, String bssid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastSSID = prefs.getString(_lastCheckedSSIDKey);
+      final lastBSSID = prefs.getString(_lastCheckedBSSIDKey);
+      
+      // مقارنة BSSID (أدق)
+      if (lastBSSID != null && lastBSSID == bssid) {
+        return true;
+      }
+      
+      // مقارنة SSID كبديل
+      if (lastSSID != null && lastSSID == ssid) {
+        return true;
+      }
+      
+      return false;
+      
+    } catch (e) {
+      print('❌ Error checking if network was checked: $e');
+      return false;
+    }
+  }
+
+  /// تسجيل أننا فحصنا هذه الشبكة
+  Future<void> _markNetworkAsChecked(String ssid, String bssid, bool isSecure) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_lastCheckedSSIDKey, ssid);
+      await prefs.setString(_lastCheckedBSSIDKey, bssid);
+      
+      // حفظ أننا عرضنا التحذير إذا كانت غير آمنة
+      if (!isSecure) {
+        await prefs.setString(_lastWarningSSIDKey, ssid);
+      }
+      
+      print('✅ Network "$ssid" marked as checked');
+      
+    } catch (e) {
+      print('❌ Error marking network as checked: $e');
+    }
+  }
+
+  /// إعادة تعيين حالة الفحص (عند تغيير الشبكة أو الانقطاع)
+  Future<void> resetCheckState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(_lastCheckedSSIDKey);
+      await prefs.remove(_lastCheckedBSSIDKey);
+      await prefs.remove(_lastWarningSSIDKey);
+      print('🔄 Check state reset - ready for new network');
+    } catch (e) {
+      print('❌ Error resetting check state: $e');
+    }
+  }
+
+  /// التحقق من الصلاحيات الفعلية من النظام
+  Future<bool> _checkPlatformPermissions() async {
+    try {
+      final result = await platform.invokeMethod<bool>('checkPermissions');
+      return result ?? false;
+    } on PlatformException catch (e) {
+      print('❌ Permission check failed: ${e.message}');
+      return false;
+    }
+  }
+
+  /// طلب صلاحية الموقع من Flutter
+  Future<void> _requestLocationPermission() async {
+    bool serviceEnabled;
+    LocationPermission permission;
+
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) {
+      return Future.error('Location services are disabled.');
     }
 
-    if (!_permissionsGranted) {
-      print('⚠️ Cannot check network - permissions not granted');
-      return WifiSecurityStatus.permissionDenied();
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        return Future.error('Location permissions are denied.');
+      }
+    }
+
+    if (permission == LocationPermission.deniedForever) {
+      return Future.error('Location permissions are permanently denied.');
+    }
+  }
+
+  /// إجراء الفحص الفعلي للشبكة
+  Future<WifiSecurityStatus?> _performNetworkCheck() async {
+    if (_isCheckingNetwork) {
+      print('⏳ Already checking network...');
+      return null;
     }
 
     _isCheckingNetwork = true;
 
     try {
-      // . التحقق من الاتصال بـ WiFi
+      // 1. التحقق من الاتصال بـ WiFi
       final List<ConnectivityResult> connectivityResult = 
           await _connectivity.checkConnectivity();
       
       if (!connectivityResult.contains(ConnectivityResult.wifi)) {
-        print('🔵 Not connected to WiFi');
+        print('📵 Not connected to WiFi');
         _isCheckingNetwork = false;
-        return WifiSecurityStatus.notConnectedToWifi();
+        return null;
       }
 
       // 2. الحصول على معلومات الشبكة من Native Code
@@ -127,17 +277,6 @@ class WifiSecurityService {
       // 3. تحويل البيانات
       final status = WifiSecurityStatus.fromMap(Map<String, dynamic>.from(rawData));
       
-      //. فحص: هل هذه نفس الشبكة السابقة؟
-      if (_lastCheckedSSID == status.ssid && _lastCheckedBSSID == status.bssid) {
-        print('ℹ️ Same network - skipping notification');
-        _isCheckingNetwork = false;
-        return null; // لا ترجع البيانات لتجنب التحذير المكرر
-      }
-      
-      // 5. حفظ آخر شبكة تم فحصها
-      _lastCheckedSSID = status.ssid;
-      _lastCheckedBSSID = status.bssid;
-      
       _printNetworkStatus(status);
       _isCheckingNetwork = false;
       
@@ -146,120 +285,160 @@ class WifiSecurityService {
     } on PlatformException catch (e) {
       print('❌ Platform Error: ${e.code} - ${e.message}');
       _isCheckingNetwork = false;
-      
-          if (e.code == 'UNKNOWN_NETWORK' || e.code == 'INVALID_BSSID') {
-      print('⚠️ No location permission - showing dialog');
-      return WifiSecurityStatus.permissionDenied();
-    }
-    
-    if (e.code == 'PERMISSION_DENIED') {
-      return WifiSecurityStatus.permissionDenied();
-    }
-    
-    return WifiSecurityStatus.error(e.message ?? 'Unknown error');
+      return null;
       
     } catch (e) {
       print('❌ Unexpected Error: $e');
       _isCheckingNetwork = false;
-      return WifiSecurityStatus.error(e.toString());
+      return null;
     }
   }
 
-  /// إعادة تعيين الحالة (للاختبار أو عند تغيير الشبكة)
-  void resetLastChecked() {
-    _lastCheckedSSID = null;
-    _lastCheckedBSSID = null;
-    print('🔄 Reset last checked network');
-  }
-
-
- /// فحص إذا تم عرض التحذير لهذه الشبكة من قبل
-  Future<bool> wasWarningShown(String ssid) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastWarning = prefs.getString(_lastWarningKey);
-      return lastWarning == ssid;
-    } catch (e) {
-      return false;
-    }
-  }
-  
-  /// حفظ أنه تم عرض التحذير لهذه الشبكة
-  Future<void> markWarningShown(String ssid) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setString(_lastWarningKey, ssid);
-      print('✅ Warning marked as shown for: $ssid');
-    } catch (e) {
-      print('❌ Error marking warning: $e');
-    }
-  }
-  
-  /// مسح السجل (عند تغيير الشبكة)
-  Future<void> clearWarningHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_lastWarningKey);
-    } catch (e) {
-      print('❌ Error clearing history: $e');
-    }
-  }
-  void dispose() {
-    _connectivitySubscription?.cancel();
-    _isInitialized = false;
-    _lastCheckedSSID = null;
-    _lastCheckedBSSID = null;
-    print('🛑 WiFi Security Service disposed');
-  }
-
-  // ============================================
-  // Private Methods
-  // ============================================
-
-  Future<bool> _requestPlatformPermissions() async {
-    try {
-      final result = await platform.invokeMethod<bool>('requestPermissions');
-      return result ?? false;
-    } on PlatformException catch (e) {
-      print('❌ Permission request failed: ${e.message}');
-      return false;
-    }
-  }
-
+  /// مراقبة تغييرات الشبكة
   void _startNetworkMonitoring() {
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
-      (List<ConnectivityResult> result) {
+      (List<ConnectivityResult> result) async {
         if (result.contains(ConnectivityResult.wifi)) {
-          print('🔄 WiFi connection detected - resetting check');
-          resetLastChecked();
+          print('🔄 WiFi connection detected - checking if network changed');
+          
+          // التحقق من أن الشبكة تغيرت فعلاً
+          final changed = await _hasNetworkChanged();
+          
+          if (changed) {
+            print('🆕 New network detected - resetting and will check on next dashboard open');
+            await resetCheckState();
+            // لا نفحص هنا - سيتم الفحص عند فتح Dashboard
+          } else {
+            print('ℹ️ Same network - no action needed');
+          }
         } else {
-          print('🔵 Disconnected from WiFi');
-          resetLastChecked();
+          print('📵 Disconnected from WiFi');
+          await resetCheckState(); // مسح البيانات عند الانقطاع
         }
       },
     );
   }
-//to check i well remove it 
+
+  /// التحقق من أن الشبكة تغيرت
+  Future<bool> _hasNetworkChanged() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lastSSID = prefs.getString(_lastCheckedSSIDKey);
+      final lastBSSID = prefs.getString(_lastCheckedBSSIDKey);
+      
+      // إذا ما في بيانات محفوظة، يعني شبكة جديدة
+      if (lastSSID == null || lastBSSID == null) {
+        return true;
+      }
+      
+      // محاولة الحصول على معلومات الشبكة الحالية
+      try {
+        final Map<dynamic, dynamic> rawData = 
+            await platform.invokeMethod('getWifiSecurityStatus');
+        
+        final currentSSID = rawData['ssid'] as String?;
+        final currentBSSID = rawData['bssid'] as String?;
+        
+        // مقارنة BSSID (أدق من SSID)
+        if (currentBSSID != null && currentBSSID != lastBSSID) {
+          return true;
+        }
+        
+        // إذا ما قدرنا نحصل BSSID، نقارن SSID
+        if (currentSSID != null && currentSSID != lastSSID) {
+          return true;
+        }
+        
+        return false;
+        
+      } catch (e) {
+        // إذا فشل الحصول على البيانات، نعتبرها شبكة جديدة للأمان
+        return true;
+      }
+      
+    } catch (e) {
+      print('❌ Error checking network change: $e');
+      return true; // للأمان، نعتبرها شبكة جديدة
+    }
+  }
+
   void _printNetworkStatus(WifiSecurityStatus status) {
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('📡 Network Security Status:');
+    print('┌─────────────────────────────────');
+    print(' Network Security Status:');
     print('   SSID: ${status.ssid}');
-    print('   BSSID: ${status.bssid}');
     print('   Security: ${status.securityType}');
     print('   Is Secure: ${status.isSecure ? "✅" : "❌"}');
-    print('   Source: ${status.dataSource}');
     print('   Platform: ${status.platform}');
-    print('   Confidence: ${status.confidence}%');
-    if (status.trustScore != null) {
-      print('   Trust Score: ${status.trustScore}');
-    }
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('└─────────────────────────────────');
+  }
+
+  void dispose() {
+    _connectivitySubscription?.cancel();
+    _isInitialized = false;
+    print('🛑 WiFi Security Service disposed');
   }
 }
 
 // ============================================
-// Data Model
+// Enums & Data Models
 // ============================================
+
+enum PermissionState {
+  neverAsked,  // لم يُسأل من قبل
+  granted,     // تم منح الصلاحيات
+  denied,      // تم رفض الصلاحيات
+}
+
+class WifiCheckResult {
+  final WifiCheckResultType type;
+  final WifiSecurityStatus? status;
+  final String? errorMessage;
+
+  WifiCheckResult({
+    required this.type,
+    this.status,
+    this.errorMessage,
+  });
+
+  factory WifiCheckResult.needsPermission() {
+    return WifiCheckResult(type: WifiCheckResultType.needsPermission);
+  }
+
+  factory WifiCheckResult.permissionDenied() {
+    return WifiCheckResult(type: WifiCheckResultType.permissionDenied);
+  }
+
+  factory WifiCheckResult.success(WifiSecurityStatus status) {
+    return WifiCheckResult(
+      type: WifiCheckResultType.success,
+      status: status,
+    );
+  }
+
+  factory WifiCheckResult.notConnected() {
+    return WifiCheckResult(type: WifiCheckResultType.notConnected);
+  }
+
+  factory WifiCheckResult.alreadyChecked() {
+    return WifiCheckResult(type: WifiCheckResultType.alreadyChecked);
+  }
+
+  factory WifiCheckResult.error(String message) {
+    return WifiCheckResult(
+      type: WifiCheckResultType.error,
+      errorMessage: message,
+    );
+  }
+}
+
+enum WifiCheckResultType {
+  needsPermission,   // يحتاج صلاحيات
+  permissionDenied,  // الصلاحيات مرفوضة
+  success,           // نجح الفحص
+  notConnected,      // غير متصل بـ WiFi
+  alreadyChecked,    // تم الفحص مسبقاً في هذه الجلسة
+  error,             // خطأ
+}
 
 class WifiSecurityStatus {
   final String ssid;
@@ -269,8 +448,6 @@ class WifiSecurityStatus {
   final String dataSource;
   final String platform;
   final int confidence;
-  final int? trustScore;
-  final int? reportCount;
   final String? warning;
   final bool hasError;
   final String? errorMessage;
@@ -283,8 +460,6 @@ class WifiSecurityStatus {
     required this.dataSource,
     required this.platform,
     required this.confidence,
-    this.trustScore,
-    this.reportCount,
     this.warning,
     this.hasError = false,
     this.errorMessage,
@@ -299,55 +474,10 @@ class WifiSecurityStatus {
       dataSource: map['source'] as String? ?? 'Unknown',
       platform: map['platform'] as String? ?? Platform.operatingSystem,
       confidence: map['confidence'] as int? ?? 0,
-      trustScore: map['trustScore'] as int?,
-      reportCount: map['reportCount'] as int?,
       warning: map['warning'] as String?,
       hasError: false,
     );
   }
-
-  factory WifiSecurityStatus.notConnectedToWifi() {
-    return WifiSecurityStatus(
-      ssid: '',
-      bssid: '',
-      securityType: 'N/A',
-      isSecure: true,
-      dataSource: 'System',
-      platform: Platform.operatingSystem,
-      confidence: 100,
-      hasError: false,
-    );
-  }
-
-  factory WifiSecurityStatus.permissionDenied() {
-    return WifiSecurityStatus(
-      ssid: '',
-      bssid: '',
-      securityType: 'N/A',
-      isSecure: true,
-      dataSource: 'System',
-      platform: Platform.operatingSystem,
-      confidence: 0,
-      hasError: true,
-      errorMessage: 'Permission denied',
-    );
-  }
-
-  factory WifiSecurityStatus.error(String message) {
-    return WifiSecurityStatus(
-      ssid: '',
-      bssid: '',
-      securityType: 'ERROR',
-      isSecure: true,
-      dataSource: 'Error',
-      platform: Platform.operatingSystem,
-      confidence: 0,
-      hasError: true,
-      errorMessage: message,
-    );
-  }
-
-  
 
   bool get shouldShowWarning => !isSecure && !hasError && ssid.isNotEmpty;
   

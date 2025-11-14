@@ -79,6 +79,9 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
+  final WifiSecurityService _wifiService = WifiSecurityService();
+
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
 
@@ -137,6 +140,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
         await _initializeMessaging();
           //   WiFi Security Service
         await _initializeWifiSecurity();
+        //  فحص الشبكة مرة واحدة فقط
+        await _checkWifiOnce();
+
         
         Navigator.of(context).pushReplacementNamed('/dashboard');
         return;
@@ -237,23 +243,62 @@ Future<void> _initializeEncryption() async {
 }
 
 /// تهيئة خدمة أمان WiFi
-  Future<void> _initializeWifiSecurity() async {
+   Future<void> _initializeWifiSecurity() async {
     try {
       print('📡 [3/3] Initializing WiFi Security Service...');
-      
-      final success = await WifiSecurityService().initialize();
-      
+      final success = await _wifiService.initialize();
       if (success) {
         print('✅ WiFi Security Service initialized successfully');
-      } else {
-        print('⚠️  WiFi Security Service initialization returned false (permissions may be pending)');
       }
-      
     } catch (e) {
       print('❌ WiFi Security Service initialization failed: $e');
     }
   }
 
+  /// فحص الشبكة مرة واحدة فقط عند فتح التطبيق
+  Future<void> _checkWifiOnce() async {
+    try {
+      print('📡 Checking WiFi security once...');
+      
+      final result = await _wifiService.checkNetworkOnAppLaunch();
+      
+      switch (result.type) {
+        case WifiCheckResultType.needsPermission:
+          print('ℹ️ Need to request permissions');
+          // سيتم طلبها من Dashboard
+          break;
+          
+        case WifiCheckResultType.permissionDenied:
+          print('⚠️ Permissions denied');
+          // سيتم عرض dialog من Dashboard
+          break;
+          
+        case WifiCheckResultType.success:
+          if (result.status != null && !result.status!.isSecure) {
+            print('⚠️ Insecure network detected: ${result.status!.ssid}');
+            // سيتم عرض التحذير من Dashboard
+          } else if (result.status != null) {
+            print('✅ Secure network: ${result.status!.ssid}');
+          }
+          break;
+          
+        case WifiCheckResultType.notConnected:
+          print('ℹ️ Not connected to WiFi');
+          break;
+          
+        case WifiCheckResultType.alreadyChecked:
+          print('ℹ️ Already checked in this session');
+          break;
+          
+        case WifiCheckResultType.error:
+          print('❌ Error: ${result.errorMessage}');
+          break;
+      }
+      
+    } catch (e) {
+      print('❌ Error checking WiFi: $e');
+    }
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(

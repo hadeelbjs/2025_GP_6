@@ -1,5 +1,5 @@
 // lib/widgets/screenshot_blocker.dart
-import 'dart:io'; //show Platform;
+/*import 'dart:io'; //show Platform;
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
@@ -218,4 +218,4 @@ class _ScreenshotBlockerState extends State<ScreenshotBlocker> {
       ],
     );
   }
-}
+}*/

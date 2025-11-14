@@ -147,6 +147,10 @@ Future<void> _initializeSocket() async {
           // الصلاحيات مرفوضة - نعرض dialog لفتح الإعدادات
           _showPermissionDeniedDialog();
           break;
+          case WifiCheckResultType.userDeclined:
+          // المستخدم رفض نهائياً - لا نزعجه
+          print('ℹ️ User declined WiFi check - respecting choice');
+          break;
           
         case WifiCheckResultType.success:
           // نجح الفحص - نعرض التحذير إذا لزم الأمر
@@ -216,7 +220,11 @@ Future<void> _initializeSocket() async {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                // تسجيل أن المستخدم اختار "ليس الآن" - لا نزعجه مرة أخرى
+                _wifiService.markUserDeclinedPermanently();
+              },
               child: const Text(
                 'ليس الآن',
                 style: TextStyle(
@@ -297,8 +305,12 @@ Future<void> _initializeSocket() async {
             textAlign: TextAlign.right,
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
+          TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+                // تسجيل أن المستخدم اختار "إلغاء" - لا نزعجه مرة أخرى
+                _wifiService.markUserDeclinedPermanently();
+              },
               child: const Text(
                 'إلغاء',
                 style: TextStyle(

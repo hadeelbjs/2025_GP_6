@@ -2,19 +2,24 @@ import UIKit
 import Flutter
 import NetworkExtension
 import SystemConfiguration.CaptiveNetwork
-
+import CoreLocation
 @main
 @objc class AppDelegate: FlutterAppDelegate {
-    
+    //استدعي الدوال اللي بفلتر باستخدام channel
     private let CHANNEL = "com.waseed.app/wifi_security"
-    
+    //نستخدمه لطلب صلاحية الموقع
+     private lazy var locationManager: CLLocationManager = { 
+        let manager = CLLocationManager()
+        return manager
+    }()
+
     override func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
         
         let controller : FlutterViewController = window?.rootViewController as! FlutterViewController
-        
+        //Listener
         let wifiChannel = FlutterMethodChannel(
             name: CHANNEL,
             binaryMessenger: controller.binaryMessenger
@@ -29,7 +34,6 @@ import SystemConfiguration.CaptiveNetwork
                                   details: nil))
                 return
             }
-            
             switch call.method {
             case "getWifiSecurityStatus":
                 self.getWifiSecurityStatus(result: result)
@@ -172,9 +176,8 @@ import SystemConfiguration.CaptiveNetwork
         ]
     }
     
-    // ============================================
-    // MARK: - WiFi Info Retrieval
-    // ============================================
+    
+    // WiFi Info Retrieval
     
     private func getWifiInfo() -> [String: Any]? {
         if #available(iOS 14.0, *) {
@@ -228,8 +231,13 @@ import SystemConfiguration.CaptiveNetwork
     // ============================================
     
     private func requestLocationPermission(result: @escaping FlutterResult) {
-        result(checkLocationPermission())
+    // إذا لم يتم تحديد حالة الصلاحية بعد، قم بطلبها
+    if CLLocationManager.authorizationStatus() == .notDetermined {
+         locationManager.requestWhenInUseAuthorization() 
     }
+    // ارجع الحالة الحالية (سواء تمت الموافقة، الرفض، أو لا تزال قيد الانتظار)
+    result(checkLocationPermission())
+} 
     
     private func checkLocationPermission() -> Bool {
         let status = CLLocationManager.authorizationStatus()

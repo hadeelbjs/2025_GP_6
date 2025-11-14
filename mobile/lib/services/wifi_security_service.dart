@@ -54,6 +54,11 @@ class WifiSecurityService {
   Future<PermissionState> getPermissionState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
+       //  هل المستخدم رفض نهائياً؟
+    final userDeclinedPermanently = prefs.getBool(_userDeclinedPermanentlyKey) ?? false;
+    if (userDeclinedPermanently) {
+      return PermissionState.userDeclinedPermanently;
+    }
       
       // هل تم السؤال من قبل؟
       final wasAsked = prefs.getBool(_permissionsAskedKey) ?? false;
@@ -84,7 +89,17 @@ class WifiSecurityService {
       return PermissionState.neverAsked;
     }
   }
-  
+  /// تسجيل أن المستخدم رفض نهائياً (ضغط "لاحقاً" أو "إلغاء")
+Future<void> markUserDeclinedPermanently() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_userDeclinedPermanentlyKey, true);
+    await prefs.setBool(_permissionsAskedKey, true);
+    print('ℹ️ User declined WiFi check permanently');
+  } catch (e) {
+    print('❌ Error marking user declined: $e');
+  }
+}
 
   /// طلب الصلاحيات (يُستدعى مرة واحدة فقط)
   Future<bool> requestPermissions() async {
@@ -122,6 +137,9 @@ class WifiSecurityService {
       if (permissionState == PermissionState.neverAsked) {
         return WifiCheckResult.needsPermission();
       }
+      if (permissionState == PermissionState.userDeclinedPermanently) {
+      return WifiCheckResult.userDeclined();
+    }
       
       if (permissionState == PermissionState.denied) {
         return WifiCheckResult.permissionDenied();
@@ -277,7 +295,6 @@ class WifiSecurityService {
       // 3. تحويل البيانات
       final status = WifiSecurityStatus.fromMap(Map<String, dynamic>.from(rawData));
       
-      _printNetworkStatus(status);
       _isCheckingNetwork = false;
       
       return status;
@@ -362,15 +379,7 @@ class WifiSecurityService {
     }
   }
 
-  void _printNetworkStatus(WifiSecurityStatus status) {
-    print('┌─────────────────────────────────');
-    print(' Network Security Status:');
-    print('   SSID: ${status.ssid}');
-    print('   Security: ${status.securityType}');
-    print('   Is Secure: ${status.isSecure ? "✅" : "❌"}');
-    print('   Platform: ${status.platform}');
-    print('└─────────────────────────────────');
-  }
+  
 
   void dispose() {
     _connectivitySubscription?.cancel();
@@ -386,7 +395,8 @@ class WifiSecurityService {
 enum PermissionState {
   neverAsked,  // لم يُسأل من قبل
   granted,     // تم منح الصلاحيات
-  denied,      // تم رفض الصلاحيات
+  denied, // تم رفض الصلاحيات
+  userDeclinedPermanently,      
 }
 
 class WifiCheckResult {
@@ -406,6 +416,9 @@ class WifiCheckResult {
 
   factory WifiCheckResult.permissionDenied() {
     return WifiCheckResult(type: WifiCheckResultType.permissionDenied);
+  }
+  factory WifiCheckResult.userDeclined() {
+    return WifiCheckResult(type: WifiCheckResultType.userDeclined);
   }
 
   factory WifiCheckResult.success(WifiSecurityStatus status) {
@@ -433,7 +446,8 @@ class WifiCheckResult {
 
 enum WifiCheckResultType {
   needsPermission,   // يحتاج صلاحيات
-  permissionDenied,  // الصلاحيات مرفوضة
+  permissionDenied, // الصلاحيات مرفوضة
+  userDeclined, 
   success,           // نجح الفحص
   notConnected,      // غير متصل بـ WiFi
   alreadyChecked,    // تم الفحص مسبقاً في هذه الجلسة

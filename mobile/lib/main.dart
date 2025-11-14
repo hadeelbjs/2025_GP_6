@@ -272,6 +272,10 @@ Future<void> _initializeEncryption() async {
           print('⚠️ Permissions denied');
           // سيتم عرض dialog من Dashboard
           break;
+          case WifiCheckResultType.userDeclined:
+        print('ℹ️ User declined WiFi check permanently - respecting choice');
+        // المستخدم رفض نهائياً - لا نزعجه
+        break;
           
         case WifiCheckResultType.success:
           if (result.status != null && !result.status!.isSecure) {
@@ -281,6 +285,7 @@ Future<void> _initializeEncryption() async {
             print('✅ Secure network: ${result.status!.ssid}');
           }
           break;
+        
           
         case WifiCheckResultType.notConnected:
           print('ℹ️ Not connected to WiFi');

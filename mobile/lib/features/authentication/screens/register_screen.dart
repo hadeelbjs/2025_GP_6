@@ -195,7 +195,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (phoneVerified == true && mounted) {
         setState(() => _isLoading = true);
 
-        final token = await _apiService.getAccessToken();
+        //final token = await _apiService.getAccessToken();
         await _generateAndUploadKeys();
         await SocketService().connect();
 

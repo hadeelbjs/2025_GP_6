@@ -98,21 +98,31 @@ failedVerificationAtRecipient: {
 failedVerification: {
   type: Boolean,
   default: false,
-}
+},
+
+visibilityDuration: {
+  type: Number,
+  required: false,
+  min: 1,           
+ 
+},
+  
+  expiresAt: {
+    type: Date,
+    required: false, 
+    index: true, 
+  },
+  
+  isExpired: {
+    type: Boolean,
+    default: false,
+    index: true,
+  }
 
 });
 
 
-// Index للبحث السريع
-MessageSchema.index({ senderId: 1, recipientId: 1, createdAt: -1 });
-
-MessageSchema.index(
-  { createdAt: 1 },
-  { 
-    expireAfterSeconds: 172800,  // 48 hours = 2 days
-    name: 'auto_delete_messages'  
-  }
-);
+MessageSchema.index({ expiresAt: 1, isExpired: 1 });
 
 
 

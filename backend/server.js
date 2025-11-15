@@ -7,6 +7,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
+const { startMessageExpiryJob, startDeliveredMessagesCleanup } = require('./jobs/messageCleanup');
 
 const app = express();
 const server = http.createServer(app); 
@@ -101,6 +102,8 @@ mongoose.connect(process.env.MONGODB_URI)
 
 // ✅ Socket.IO - يجب أن تكون قبل Routes
 require('./sockets/messageSocket')(io);
+startMessageExpiryJob(io);
+
 
 app.use((req, res, next) => {
   req.io = io;
@@ -142,4 +145,6 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Server running on port: ${PORT}`);
   console.log(`✅ Socket.IO ready`);
   console.log(`✅ Listening on all interfaces (0.0.0.0)`);
+  console.log(`✅ Message expiry job started`);
+
 });

@@ -5,6 +5,13 @@ const Message = require('../models/Message');
 const userSockets = new Map();
 const onlineUsers = new Set(); 
 
+
+function generateConversationId(userId1, userId2) {
+  const ids = [userId1.toString(), userId2.toString()].sort();
+  return `${ids[0]}-${ids[1]}`;
+}  
+
+
 async function broadcastStatusToContacts(userId, isOnline, io) {
   try {
     const Contact = require('../models/Contact');
@@ -96,16 +103,13 @@ module.exports = (io) => {
               attachmentType: msg.attachmentType || null,
               attachmentName: msg.attachmentName || null,
               attachmentMimeType: msg.attachmentMimeType || null,
+              visibilityDuration: msg.visibilityDuration || null,
+              expiresAt: msg.expiresAt ? msg.expiresAt.toISOString() : null,
               createdAt: msg.createdAt ? msg.createdAt.toISOString() : new Date().toISOString(),
             });
 
-            await Message.findOneAndUpdate(
-              { messageId: msg.messageId },
-              { 
-                status: 'delivered',
-                deliveredAt: new Date()
-              }
-            );
+       await Message.findOneAndDelete({ messageId: msg.messageId });
+       console.log(`🗑️ Deleted delivered message from MongoDB: ${msg.messageId}`);
 
             io.sendToUser(msg.senderId.toString(), 'message:status_update', {
               messageId: msg.messageId,
@@ -138,12 +142,36 @@ module.exports = (io) => {
           attachmentData,
           attachmentType,
           attachmentName,
-          attachmentMimeType
+          attachmentMimeType,
+          visibilityDuration, 
+          expiresAt,  
         } = data;
         
         const senderId = userId;
         
         console.log(`📤 Sending message: ${messageId} from ${senderId} → ${recipientId}`);
+
+                    
+        let finalExpiresAt = null;
+        let messageCreatedAt = data.createdAt ? new Date(data.createdAt) : new Date();
+
+        if (expiresAt) {
+          try {
+            finalExpiresAt = new Date(expiresAt);
+            console.log(`⏱️ Message duration: ${visibilityDuration}s`);
+            console.log(`   📅 Created at: ${messageCreatedAt.toISOString()}`);
+            console.log(`   ⏰ Will expire at: ${finalExpiresAt.toISOString()}`);
+          } catch (err) {
+            console.error('❌ Failed to parse expiresAt:', err);
+            if (visibilityDuration) {
+              finalExpiresAt = new Date(messageCreatedAt.getTime() + (visibilityDuration * 1000));
+            }
+          }
+        } else if (visibilityDuration) {
+          finalExpiresAt = new Date(messageCreatedAt.getTime() + (visibilityDuration * 1000));
+          console.log(`⏱️ Message duration: ${visibilityDuration}s (calculated)`);
+        }
+        
 
         const delivered = io.sendToUser(recipientId, 'message:new', {
           messageId,
@@ -154,7 +182,9 @@ module.exports = (io) => {
           attachmentType,
           attachmentName,
           attachmentMimeType,
-          createdAt: new Date().toISOString(),
+          visibilityDuration,
+          expiresAt: finalExpiresAt ? finalExpiresAt.toISOString() : null,  
+          createdAt: messageCreatedAt.toISOString(),
         });
 
         socket.emit('message:sent', {
@@ -168,6 +198,7 @@ module.exports = (io) => {
             messageId,
             status: 'delivered',  
             timestamp: Date.now(),
+            expiresAt: finalExpiresAt ? finalExpiresAt.toISOString() : null, 
           });
         }
 
@@ -183,19 +214,23 @@ module.exports = (io) => {
             attachmentName,
             attachmentMimeType,
             status: 'sent',
-            createdAt: new Date(),
+            createdAt: messageCreatedAt, 
+            visibilityDuration,
+            expiresAt: finalExpiresAt,  
+            isExpired: false,
           });
-          console.log(`💾 Message saved (offline): ${messageId}`);
-        }
+      console.log(`💾 Message saved (offline) with duration: ${visibilityDuration}s`);
+      console.log(`   ⏰ Will expire at: ${finalExpiresAt ? finalExpiresAt.toISOString() : 'N/A'}`);        }
 
       } catch (err) {
         console.error('❌ Send message error:', err);
         socket.emit('error', { message: 'Failed to send message' });
       }
     });
+    
 
-    // ✅ تأكيد الاستلام
-    socket.on('message:delivered', async (data) => {
+    /* 
+    (socket.on('message:delivered', async (data) => {
       try {
         const { messageId, senderId, encryptedType, encryptedBody, attachmentData, attachmentType, attachmentName, createdAt } = data;
         const receiverId = userId;
@@ -235,7 +270,11 @@ module.exports = (io) => {
 
     // ✅ تحديث الحالة
     socket.on('message:status', async (data) => {
+      */
+     socket.on('message:delete_local', (data) => {
+
       try {
+       /*
         const { messageId, status, recipientId } = data;
 
         await Message.findOneAndUpdate(
@@ -258,16 +297,23 @@ module.exports = (io) => {
     socket.on('message:delete', async (data) => {
       try {
         const { messageId, deleteFor } = data;
+            const { messageId, deleteFor, recipientId } = data;
+        */
+        const { messageId, deleteFor, recipientId } = data;
         const senderId = userId;
 
-        console.log(`🗑️ Delete request: ${messageId} (deleteFor: ${deleteFor})`);
+     //   console.log(`🗑️ Delete request: ${messageId} (deleteFor: ${deleteFor})`);
 
-        const message = await Message.findOne({ messageId });
+      //  const message = await Message.findOne({ messageId });
+          console.log(`🗑️ Local delete: ${messageId} (deleteFor: ${deleteFor})`);
+
         
-        if (!message) {
-          socket.emit('error', { message: 'الرسالة غير موجودة' });
-          return;
-        }
+      if (!recipientId) {
+      console.error('❌ recipientId is missing!');
+      socket.emit('error', { message: 'معرف المستقبل مفقود' });
+      return;
+    }
+    /*
 
         if (deleteFor === 'everyone') {
           if (message.senderId.toString() !== senderId) {
@@ -283,9 +329,12 @@ module.exports = (io) => {
           const recipientId = message.recipientId.toString();
           
           const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
-            messageId,
-            deletedFor: 'everyone',
-          });
+          */
+             // ✅ إرسال الإشعار للطرف الآخر مباشرة
+    const sent = io.sendToUser(recipientId, 'message:deleted', {
+      messageId,
+           /* deletedFor: 'everyone',
+        });
           
           console.log(`${sentToRecipient ? '✅' : '⚠️'} Sent delete to recipient ${recipientId}`);
 
@@ -316,7 +365,16 @@ module.exports = (io) => {
           });
 
           console.log(`${sentToRecipient ? '✅' : '⚠️'} Delete sent to recipient ${recipientId}`);
-        }
+          */
+
+          deletedFor: deleteFor,
+          });
+
+          if (sent) {
+            console.log(`✅ Delete notification sent to ${recipientId}`);
+          } else {
+            console.log(`⚠️ Recipient ${recipientId} offline - delete queued locally`);
+          }
 
       } catch (err) {
         console.error('❌ Delete message error:', err);

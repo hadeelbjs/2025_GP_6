@@ -20,7 +20,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6, // ✅ تحديث النسخة إلى 6
+      version: 7, 
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -53,6 +53,9 @@ class DatabaseHelper {
         attachmentData TEXT,
         attachmentType TEXT,
         attachmentName TEXT,
+        visibilityDuration INTEGER,
+        expiresAt INTEGER,
+        isExpired INTEGER DEFAULT 0,
         FOREIGN KEY (conversationId) REFERENCES conversations(id)
       )
     ''');
@@ -70,6 +73,17 @@ class DatabaseHelper {
       )
     ''');
 
+      await db.execute('''
+    CREATE TABLE user_conversation_duration (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      conversationId TEXT NOT NULL UNIQUE,
+      currentDuration INTEGER NOT NULL,
+      lastModified INTEGER NOT NULL
+    )
+  ''');
+
+
+
     // ✅ Indexes للأداء
     await db.execute('''
       CREATE INDEX idx_messages_conversation 
@@ -85,6 +99,14 @@ class DatabaseHelper {
       CREATE INDEX idx_messages_deleted
       ON messages(isDeleted, isDeletedForMe)
     ''');
+
+    await db.execute('''
+      CREATE INDEX idx_messages_expiry
+      ON messages(expiresAt, isExpired)
+    ''');
+
+
+
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -177,6 +199,62 @@ class DatabaseHelper {
 
       print('✅ Upgraded to v6: Added deletion and lock columns');
     }
+
+     
+      if (oldVersion < 7) {
+    try {
+      await db.execute(
+        'ALTER TABLE messages ADD COLUMN visibilityDuration INTEGER',
+      );
+      print('✅ Added visibilityDuration');
+    } catch (e) {
+      print('⚠️ Column visibilityDuration might already exist');
+    }
+
+    try {
+      await db.execute(
+        'ALTER TABLE messages ADD COLUMN expiresAt INTEGER',
+      );
+      print('✅ Added expiresAt');
+    } catch (e) {
+      print('⚠️ Column expiresAt might already exist');
+    }
+
+    try {
+      await db.execute(
+        'ALTER TABLE messages ADD COLUMN isExpired INTEGER DEFAULT 0',
+      );
+      print('✅ Added isExpired');
+    } catch (e) {
+      print('⚠️ Column isExpired might already exist');
+    }
+
+    try {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS user_conversation_duration (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          conversationId TEXT NOT NULL UNIQUE,
+          currentDuration INTEGER NOT NULL,
+          lastModified INTEGER NOT NULL
+        )
+      ''');
+      print('✅ Created user_conversation_duration table');
+    } catch (e) {
+      print('⚠️ Table user_conversation_duration might already exist');
+    }
+
+    try {
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_messages_expiry
+        ON messages(expiresAt, isExpired)
+      ''');
+      print('✅ Created expiry index');
+    } catch (e) {
+      print('⚠️ Index idx_messages_expiry might already exist');
+    }
+
+    print('✅ Upgraded to v7: Added Message Visibility Duration');
+  }
   }
 
   // ============================================
@@ -211,6 +289,10 @@ class DatabaseHelper {
       'attachmentData': message['attachmentData'],
       'attachmentType': message['attachmentType'],
       'attachmentName': message['attachmentName'],
+      
+        'visibilityDuration': message['visibilityDuration'],
+        'expiresAt': message['expiresAt'], // int: millisecondsSinceEpoch
+        'isExpired': message['isExpired'] ?? 0,
     };
 
     await db.insert(
@@ -260,6 +342,8 @@ class DatabaseHelper {
             'attachmentType': msg['attachmentType'],
             'attachmentData': msg['attachmentData'],
             'attachmentName': msg['attachmentName'],
+            'expiresAt': msg['expiresAt'],
+
           },
         )
         .toList();
@@ -604,4 +688,103 @@ class DatabaseHelper {
     }
     return false;
   }
+
+   
+Future<int?> getUserDuration(String conversationId) async {
+  final db = await database;
+  final result = await db.query(
+    'user_conversation_duration',
+    where: 'conversationId = ?',
+    whereArgs: [conversationId],
+  );
+  
+  if (result.isEmpty) return null;
+  return result.first['currentDuration'] as int;
+}
+
+Future<void> setUserDuration(String conversationId, int duration) async {
+  final db = await database;
+  await db.insert(
+    'user_conversation_duration',
+    {
+      'conversationId': conversationId,
+      'currentDuration': duration,
+      'lastModified': DateTime.now().millisecondsSinceEpoch,
+    },
+    conflictAlgorithm: ConflictAlgorithm.replace,
+  );
+  print('✅ Duration saved: ${duration}s for $conversationId');
+}
+
+Future<void> deleteMessageById(String messageId) async {
+  final db = await database;
+  await db.delete('messages', where: 'id = ?', whereArgs: [messageId]);
+}
+
+
+Future<List<String>> deleteExpiredMessages() async {
+  final db = await database;
+  final now = DateTime.now().millisecondsSinceEpoch;
+  final nowReadable = DateTime.now().toIso8601String();
+
+  print('🕐 [DB] Current time: $nowReadable ($now ms)');
+
+  final expiredMessages = await db.query(
+    'messages',
+    where: 'expiresAt IS NOT NULL AND expiresAt < ?',
+    whereArgs: [now],
+    columns: ['id', 'expiresAt', 'createdAt', 'visibilityDuration'],
+  );
+
+  final expiredIds = expiredMessages.map((e) => e['id'] as String).toList();
+
+  if (expiredIds.isEmpty) return [];
+
+  for (final msg in expiredMessages) {
+    final expiresAt = msg['expiresAt'] as int;
+    final createdAt = msg['createdAt'] as int;
+    final duration = msg['visibilityDuration'] as int?;
+    final expiresAtReadable = DateTime.fromMillisecondsSinceEpoch(expiresAt).toIso8601String();
+    final createdAtReadable = DateTime.fromMillisecondsSinceEpoch(createdAt).toIso8601String();
+    final delay = now - expiresAt;
+    final actualLifetime = now - createdAt;
+    
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    print('⏱️  MESSAGE EXPIRED:');
+    print('   📝 Message ID: ${msg['id']}');
+    print('   ⏱️ Duration Set: ${duration}s');
+    print('   📅 Created: $createdAtReadable');
+    print('   ⏰ Should expire: $expiresAtReadable');
+    print('   🕐 Actually deleted: $nowReadable');
+    print('   ⏳ Deletion Delay: ${delay}ms (${(delay / 1000).toStringAsFixed(2)}s)');
+    print('   ⌛ Actual Lifetime: ${(actualLifetime / 1000).toStringAsFixed(2)}s (Expected: ${duration}s)');
+    if (delay > 2000) {
+      print('   ⚠️  WARNING: Delay > 2 seconds!');
+    }
+    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  }
+
+  await db.delete(
+    'messages',
+    where: 'id IN (${List.filled(expiredIds.length, '?').join(',')})',
+    whereArgs: expiredIds,
+  );
+
+  print('✅ [DB] Deleted ${expiredIds.length} expired messages from database');
+
+  return expiredIds;
+}
+
+
+
+Future<void> markMessageAsExpired(String messageId) async {
+  final db = await database;
+  await db.update(
+    'messages',
+    {'isExpired': 1},
+    where: 'id = ?',
+    whereArgs: [messageId],
+  );
+}
+
 }

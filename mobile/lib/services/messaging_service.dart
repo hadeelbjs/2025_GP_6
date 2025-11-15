@@ -1,4 +1,3 @@
-// messaging_service.dart - الملف المعدل
 
 import 'dart:async';
 import 'dart:convert';
@@ -14,6 +13,7 @@ import 'crypto/signal_protocol_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class MessagingService {
+  static bool _hasStartedTimer = false; 
   static final MessagingService _instance = MessagingService._internal();
   factory MessagingService() => _instance;
 
@@ -35,6 +35,7 @@ class MessagingService {
   StreamSubscription? _statusSubscription;
   StreamSubscription? _deleteSubscription;
   Timer? _cleanupTimer;
+  Timer? _expiryTimer;
   static int decryptionFailure = 0;
 
   final _newMessageController =
@@ -43,12 +44,18 @@ class MessagingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final _messageStatusController =
       StreamController<Map<String, dynamic>>.broadcast();
+  final _messageExpiredController = 
+      StreamController<Map<String, dynamic>>.broadcast();
+
 
   Stream<Map<String, dynamic>> get onNewMessage => _newMessageController.stream;
   Stream<Map<String, dynamic>> get onMessageDeleted =>
       _messageDeletedController.stream;
   Stream<Map<String, dynamic>> get onMessageStatusUpdate =>
       _messageStatusController.stream;
+         Stream<Map<String, dynamic>> get onMessageExpired => 
+      _messageExpiredController.stream;
+
 
   bool get isConnected => _socketService.isConnected;
   Stream<Map<String, dynamic>> get onUserStatusChange =>
@@ -69,6 +76,14 @@ class MessagingService {
           return false;
         }
       } else {}
+        print('🔍 Checking for expired messages on app start...');
+    await deleteExpiredMessages(); 
+    
+      if (!_hasStartedTimer) {
+        startLocalExpiryTimer();
+        _hasStartedTimer = true;
+        print('⏱️ Global expiry timer started');
+      }
 
       _setupSocketListeners();
       _startMessageCacheCleanup();
@@ -93,8 +108,20 @@ class MessagingService {
     });
 
     _deleteSubscription = _socketService.onMessageDeleted.listen((data) async {
-      await _handleMessageDeleted(data);
+       final deletedMessageId = data['messageId'];
+  
+  await _db.deleteMessage(deletedMessageId);
+  _messageDeletedController.add(data);
     });
+
+  _socketService.onMessageExpired.listen((data) async {
+    final messageId = data['messageId'] as String;
+    print('⏱️ Message expired from backend: $messageId');
+    
+    await _db.deleteMessage(messageId);
+    
+    _messageExpiredController.add({'messageId': messageId});
+  });
 
     _listenersSetup = true;
   }
@@ -113,6 +140,16 @@ class MessagingService {
       final messageId = _uuid.v4();
       final conversationId = _generateConversationId(recipientId);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+      
+    final duration = await _db.getUserDuration(conversationId);
+    
+    if (duration == null) {
+      throw Exception('يجب تحديد مدة الرسالة أولاً');
+    }
+
+    final now = DateTime.now();
+    final expiresAt = now.add(Duration(seconds: duration));
 
       //  تحويل الملفات إلى Base64
       String? attachmentData;
@@ -170,6 +207,9 @@ class MessagingService {
         'attachmentData': attachmentData,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
+        'visibilityDuration': duration,
+        'expiresAt': expiresAt?.millisecondsSinceEpoch,
+        'isExpired': 0,
       });
 
       // حفظ المحادثة
@@ -197,6 +237,9 @@ class MessagingService {
         attachmentType: attachmentType,
         attachmentName: attachmentName,
         attachmentMimeType: attachmentMimeType,
+        visibilityDuration: duration,                 
+        expiresAt: expiresAt.toIso8601String(),
+
       );
 
       return {'success': true, 'messageId': messageId};
@@ -228,6 +271,16 @@ class MessagingService {
       final attachmentData = data['attachmentData'] as String?;
       final attachmentType = data['attachmentType'] as String?;
       final attachmentName = data['attachmentName'] as String?;
+      final visibilityDuration = data['visibilityDuration'] as int?;
+      final expiresAtStr = data['expiresAt'] as String?;
+
+      int? expiresAt;
+      if (expiresAtStr != null) {
+        try {
+          expiresAt = DateTime.parse(expiresAtStr).millisecondsSinceEpoch;
+        } catch (e) {
+        }
+      }
 
       final timestamp = data['createdAt'] != null
           ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
@@ -256,6 +309,9 @@ class MessagingService {
         'attachmentData': attachmentData,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
+        'visibilityDuration': visibilityDuration,
+        'expiresAt': expiresAt,
+        'isExpired': 0,
       });
 
       if (!isCurrentChat) {
@@ -270,7 +326,10 @@ class MessagingService {
         'senderId': senderId,
         'isLocked': true,
       });
-    } catch (e) {}
+    } catch (e) {
+    print('❌ Error in _handleIncomingMessage: $e');
+
+    }
 
     Future<void> updateConversationPrivacyPolicy({
       required String peerUserId,
@@ -304,7 +363,32 @@ class MessagingService {
       final messageId = data['messageId'];
       final newStatus = data['status'];
 
-      await _db.updateMessageStatus(messageId, newStatus);
+          final visibilityDuration = data['visibilityDuration'] as int?;
+    final expiresAtStr = data['expiresAt'] as String?;
+
+   
+    int? expiresAt;
+    if (expiresAtStr != null) {
+      try {
+        expiresAt = DateTime.parse(expiresAtStr).millisecondsSinceEpoch;
+      } catch (e) {
+        print('⚠️ Failed to parse expiresAt from status_update: $expiresAtStr');
+      }
+    }
+
+    final updateData = <String, dynamic>{
+      'status': newStatus,
+    };
+
+    if (visibilityDuration != null) {
+      updateData['visibilityDuration'] = visibilityDuration;
+    }
+
+    if (expiresAt != null) {
+      updateData['expiresAt'] = expiresAt;
+    }
+
+    await _db.updateMessage(messageId, updateData);
 
       if (!_messageStatusController.isClosed) {
         _messageStatusController.add({
@@ -344,6 +428,8 @@ class MessagingService {
     try {
       final messageId = data['messageId'];
       final deletedFor = data['deletedFor'];
+      print('🗑️ Received delete notification: $messageId (deletedFor: $deletedFor)');
+
 
       if (!_messageDeletedController.isClosed) {
         _messageDeletedController.add({
@@ -357,10 +443,17 @@ class MessagingService {
 
       if (deletedFor == 'everyone') {
         await _db.deleteMessage(messageId);
+       print('✅ Deleted message for everyone: $messageId');
+
       } else if (deletedFor == 'recipient') {
         await _db.deleteMessage(messageId);
+      print('✅ Deleted message at recipient: $messageId');
+
       }
-    } catch (e) {}
+    } catch (e) {
+    print('❌ Error handling delete: $e');
+
+    }
   }
 
   Future<Map<String, dynamic>> decryptAllConversationMessages(
@@ -610,30 +703,54 @@ class MessagingService {
         return {'success': false, 'message': 'الرسالة غير موجودة'};
       }
 
-      if (deleteForEveryone) {
-        //  حذف للجميع
-        _socketService.deleteMessage(
-          messageId: messageId,
-          deleteFor: 'everyone',
-        );
+      final String otherUserId;
+    final bool isMine = (message['isMine'] as int?) == 1;
+    
+    if (isMine) {
+      otherUserId = message['receiverId'] as String;
+    } else {
+      otherUserId = message['senderId'] as String;
+    }
 
-        // حذف محلي فوري
+    print('🗑️ Delete request:');
+    print('   messageId: $messageId');
+    print('   otherUserId: $otherUserId');
+    print('   deleteForEveryone: $deleteForEveryone');
+
+
+      if (deleteForEveryone) {
         await _db.deleteMessage(messageId);
+        _socketService.socket?.emit('message:delete_local', {
+        'messageId': messageId,
+        'deleteFor': 'everyone',
+        'recipientId': otherUserId,
+      });
+
+      print('✅ Deleted for everyone');
 
         return {'success': true, 'message': 'تم الحذف للجميع'};
       } else {
-        // حذف من عند المستقبل فقط
-        _socketService.deleteMessage(
-          messageId: messageId,
-          deleteFor: 'recipient',
-        );
-
-        //  تحديث محلي - إضافة علامة "تم الحذف لدى المستقبل"
+     
         await _db.updateMessage(messageId, {'deletedForRecipient': 1});
+                print('✅ Updated deletedForRecipient = 1 for message: $messageId');
+
+
+      _socketService.socket?.emit('message:delete_local', {
+        'messageId': messageId,
+        'deleteFor': 'recipient',
+        'recipientId': otherUserId,
+      });
+
+  final updatedMessage = await _db.getMessage(messageId);
+  print('🔍 Message after update: $updatedMessage');
+
+
 
         return {'success': true, 'message': 'تم الحذف من عند المستقبل'};
       }
-    } catch (e) {
+      } catch (e, stackTrace) {
+    print('❌ Delete error: $e');
+    print('Stack trace: $stackTrace');
       return {'success': false, 'message': 'فشل الحذف: $e'};
     }
   }
@@ -703,6 +820,9 @@ class MessagingService {
     _newMessageController.close();
     _messageDeletedController.close();
     _messageStatusController.close();
+     _messageExpiredController.close();
+    _expiryTimer?.cancel();
+    _cleanupTimer?.cancel();
   }
 
   String getConversationId(String otherUserId) {
@@ -747,4 +867,44 @@ class MessagingService {
       return false;
     }
   }
+
+  
+Future<int?> getUserDuration(String conversationId) async {
+  return await _db.getUserDuration(conversationId);
+}
+
+Future<void> setUserDuration(String conversationId, int duration) async {
+  await _db.setUserDuration(conversationId, duration);
+
+  
+}
+
+Future<void> deleteExpiredMessages() async {
+  final now = DateTime.now();
+  
+  final expiredIds = await _db.deleteExpiredMessages();
+  
+  
+  for (final messageId in expiredIds) {
+    _messageExpiredController.add({'messageId': messageId});
+  }
+ 
+}
+
+ void startLocalExpiryTimer() {
+    
+    // _expiryTimer?.cancel();
+    
+    if (_expiryTimer != null && _expiryTimer!.isActive) {
+      return;
+    }
+    
+    _expiryTimer = Timer.periodic(
+      const Duration(seconds: 5), 
+      (timer) async {
+        await deleteExpiredMessages();
+      },
+    );
+  }
+
 }

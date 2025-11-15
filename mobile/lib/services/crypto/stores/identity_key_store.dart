@@ -101,23 +101,42 @@ class MyIdentityKeyStore extends IdentityKeyStore {
   // ========================================
   @override
   Future<IdentityKeyPair> getIdentityKeyPair() async {
-    if (_identityKeyPair == null) {
-      throw Exception('Identity key not initialized for user: $_userId');
-    }
+ // 1. إذا كان المفتاح موجوداً في الذاكرة المؤقتة، أعده.
+  if (_identityKeyPair != null) {
     return _identityKeyPair!;
   }
+
+  // 2. إذا لم يكن موجوداً، قم بإعادة التهيئة لإجباره على القراءة من القرص.
+  await initialize(); 
+
+  // 3. التحقق بعد إعادة التهيئة
+  if (_identityKeyPair == null) {
+    // ❌ إذا فشل التحميل حتى بعد محاولة initialize، أطلق الخطأ
+    throw Exception('Identity key not found in storage after initialization for user: $_userId');
+  }
+
+  return _identityKeyPair!;
+}
 
   // ========================================
   // ✅ جلب Registration ID
   // ========================================
-  @override
-  Future<int> getLocalRegistrationId() async {
-    if (_localRegistrationId == null) {
-      throw Exception('Registration ID not initialized for user: $_userId');
-    }
+ @override
+Future<int> getLocalRegistrationId() async {
+ // 1. إذا كان الـ ID موجوداً في الذاكرة المؤقتة، أعده.
+  if (_localRegistrationId != null) {
     return _localRegistrationId!;
   }
 
+  // 2. إذا لم يكن، قم بإعادة التهيئة لإجباره على القراءة من القرص.
+  await initialize();
+
+  // 3. التحقق بعد إعادة التهيئة
+  if (_localRegistrationId == null) {
+    throw Exception('Registration ID not found in storage after initialization for user: $_userId');
+  }
+  return _localRegistrationId!;
+}
   // ========================================
   // ✅ حفظ Identity للطرف الآخر (Peer)
   // ========================================

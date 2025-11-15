@@ -436,7 +436,19 @@ class SignalProtocolManager {
   Future<bool> createSession(String recipientId) async {
   try {
     await initialize();
-
+  //  نقطة التحقق الإجباري:
+    final hasOwnKeys = await hasKeys();
+    if (!hasOwnKeys) {
+      print(' No local keys found');
+      print('💡 Generating keys first...');
+      
+      // ✅ توليد وحفظ المفاتيح إذا كانت مفقودة
+      final generated = await generateAndUploadKeys(); 
+      if (!generated) {
+        throw Exception('Failed to generate keys for user $currentUserId'); // فشل توليد حرج
+      }
+      // ملاحظة: بعد generateAndUploadKeys، سيتم ملء _identityKeyPair و _localRegistrationId
+    }
     final userData = await _storage.read(key: 'user_data');
     if (userData != null) {
       final currentUserId = jsonDecode(userData)['id'];

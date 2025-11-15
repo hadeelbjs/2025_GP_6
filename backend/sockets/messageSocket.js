@@ -198,8 +198,9 @@ module.exports = (io) => {
             messageId,
             status: 'delivered',  
             timestamp: Date.now(),
+            visibilityDuration,  
             expiresAt: finalExpiresAt ? finalExpiresAt.toISOString() : null, 
-          });
+      });
         }
 
         if (!delivered) {

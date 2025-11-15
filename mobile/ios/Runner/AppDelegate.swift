@@ -58,7 +58,7 @@ import CoreLocation
     // MARK: - WiFi Security Detection (Rule-Based Only)
     // ============================================
     
-    private func getWifiSecurityStatus(result: @escaping FlutterResult) {
+  private func getWifiSecurityStatus(result: @escaping FlutterResult) {
         
         guard checkLocationPermission() else {
             result(FlutterError(
@@ -69,7 +69,8 @@ import CoreLocation
             return
         }
         
-        guard let wifiInfo = getWifiInfo() else {
+        // الحصول على معلومات الواي فاي. إذا كان iOS >= 14، سيتم جلب معلومات الأمان أيضاً
+        guard var response = getWifiInfo() else {
             result(FlutterError(
                 code: "NO_WIFI",
                 message: "Not connected to WiFi",
@@ -78,28 +79,35 @@ import CoreLocation
             return
         }
         
-        let ssid = wifiInfo["SSID"] as? String ?? "Unknown"
-        let bssid = wifiInfo["BSSID"] as? String ?? "unknown"
-        // delete after check 
-        print("📡 iOS WiFi Info:")
-        print("   SSID: \(ssid)")
-        print("   BSSID: \(bssid)")
+        let ssid = response["ssid"] as? String ?? "Unknown"
         
-        // (Rule-Based)
+        // 1. التحقق من موثوقية البيانات
+        // إذا كانت الثقة عالية (من NEHotspotNetwork أو Legacy)، نستخدمها مباشرة
+        if response["confidence"] as? Int ?? 0 >= 90 {
+            print("📊 iOS Result (High Confidence): \(response)")
+            result(response)
+            return
+        }
+
+        
+        
+        // 2. التحليل المستند إلى القاعدة (Fallback)
+        // يتم هذا فقط إذا فشل الحصول على معلومات الأمان من NEHotspotNetwork (للإصدارات القديمة أو فشل NE)
+        
+        print("ℹ️ Falling back to Rule-Based analysis...")
         let analysis = analyzeNetworkByName(ssid: ssid)
         
-        var response: [String: Any] = [
-            "ssid": ssid,
-            "bssid": bssid,
-            "platform": "iOS",
-            "securityType": analysis["type"] ?? "UNKNOWN",
-            "isSecure": analysis["isSecure"] ?? true,
-            "source": "Rule-Based Analysis",
-            "confidence": analysis["confidence"] ?? 60,
-            "warning": "التحليل بناءً على اسم الشبكة فقط"
-        ]
-        // delete after check 
-        print("📊 iOS Result: \(response)")
+        // دمج نتائج التحليل القديم في الرد
+        response["ssid"] = ssid
+        response["bssid"] = response["bssid"] as? String ?? "unknown"
+        response["platform"] = "iOS"
+        response["securityType"] = analysis["type"] ?? "UNKNOWN"
+        response["isSecure"] = analysis["isSecure"] ?? false
+        response["source"] = "Rule-Based Analysis (Fallback)"
+        response["confidence"] = analysis["confidence"] ?? 40
+        response["warning"] = "التحليل بناءً على اسم الشبكة فقط"
+        
+        print("📊 iOS Result (Low Confidence Fallback): \(response)")
         result(response)
     }
     
@@ -170,7 +178,7 @@ import CoreLocation
         //  افتراضي: شبكة خاصة (محتمل آمنة)
         return [
             "type": "UNKNOWN",
-            "isSecure": false,
+            "isSecure": true,
             "confidence": 40,
             "reason": "لا يمكن تحديد نوع الشبكة - افتراضياً خاصة"
         ]
@@ -187,27 +195,38 @@ import CoreLocation
     }
     
     @available(iOS 14.0, *)
-    private func getWifiInfoModern() -> [String: Any]? {
-        var wifiInfo: [String: Any]?
-        let semaphore = DispatchSemaphore(value: 0)
+private func getWifiInfoModern() -> [String: Any]? {
+    var wifiInfo: [String: Any]?
+    let semaphore = DispatchSemaphore(value: 0)
+    
+    NEHotspotNetwork.fetchCurrent { network in
+        defer { semaphore.signal() }
         
-        NEHotspotNetwork.fetchCurrent { network in
-            defer { semaphore.signal() }
-            
-            guard let network = network else {
-                print("⚠️ No WiFi network detected")
-                return
-            }
-            
-            wifiInfo = [
-                "SSID": network.ssid,
-                "BSSID": network.bssid
-            ]
+        guard let network = network else {
+            print("⚠️ No WiFi network detected or Location permission denied.")
+            return
         }
         
-        _ = semaphore.wait(timeout: .now() + 2.0)
-        return wifiInfo
+        // **الآن نحصل على نوع الأمان الفعلي**
+        let securityType = self.mapSecurityType(network.securityType)
+        let isSecure = securityType != "OPEN" && securityType != "WEP"
+        
+        wifiInfo = [
+            "ssid": network.ssid,
+            "bssid": network.bssid,
+            "securityType": securityType,
+            "isSecure": isSecure,
+            "source": "iOS Native (NEHotspotNetwork)",
+            "platform": "iOS",
+            "warning": securityType == "WPA/WPA2/WPA3" ? "لا يمكن التحديد بدقة بين WPA2 و WPA3" : nil
+        ]
+        
+        print("✅ NEHotspotNetwork Info: \(wifiInfo ?? [:])") //
     }
+    
+    _ = semaphore.wait(timeout: .now() + 2.0)
+    return wifiInfo
+}
     
     private func getWifiInfoLegacy() -> [String: Any]? {
         guard let interfaces = CNCopySupportedInterfaces() as? [String] else {
@@ -219,13 +238,42 @@ import CoreLocation
             guard let info = CNCopyCurrentNetworkInfo(interface as CFString) as? [String: Any] else {
                 continue
             }
-            return info
+            let ssid = info["SSID"] as? String ?? "Unknown"
+            let bssid = info["BSSID"] as? String ?? "unknown"
+        return [
+                "ssid": ssid,
+                "bssid": bssid,
+                "securityType": "UNKNOWN", 
+                "isSecure": false,
+                "source": "iOS Legacy (CNCopyCurrentNetworkInfo)",
+                "platform": "iOS",
+                "confidence": 50 
+            ]
         }
         
         print("⚠️ Could not get WiFi info")
         return nil
     }
-    
+    private func mapSecurityType(_ type: NEHotspotNetworkSecurityType) -> String {
+    switch type {
+    case .open:
+        return "OPEN"
+    case .WEP:
+        return "WEP"
+    case .personal:
+        // يشمل WPA/WPA2/WPA3 Personal
+        return "WPA/WPA2/WPA3"
+    case .enterprise:
+        return "WPA_ENTERPRISE"
+    case .unknown:
+        return "UNKNOWN"
+    @unknown default:
+        return "UNKNOWN"
+    }
+}
+
+
+
     // ============================================
     // MARK: - Permissions
     // ============================================

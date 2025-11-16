@@ -1475,305 +1475,37 @@ void _showBiometricVerificationDialog() {
     );
   }
   // ============================================
-  // زر حذف الحساب
+  // حذف الحساب
   // ============================================
-  Widget _buildDeleteAccountButton() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: OutlinedButton.icon(
-        onPressed: _confirmDeleteAccount,
-        icon: const Icon(Icons.delete_forever, color: Colors.red, size: 20),
-        label: const Text(
-          'حذف الحساب نهائياً',
-          style: TextStyle(
-            fontSize: 16,
-            fontFamily: 'IBMPlexSansArabic',
-            fontWeight: FontWeight.w600,
-            color: Colors.red,
-          ),
-        ),
-        style: OutlinedButton.styleFrom(
-          side: const BorderSide(color: Colors.red, width: 2),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-        ),
+  void _confirmDeleteAccount() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => _DeleteAccountDialog(
+        onConfirm: (password) async {
+          Navigator.of(dialogContext).pop();
+          if (mounted) {
+            await _deleteAccount(password);
+          }
+        },
+        onCancel: () => Navigator.of(dialogContext).pop(),
       ),
     );
   }
 
-// ============================================
-//  تأكيد الحذف    
-// ============================================
-void _confirmDeleteAccount() {
-  final passwordController = TextEditingController();
-  bool obscurePassword = true;
-
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) {
-      return StatefulBuilder(
-        builder: (context, setDialogState) {
-          return Directionality(
-            textDirection: TextDirection.rtl,
-            child: AlertDialog(
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
-              backgroundColor: Colors.white,
-              title: const Text(
-                'تأكيد حذف الحساب',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                  color: Color.fromARGB(221, 246, 5, 5),
-                  fontSize: 20,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'هل أنت متأكد من حذف حسابك؟',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: Color.fromARGB(221, 216, 9, 9),
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // التحذير
-                  const Text(
-                    'هذا القرار نهائي ولا يمكن التراجع عنه',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 14,
-                      color: AppColors.primary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  // القائمة
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade50,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'ستفقد البيانات التالية نهائياً:',
-                          style: TextStyle(
-                            fontFamily: 'IBMPlexSansArabic',
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primary,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildDeleteItem('جميع المحادثات والرسائل'),
-                        _buildDeleteItem('قائمة جهات الاتصال'),
-                        _buildDeleteItem('معلومات الحساب الشخصية'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  
-                  // ملاحظة
-                  const Text(
-                    'يمكنك إنشاء حساب جديد في أي وقت',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 13,
-                      color:AppColors.primary,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-                  
-                  // حقل كلمة المرور
-                  const Align(
-                    alignment: Alignment.centerRight,
-                    child: Text(
-                      'أدخل كلمة المرور للتأكيد:',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: passwordController,
-                    obscureText: obscurePassword,
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-                    decoration: InputDecoration(
-                      hintText: 'أدخل كلمة المرور',
-                      hintStyle: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        color: Colors.grey.shade400,
-                      ),
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                          color: Colors.grey.shade600,
-                        ),
-                        onPressed: () {
-                          setDialogState(() {
-                            obscurePassword = !obscurePassword;
-                          });
-                        },
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              actions: [
-                // زر الإلغاء
-                TextButton(
-                  onPressed: () {
-                    passwordController.dispose();
-                    Navigator.pop(context);
-                  },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: const Text(
-                    'إلغاء',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 16,
-                      color:AppColors.primary,
-                    ),
-                  ),
-                ),
-                
-                // زر الحذف
-                ElevatedButton(
-                  onPressed: () async {
-                    final password = passwordController.text.trim();
-                    
-                    if (password.isEmpty) {
-                      _showMessage('الرجاء إدخال كلمة المرور', false);
-                      return;
-                    }
-
-                    Navigator.pop(context);
-                    await _deleteAccount(password);
-                    passwordController.dispose();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Color.fromARGB(221, 246, 5, 5),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 24,
-                      vertical: 12,
-                    ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'تأكيد الحذف',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
-      );
-    },
-  );
-}
-
-Widget _buildDeleteItem(String text) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 8),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          margin: const EdgeInsets.only(top: 7),
-          width: 4,
-          height: 4,
-          decoration: const BoxDecoration(
-            color:AppColors.primary,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: const TextStyle(
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              color:AppColors.primary,
-              height: 1.4,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-
-  // ============================================
-  // تنفيذ الحذف
-  // ============================================
   Future<void> _deleteAccount(String password) async {
+    if (!mounted) return;
+
     setState(() => _isLoading = true);
 
     try {
       final token = await _apiService.getAccessToken();
       if (token == null) {
-        _showMessage('خطأ في التوكن', false);
+        if (!mounted) return;
         setState(() => _isLoading = false);
+        _showMessage('خطأ في التوكن', false);
         return;
       }
-
-
-    
 
       final response = await http.delete(
         Uri.parse('$baseUrl/user/delete-account'),
@@ -1786,38 +1518,322 @@ Widget _buildDeleteItem(String text) {
 
       if (!mounted) return;
 
-      setState(() => _isLoading = false);
-
       if (response.statusCode == 200) {
-        // قطع Socket
         final socketService = SocketService();
         socketService.disconnectOnLogout();
 
-        // حذف البيانات المحلية
         await _apiService.logout();
         await BiometricService.disableBiometric();
 
+        if (!mounted) return;
+
+        setState(() => _isLoading = false);
+
         _showMessage('تم حذف حسابك بنجاح', true);
 
-        // الانتقال للـ Login
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted) {
-            Navigator.of(context).pushNamedAndRemoveUntil(
-              '/login',
-              (route) => false,
-            );
-          }
-        });
+        await Future.delayed(const Duration(milliseconds: 500));
+
+        if (!mounted) return;
+
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
       } else {
+        if (!mounted) return;
+        setState(() => _isLoading = false);
+
         final error = jsonDecode(response.body);
         _showMessage(error['message'] ?? 'فشل الحذف', false);
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showMessage('خطأ في الاتصال', false);
-      }
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      _showMessage('خطأ في الاتصال: ${e.toString()}', false);
     }
   }
+}
 
+// ============================================
+// Dialog Widget منفصل
+// ============================================
+class _DeleteAccountDialog extends StatefulWidget {
+  final Function(String) onConfirm;
+  final VoidCallback onCancel;
+
+  const _DeleteAccountDialog({
+    required this.onConfirm,
+    required this.onCancel,
+  });
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _passwordController = TextEditingController();
+  bool _obscurePassword = true;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width * 0.85,
+          child: ListView(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            children: [
+             
+
+              // المحتوى
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'هل أنت متأكد من حذف حسابك؟',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: Color.fromARGB(221, 216, 9, 9),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'هذا القرار نهائي ولا يمكن التراجع عنه',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 14,
+                        color: AppColors.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // القائمة
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text(
+                            'ستفقد البيانات التالية نهائياً:',
+                            style: TextStyle(
+                              fontFamily: 'IBMPlexSansArabic',
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          _buildDeleteItem('جميع المحادثات والرسائل'),
+                          _buildDeleteItem('قائمة جهات الاتصال'),
+                          _buildDeleteItem('معلومات الحساب الشخصية'),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    const Text(
+                      'يمكنك إنشاء حساب جديد في أي وقت',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 13,
+                        color: AppColors.primary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+
+                    // حقل كلمة المرور
+                    const Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        'أدخل كلمة المرور للتأكيد:',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: _obscurePassword,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 14,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'أدخل كلمة المرور',
+                        hintStyle: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          color: Colors.grey.shade400,
+                        ),
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 14,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: Colors.grey.shade300),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                            color: AppColors.primary,
+                            width: 2,
+                          ),
+                        ),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                           !_obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: Colors.grey.shade600,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _obscurePassword = !_obscurePassword;
+                            });
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // الأزرار
+              Container(
+                padding: const EdgeInsets.fromLTRB(24, 16, 24, 24),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextButton(
+                        onPressed: widget.onCancel,
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        child: const Text(
+                          'إلغاء',
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 16,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final password = _passwordController.text.trim();
+                          if (password.isEmpty) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'الرجاء إدخال كلمة المرور',
+                                  style: TextStyle(
+                                    fontFamily: 'IBMPlexSansArabic',
+                                  ),
+                                  textAlign: TextAlign.center,
+                                ),
+                                backgroundColor: Colors.red,
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
+                            return;
+                          }
+                          widget.onConfirm(password);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor:
+                              const Color(0xFF2D1B69),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: const Text(
+                          'تأكيد الحذف',
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDeleteItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            margin: const EdgeInsets.only(top: 7),
+            width: 4,
+            height: 4,
+            decoration: const BoxDecoration(
+              color: AppColors.primary,
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 14,
+                color: AppColors.primary,
+                height: 1.4,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }

@@ -15,11 +15,11 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
   // ========================================
   // ✅ دالة موحّدة لإنشاء مفاتيح التخزين
   // ========================================
-  String _getStorageKey(String baseKey) {
+  String _getStorageKey(String key) {
     if (_userId != null) {
-      return '${baseKey}_$_userId';
+      return '${_userId}_$key';
     }
-    return baseKey;
+    return key;
   }
 
   // ========================================

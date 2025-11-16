@@ -235,6 +235,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
+      _skipPhoneVerification();
+
       await Future.delayed(const Duration(milliseconds: 500));
       if (!mounted) return;
       Navigator.pushAndRemoveUntil(
@@ -244,7 +246,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
     }
   }
-/*
+
   // تخطي تحقق الجوال - مافيه احد مستدعيه مسكينه يمكن تنحذف
   Future<void> _skipPhoneVerification() async {
     setState(() => _isLoading = true);
@@ -283,7 +285,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       setState(() => _isLoading = false);
       _showMessage(result['message'], isError: true);
     }
-  }*/
+  }
 
   @override
   Widget build(BuildContext context) {

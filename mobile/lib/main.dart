@@ -207,7 +207,7 @@ Future<void> _initializeEncryption() async {
 
     
     
-    // ✅ 1. جلب userId أولاً
+    // 1. جلب userId أولاً
     final storage = const FlutterSecureStorage();
     final userDataStr = await storage.read(key: 'user_data');
     
@@ -221,13 +221,13 @@ Future<void> _initializeEncryption() async {
     
     print('👤 User ID: $userId');
     
-    // ✅ 2. تهيئة SignalProtocolManager
+    // 2. تهيئة SignalProtocolManager
     final signalManager = SignalProtocolManager();
     await signalManager.initialize(userId: userId);
     await signalManager.ensureSignedPreKeyRotation(userId);
     
-    // ✅ 3. الفحص باستخدام userId
-    final userIdentityKey = await storage.read(key: 'identity_key_${userId}');
+    // 3. الفحص باستخدام userId
+    final userIdentityKey = await storage.read(key: '${userId}_identity_key');
 
     
     if (userIdentityKey != null) {
@@ -236,7 +236,7 @@ Future<void> _initializeEncryption() async {
     } else {
       print('🆕 توليد مفاتيح جديدة للمستخدم $userId');
       await signalManager.generateAndUploadKeys();
-    }
+    } 
     
   } catch (e) {
     print('❌ خطأ في تهيئة التشفير: $e');

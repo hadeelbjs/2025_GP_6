@@ -16,7 +16,7 @@ class MyIdentityKeyStore extends IdentityKeyStore {
 
 
   Future<void> initialize() async {
-    final identityKeyData = await _storage.read(key: 'identity_key');
+    final identityKeyData = await _storage.read(key: _getStorageKey('identity_key'));
     if (identityKeyData != null) {
       try {
         final data = jsonDecode(identityKeyData);
@@ -30,7 +30,7 @@ class MyIdentityKeyStore extends IdentityKeyStore {
       }
     }
     
-    final regId = await _storage.read(key: 'registration_id');
+    final regId = await _storage.read(key: _getStorageKey('registration_id'));
     if (regId != null) {
       _localRegistrationId = int.parse(regId);
       print('✅ Registration ID loaded: $_localRegistrationId');
@@ -43,14 +43,14 @@ class MyIdentityKeyStore extends IdentityKeyStore {
       'public': base64Encode(keyPair.getPublicKey().serialize()),
       'private': base64Encode(keyPair.getPrivateKey().serialize()),
     });
-    await _storage.write(key: 'identity_key', value: data);
+    await _storage.write(key: _getStorageKey("identity_key"), value: data);
     print('✅ Identity key pair saved to storage');
   }
 
   Future<void> saveRegistrationId(int registrationId) async {
     _localRegistrationId = registrationId;
     await _storage.write(
-      key: 'registration_id',
+      key: _getStorageKey("registration_id"),
       value: registrationId.toString(),
     );
     print('✅ Registration ID saved: $registrationId');
@@ -204,8 +204,8 @@ class MyIdentityKeyStore extends IdentityKeyStore {
       _identityKeyPair = null;
       _localRegistrationId = null;
       
-      await _storage.delete(key: 'identity_key');
-      await _storage.delete(key: 'registration_id');
+      await _storage.delete(key: 'identity_key_{$_userId}');
+      await _storage.delete(key: 'registration_id_{$_userId}');
       
       // حذف جميع Identity Keys المحفوظة
       final allKeys = await _storage.readAll();

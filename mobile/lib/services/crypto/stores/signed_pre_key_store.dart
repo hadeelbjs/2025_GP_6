@@ -23,7 +23,7 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
   }
 
   // ========================================
-  // ✅ التهيئة - موحّدة
+  // ✅ التهيئة - موحّدة ومُصلحة
   // ========================================
   Future<void> initialize() async {
     print('🔧 Initializing SignedPreKey Store for user: $_userId');
@@ -34,16 +34,16 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
     int loadedCount = 0;
     
     for (var entry in allKeys.entries) {
-      if (entry.key.startsWith('signed_prekey_')) {
+      if (entry.key.contains('signed_prekey_')) {
         bool isForCurrentUser = false;
         int? signedPreKeyId;
         
         if (_userId != null) {
-          // مثال: signed_prekey_1_user456
-          if (entry.key.endsWith('_$_userId')) {
+          // مثال: user456_signed_prekey_1
+          if (entry.key.startsWith('${_userId}_signed_prekey_')) {
             final parts = entry.key.split('_');
             if (parts.length >= 4) {
-              signedPreKeyId = int.tryParse(parts[2]);
+              signedPreKeyId = int.tryParse(parts[3]); // ✅ تصحيح: parts[3] بدلاً من parts[2]
               isForCurrentUser = true;
             }
           }
@@ -159,7 +159,7 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
   }
 
   // ========================================
-  // ✅ حذف جميع SignedPreKeys
+  // ✅ حذف جميع SignedPreKeys - مُصلحة
   // ========================================
   Future<void> clearAll() async {
     try {
@@ -172,7 +172,7 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
       
       for (var key in allKeys.keys) {
         if (key.startsWith('signed_prekey_')) {
-          if (_userId != null && key.endsWith('_$_userId')) {
+          if (_userId != null && key.startsWith('${_userId}_signed_prekey_')) {
             await _storage.delete(key: key);
             deletedCount++;
           } else if (_userId == null) {
@@ -223,7 +223,7 @@ class MySignedPreKeyStore extends SignedPreKeyStore {
     print('\n💾 Stored SignedPreKeys (on disk):');
     for (var key in allKeys.keys) {
       if (key.startsWith('signed_prekey_')) {
-        if (_userId != null && key.endsWith('_$_userId')) {
+        if (_userId != null && key.startsWith('${_userId}_signed_prekey_')) {
           print('  ✅ $key');
           count++;
         } else if (_userId == null) {

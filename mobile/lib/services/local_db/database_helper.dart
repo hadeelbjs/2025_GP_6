@@ -319,7 +319,7 @@ class DatabaseHelper {
       'messages',
       where: 'conversationId = ?',
       whereArgs: [conversationId],
-      orderBy: 'createdAt ASC',
+      orderBy: 'createdAt DESC',
     );
 
     // ✅ تحويل الرسائل إلى format يفهمه ChatScreen
@@ -727,24 +727,24 @@ Future<List<String>> deleteExpiredMessages() async {
   final now = DateTime.now().toUtc().millisecondsSinceEpoch;
   final nowReadable = DateTime.now().toIso8601String();
 
-  print('🕐 [DB] Current time: $nowReadable ($now ms)');
+  //print('🕐 [DB] Current time: $nowReadable ($now ms)');
 
    final allMessages = await db.query('messages');
-  print('📊 [DEBUG] Total messages in DB: ${allMessages.length}');
+  //print('📊 [DEBUG] Total messages in DB: ${allMessages.length}');
   for (final msg in allMessages) {
     final expires = msg['expiresAt'];
     final id = msg['id']?.toString() ?? 'unknown';
     final shortId = id.length > 8 ? id.substring(0, 8) : id;
-    print('   📧 $shortId: expiresAt=$expires (type: ${expires.runtimeType})');
+    //print('   📧 $shortId: expiresAt=$expires (type: ${expires.runtimeType})');
     if (expires is int) {
-      print('      Comparison: $expires < $now = ${expires < now}');
+    //  print('      Comparison: $expires < $now = ${expires < now}');
     } else {
-      print('      ⚠️ expiresAt is NOT int! Type: ${expires.runtimeType}');
+     // print('      ⚠️ expiresAt is NOT int! Type: ${expires.runtimeType}');
     }
   }
 
-  print('🔍 [DB] Searching for expired messages...');
-  print('   Query: expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) < $now');
+  //print('🔍 [DB] Searching for expired messages...');
+  //print('   Query: expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) < $now');
   
   final expiredMessages = await db.query(
     'messages',
@@ -753,9 +753,9 @@ Future<List<String>> deleteExpiredMessages() async {
     columns: ['id', 'expiresAt', 'createdAt', 'visibilityDuration'],
   );
 
-  print('📊 [DB] Found ${expiredMessages.length} expired messages');
+  //print('📊 [DB] Found ${expiredMessages.length} expired messages');
   if (expiredMessages.isEmpty) {
-    print('✅ [DB] No expired messages to delete');
+   // print('✅ [DB] No expired messages to delete');
   }
 
 

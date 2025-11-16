@@ -29,7 +29,7 @@ class MySessionStore extends SessionStore {
   }
 
   // ========================================
-  // ✅ التهيئة - موحّدة
+  // ✅ التهيئة - موحّدة ومُصلحة
   // ========================================
   Future<void> initialize() async {
     print('🔧 Initializing Session Store for user: $_userId');
@@ -40,15 +40,15 @@ class MySessionStore extends SessionStore {
     int loadedCount = 0;
     
     for (var entry in allKeys.entries) {
-      if (entry.key.startsWith('session_')) {
+      if (entry.key.contains('session_')) {
         bool isForCurrentUser = false;
         String? sessionKey;
         
         if (_userId != null) {
-          // مثال: session_alice_1_user456
-          if (entry.key.endsWith('_$_userId')) {
-            // استخراج session key الأصلي
-            sessionKey = entry.key.substring(0, entry.key.lastIndexOf('_$_userId'));
+          // مثال: user456_session_alice_1
+          if (entry.key.startsWith('${_userId}_session_')) {
+            // استخراج session key الأصلي (بدون userId)
+            sessionKey = entry.key.substring('${_userId}_'.length);
             isForCurrentUser = true;
           }
         } else {
@@ -181,7 +181,7 @@ class MySessionStore extends SessionStore {
   }
 
   // ========================================
-  // ✅ حذف جميع Sessions
+  // ✅ حذف جميع Sessions - مُصلحة
   // ========================================
   Future<void> clearAll() async {
     try {
@@ -194,7 +194,7 @@ class MySessionStore extends SessionStore {
       
       for (var key in allKeys.keys) {
         if (key.startsWith('session_')) {
-          if (_userId != null && key.endsWith('_$_userId')) {
+          if (_userId != null && key.startsWith('${_userId}_session_')) {
             await _storage.delete(key: key);
             deletedCount++;
           } else if (_userId == null) {
@@ -258,7 +258,7 @@ class MySessionStore extends SessionStore {
     print('\n💾 Stored Sessions (on disk):');
     for (var key in allKeys.keys) {
       if (key.startsWith('session_')) {
-        if (_userId != null && key.endsWith('_$_userId')) {
+        if (_userId != null && key.startsWith('${_userId}_session_')) {
           print('  ✅ $key');
           count++;
         } else if (_userId == null) {
@@ -295,9 +295,8 @@ class MySessionStore extends SessionStore {
   /// الحصول على تفاصيل session
   Future<Map<String, dynamic>?> getSessionInfo(SignalProtocolAddress address) async {
     final record = await loadSession(address);
-    if (record == null) return null;
     
-    // ✅ التحقق من وجود session صالح عن طريق محاولة الوصول للـ session state
+    // ✅ التحقق من وجود session صالح
     bool hasValidSession = false;
     try {
       final sessionState = record.sessionState;

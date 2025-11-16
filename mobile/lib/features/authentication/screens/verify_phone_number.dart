@@ -130,7 +130,7 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
       final userId = jsonDecode(userData!)['id'].toString();
 
       final signalManager = SignalProtocolManager();
-      await signalManager.initialize(userId: userId);
+      
       final keysUploaded = await signalManager.generateAndUploadKeys();
       
       if (!keysUploaded) {

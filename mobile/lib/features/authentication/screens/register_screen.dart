@@ -83,7 +83,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (emailVerified == true && mounted) {
-      _proceedToPhoneVerification();
+       _proceedToPhoneVerification();
                 
       }
     } else {
@@ -203,26 +203,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
         ),
       );
 
-      if (phoneVerified == true && mounted) {
-        setState(() => _isLoading = true);
-
-        FlutterSecureStorage storage = const FlutterSecureStorage();
-        
-     
-        //final token = await _apiService.getAccessToken();
-        print("Tesssssssting");
-        await _generateAndUploadKeys();
-        await SocketService().connect();
-
-        setState(() => _isLoading = false);
-
-        if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (_) => const MainDashboard()),
-          (route) => false,
-        );
-      }
+      
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(

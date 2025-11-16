@@ -390,7 +390,7 @@ class _ChatScreenState extends State<ChatScreen> {
             '⚠️ Key-related error detected. Count: $_decryptionFailureCount',
           );
 
-          if (_decryptionFailureCount >= 3 && !_hasShownDecryptionDialog) {
+          if (_decryptionFailureCount >= 1 && !_hasShownDecryptionDialog) {
             _hasShownDecryptionDialog = true;
 
             if (mounted) {
@@ -402,10 +402,7 @@ class _ChatScreenState extends State<ChatScreen> {
               false,
             );
           }
-        } else {
-          // أخطاء عامة أخرى
-          _showMessage('حدث خطأ أثناء فك التشفير', false);
-        }
+        } 
       }
     } catch (e) {
       print('❌ Exception during decryption: $e');
@@ -1602,7 +1599,7 @@ await DatabaseHelper.instance.deleteExpiredMessages();
                   reverse: true,
                   itemCount: _messages.length,
                   itemBuilder: (context, index) {
-                    final message = _messages[_messages.length - 1 - index];
+                    final message = _messages[index];
                     return _buildMessageBubble(message);
                   },
                 ),

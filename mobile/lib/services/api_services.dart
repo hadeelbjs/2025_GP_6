@@ -1122,7 +1122,7 @@ class ApiService {
   // ===================================
   // رفع Bundle كامل مع النسخة
   // ===================================
-  Future<Map<String, dynamic>> uploadPreKeyBundle(
+  Future<Map<String, dynamic>> uploadKeyBundle(
     Map<String, dynamic> bundle,
   ) async {
     try {

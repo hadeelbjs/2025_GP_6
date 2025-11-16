@@ -107,7 +107,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
   // توليد ورفع المفاتيح
   Future<void> _generateAndUploadKeys() async {
     try {
+      FlutterSecureStorage storage = const FlutterSecureStorage();
+      final userData = await storage.read(key: 'user_data');
+      final accessToken = await storage.read(key: 'access_token');
+      final userId = jsonDecode(userData!)['id'].toString();
+
       final signalManager = SignalProtocolManager();
+      await signalManager.initialize(userId: userId);
       final keysUploaded = await signalManager.generateAndUploadKeys();
       if (!keysUploaded) {
         _showMessage('تحذير: فشل إعداد مفاتيح تشفير الرسائل', isError: true);
@@ -196,7 +202,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (phoneVerified == true && mounted) {
         setState(() => _isLoading = true);
 
+        FlutterSecureStorage storage = const FlutterSecureStorage();
+        
+     
         //final token = await _apiService.getAccessToken();
+        print("Tesssssssting");
         await _generateAndUploadKeys();
         await SocketService().connect();
 

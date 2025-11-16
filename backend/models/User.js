@@ -19,9 +19,6 @@ const UserSchema = new mongoose.Schema({
   // تاريخ آخر تغيير للباسورد
   passwordChangedAt: { type: Date, default: Date.now },
   
-  isEmailVerified: { type: Boolean, default: false },
-  isPhoneVerified: { type: Boolean, default: false },
-  
   emailVerificationCode: String,
   emailVerificationExpires: Date,
   

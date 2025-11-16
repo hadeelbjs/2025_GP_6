@@ -192,7 +192,7 @@ Future<bool> generateAndUploadKeys() async {
 
     // رفع المفاتيح للسيرفر
     print('📤 Uploading keys to server...');
-    final result = await _apiService.uploadPreKeyBundle(bundle);
+    final result = await _apiService.uploadKeyBundle(bundle);
 
     if (!result['success']) {
       throw Exception(result['message']);
@@ -205,7 +205,7 @@ Future<bool> generateAndUploadKeys() async {
     await _identityStore.saveRegistrationIdWithUserId(registrationId);
     
     // حفظ PreKeys
-    
+
     for (var preKey in preKeys) {
       await _preKeyStore.storePreKey(preKey.id, preKey);
     }
@@ -294,7 +294,7 @@ Future<bool> generateAndUploadKeys() async {
         },
       };
 
-      await _apiService.uploadPreKeyBundle(bundle);
+      await _apiService.uploadKeyBundle(bundle);
 
       // تحديث وقت التدوير
       await _storage.write(
@@ -630,7 +630,7 @@ Future<bool> generateAndUploadKeys() async {
         }).toList(),
       };
       
-      final result = await _apiService.uploadPreKeyBundle(bundle);
+      final result = await _apiService.uploadKeyBundle(bundle);
       
       if (result['success']) {
         print('✅ Uploaded ${newPreKeys.length} additional PreKeys');

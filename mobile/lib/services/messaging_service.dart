@@ -238,7 +238,7 @@ class MessagingService {
         attachmentName: attachmentName,
         attachmentMimeType: attachmentMimeType,
         visibilityDuration: duration,                 
-        expiresAt: expiresAt.toIso8601String(),
+        expiresAt: expiresAt.toUtc().toIso8601String(),
 
       );
 
@@ -277,7 +277,7 @@ class MessagingService {
       int? expiresAt;
       if (expiresAtStr != null) {
         try {
-          expiresAt = DateTime.parse(expiresAtStr).millisecondsSinceEpoch;
+          expiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
         } catch (e) {
         }
       }

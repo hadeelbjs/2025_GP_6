@@ -724,7 +724,7 @@ Future<void> deleteMessageById(String messageId) async {
 
 Future<List<String>> deleteExpiredMessages() async {
   final db = await database;
-  final now = DateTime.now().millisecondsSinceEpoch;
+  final now = DateTime.now().toUtc().millisecondsSinceEpoch;
   final nowReadable = DateTime.now().toIso8601String();
 
   print('🕐 [DB] Current time: $nowReadable ($now ms)');

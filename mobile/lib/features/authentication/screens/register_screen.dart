@@ -83,7 +83,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
       );
 
       if (emailVerified == true && mounted) {
-        _showPhoneVerificationOptions();
+      _proceedToPhoneVerification();
+                
       }
     } else {
       _showMessage(result['message'] ?? 'حدث خطأ', isError: true);

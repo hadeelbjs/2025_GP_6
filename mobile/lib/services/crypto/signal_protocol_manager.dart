@@ -141,89 +141,96 @@ class SignalProtocolManager {
   // ===================================
   // توليد ورفع المفاتيح 
   // ===================================
-  Future<bool> generateAndUploadKeys() async {
-    try {
-      await initialize();
-      
-      final userId = await _getCurrentUserId();
-      print('🔑 Generating keys for user: $userId');
+  // ============================================
+// ✅ دالة مساعدة موحدة لتوليد مفاتيح التخزين
+// ============================================
+String _getStorageKey(String userId, String key) {
+  return '${userId}_$key';
+}
 
-      // توليد المفاتيح
-      final identityKeyPair = generateIdentityKeyPair();
-      final registrationId = generateRegistrationId(false);
-      final preKeys = generatePreKeys(1, 100);
-      final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
+// ============================================
+//  توليد ورفع المفاتيح 
+// ============================================
+Future<bool> generateAndUploadKeys() async {
+  try {
+    await initialize();
+    
+    final userId = await _getCurrentUserId();
+    print('🔑 Generating keys for user: $userId');
 
-      // حفظ النسخة المحلية
-      final version = DateTime.now().millisecondsSinceEpoch;
-      await _saveLocalKeysVersion(version, userId);
+    // توليد المفاتيح
+    final identityKeyPair = generateIdentityKeyPair();
+    final registrationId = generateRegistrationId(false);
+    final preKeys = generatePreKeys(1, 100);
+    final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
 
-      // تجهيز البيانات للرفع
-      final bundle = {
-        'registrationId': registrationId,
-        'identityKey': base64Encode(
-          identityKeyPair.getPublicKey().serialize()
+    // حفظ النسخة المحلية
+    final version = DateTime.now().millisecondsSinceEpoch;
+    await _saveLocalKeysVersion(version, userId);
+
+    // تجهيز البيانات للرفع
+    final bundle = {
+      'registrationId': registrationId,
+      'identityKey': base64Encode(
+        identityKeyPair.getPublicKey().serialize()
+      ),
+      'signedPreKey': {
+        'keyId': signedPreKey.id,
+        'publicKey': base64Encode(
+          signedPreKey.getKeyPair().publicKey.serialize()
         ),
-        'signedPreKey': {
-          'keyId': signedPreKey.id,
-          'publicKey': base64Encode(
-            signedPreKey.getKeyPair().publicKey.serialize()
-          ),
-          'signature': base64Encode(signedPreKey.signature),
-        },
-        'preKeys': preKeys.map((pk) => {
-          'keyId': pk.id,
-          'publicKey': base64Encode(
-            pk.getKeyPair().publicKey.serialize()
-          ),
-        }).toList(),
-        'version': version,
-      };
+        'signature': base64Encode(signedPreKey.signature),
+      },
+      'preKeys': preKeys.map((pk) => {
+        'keyId': pk.id,
+        'publicKey': base64Encode(
+          pk.getKeyPair().publicKey.serialize()
+        ),
+      }).toList(),
+      'version': version,
+    };
 
-      // رفع المفاتيح للسيرفر
-      print('📤 Uploading keys to server...');
-      final result = await _apiService.uploadPreKeyBundle(bundle);
+    // رفع المفاتيح للسيرفر
+    print('📤 Uploading keys to server...');
+    final result = await _apiService.uploadPreKeyBundle(bundle);
 
-      if (!result['success']) {
-        throw Exception(result['message']);
-      }
-      
-      print('✅ Keys uploaded to server successfully');
-
-      // حفظ محلياً
-      await _identityStore.saveIdentityKeyPair(identityKeyPair);
-      await _identityStore.saveRegistrationId(registrationId);
-      
-      await _storage.write(
-        key: 'registration_id_$userId',
-        value: registrationId.toString(),
-      );
-      
-      // ✅ حفظ المفتاح العام فقط (أكثر أماناً)
-      await _storage.write(
-        key: 'identity_public_key_$userId',
-        value: base64Encode(identityKeyPair.getPublicKey().serialize()),
-      );
-
-      // حفظ PreKeys
-      for (var preKey in preKeys) {
-        await _preKeyStore.storePreKey(preKey.id, preKey);
-      }
-
-      // حفظ SignedPreKey
-      await _signedPreKeyStore.storeSignedPreKey(
-        signedPreKey.id,
-        signedPreKey,
-      );
-
-      print('✅ Keys generated and uploaded successfully for user: $userId');
-      return true;
-      
-    } catch (e) {
-      print('❌ Error generating keys: $e');
-      return false;
+    if (!result['success']) {
+      throw Exception(result['message']);
     }
+    
+    print('✅ Keys uploaded to server successfully');
+
+    // حفظ في الـ Stores
+    await _identityStore.saveIdentityKeyPairWithUserId(identityKeyPair);
+    await _identityStore.saveRegistrationIdWithUserId(registrationId);
+    
+    // حفظ PreKeys
+    
+    for (var preKey in preKeys) {
+      await _preKeyStore.storePreKey(preKey.id, preKey);
+    }
+
+    // حفظ SignedPreKey
+    await _signedPreKeyStore.storeSignedPreKey(
+      signedPreKey.id,
+      signedPreKey,
+    );
+
+    // المهم: حفظ تاريخ أول rotation
+    await _storage.write(
+      key: _getStorageKey(userId, 'signed_prekey_last_rotated'),
+      value: DateTime.now().toIso8601String(),
+    );
+    print('✅ Initial SignedPreKey rotation date saved');
+
+    print('✅ Keys generated and uploaded successfully for user: $userId');
+    return true;
+    
+  } catch (e) {
+    print('❌ Error generating keys: $e');
+    return false;
   }
+}
 
   // ===================================
   // ♻️ التحقق من SignedPreKey وتدويره إذا لزم (محسّن)

@@ -227,7 +227,8 @@ Future<void> _initializeEncryption() async {
     await signalManager.ensureSignedPreKeyRotation(userId);
     
     // ✅ 3. الفحص باستخدام userId
-    final userIdentityKey = await storage.read(key: 'identity_key_$userId');
+    final userIdentityKey = await storage.read(key: 'identity_key_${userId}');
+
     
     if (userIdentityKey != null) {
       print('✅ المفاتيح موجودة للمستخدم $userId');

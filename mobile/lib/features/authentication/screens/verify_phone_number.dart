@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:waseed/services/crypto/signal_protocol_manager.dart';
 import 'dart:async';
 import '../../../services/api_services.dart';
-
+import 'dart:convert';
 import '../../dashboard/screens/main_dashboard.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
@@ -87,7 +87,20 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
 
     if (result['success']) {
   _showMessage('تم تأكيد رقم الجوال بنجاح!', isError: false);
-  
+  FlutterSecureStorage storage = const FlutterSecureStorage();
+    await storage.write(
+      key: 'user_data',
+      value: jsonEncode(result['user']),
+    );  
+    await storage.write(
+      key: 'access_token',
+      value: result['access_token'],
+    );
+    await storage.write(
+      key: 'refresh_token',
+      value: result['refresh_token'],
+    );  
+  await _generateAndUploadKeys();
   await Future.delayed(const Duration(seconds: 1));
   if (!mounted) return;
   
@@ -104,6 +117,25 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
         controller.clear();
       }
       _focusNodes[0].requestFocus();
+    }
+  }
+
+  Future<void> _generateAndUploadKeys() async {
+    try {
+      FlutterSecureStorage storage = const FlutterSecureStorage();
+      final userData = await storage.read(key: 'user_data');
+      final accessToken = await storage.read(key: 'access_token');
+      final userId = jsonDecode(userData!)['id'].toString();
+
+      final signalManager = SignalProtocolManager();
+      await signalManager.initialize(userId: userId);
+      final keysUploaded = await signalManager.generateAndUploadKeys();
+      
+      if (!keysUploaded) {
+        _showMessage('تحذير: فشل إعداد مفاتيح تشفير الرسائل', isError: true);
+      }
+    } catch (e) {
+      print('خطأ في توليد/رفع المفاتيح: $e');
     }
   }
 

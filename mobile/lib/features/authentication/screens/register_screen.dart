@@ -113,8 +113,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
       final userId = jsonDecode(userData!)['id'].toString();
 
       final signalManager = SignalProtocolManager();
-      await signalManager.initialize(userId: userId);
+      await signalManager.initialize();
       final keysUploaded = await signalManager.generateAndUploadKeys();
+      
       if (!keysUploaded) {
         _showMessage('تحذير: فشل إعداد مفاتيح تشفير الرسائل', isError: true);
       }
@@ -182,6 +183,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
     final sendSmsResult = await _apiService.sendPhoneVerification(
       _phoneController.text.trim(),
     );
+
+    print("DEBUG sendSmsResult => $sendSmsResult");
+
 
     setState(() => _isLoading = false);
 

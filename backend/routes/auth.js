@@ -429,7 +429,6 @@ router.post('/verify-phone', async (req, res) => {
             username: user.username,
             email: user.email,
             phone: user.phone,
-            memoji: user.memoji || '😊',
             isPhoneVerified: user.isPhoneVerified,
             isEmailVerified: user.isEmailVerified
           }

@@ -384,9 +384,11 @@ class MessagingService {
       updateData['visibilityDuration'] = visibilityDuration;
     }
 
+    /*
     if (expiresAt != null) {
       updateData['expiresAt'] = expiresAt;
     }
+    */
 
     await _db.updateMessage(messageId, updateData);
 

@@ -402,31 +402,6 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
           ],
 
           SizedBox(height: 16),
-
-          Container(
-            padding: EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.orange.shade50,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.orange.shade200, width: 1),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.lightbulb_outline, color: Colors.orange.shade700, size: 20),
-                SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    'الرسائل تُحذف من كلا الطرفين عند انتهاء المدة',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.orange.shade900,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
     );

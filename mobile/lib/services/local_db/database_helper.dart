@@ -729,12 +729,35 @@ Future<List<String>> deleteExpiredMessages() async {
 
   print('🕐 [DB] Current time: $nowReadable ($now ms)');
 
+   final allMessages = await db.query('messages');
+  print('📊 [DEBUG] Total messages in DB: ${allMessages.length}');
+  for (final msg in allMessages) {
+    final expires = msg['expiresAt'];
+    final id = msg['id']?.toString() ?? 'unknown';
+    final shortId = id.length > 8 ? id.substring(0, 8) : id;
+    print('   📧 $shortId: expiresAt=$expires (type: ${expires.runtimeType})');
+    if (expires is int) {
+      print('      Comparison: $expires < $now = ${expires < now}');
+    } else {
+      print('      ⚠️ expiresAt is NOT int! Type: ${expires.runtimeType}');
+    }
+  }
+
+  print('🔍 [DB] Searching for expired messages...');
+  print('   Query: expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) < $now');
+  
   final expiredMessages = await db.query(
     'messages',
-    where: 'expiresAt IS NOT NULL AND expiresAt < ?',
+    where: 'expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) < ?',
     whereArgs: [now],
     columns: ['id', 'expiresAt', 'createdAt', 'visibilityDuration'],
   );
+
+  print('📊 [DB] Found ${expiredMessages.length} expired messages');
+  if (expiredMessages.isEmpty) {
+    print('✅ [DB] No expired messages to delete');
+  }
+
 
   final expiredIds = expiredMessages.map((e) => e['id'] as String).toList();
 

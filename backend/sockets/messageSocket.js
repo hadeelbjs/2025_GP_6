@@ -151,9 +151,9 @@ module.exports = (io) => {
         
         console.log(`📤 Sending message: ${messageId} from ${senderId} → ${recipientId}`);
 
-                    
-        let finalExpiresAt = null;
-        let messageCreatedAt = data.createdAt ? new Date(data.createdAt) : new Date();
+                            
+        let finalExpiresAt = expiresAt ? new Date(expiresAt) : null;
+        let messageCreatedAt = createdAt ? new Date(createdAt) : new Date();
 
         if (expiresAt) {
           try {
@@ -163,14 +163,15 @@ module.exports = (io) => {
             console.log(`   ⏰ Will expire at: ${finalExpiresAt.toISOString()}`);
           } catch (err) {
             console.error('❌ Failed to parse expiresAt:', err);
-            if (visibilityDuration) {
+            if (visibilityDuration && !expiresAt) {
               finalExpiresAt = new Date(messageCreatedAt.getTime() + (visibilityDuration * 1000));
             }
           }
-        } else if (visibilityDuration) {
+        } else if (visibilityDuration && !expiresAt) {
           finalExpiresAt = new Date(messageCreatedAt.getTime() + (visibilityDuration * 1000));
           console.log(`⏱️ Message duration: ${visibilityDuration}s (calculated)`);
         }
+
         
 
         const delivered = io.sendToUser(recipientId, 'message:new', {

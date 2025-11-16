@@ -152,8 +152,10 @@ module.exports = (io) => {
         
         console.log(`📤 Sending message: ${messageId} from ${senderId} → ${recipientId}`);
 
-const finalExpiresAt = expiresAt ? new Date(expiresAt) : null;
-const messageCreatedAt = createdAt ? new Date(createdAt) : new Date();
+const finalExpiresAt = expiresAt 
+  ? new Date(expiresAt.endsWith('Z') ? expiresAt : expiresAt + 'Z') 
+  : null;
+  const messageCreatedAt = createdAt ? new Date(createdAt) : new Date();
 
 if (finalExpiresAt && visibilityDuration) {
   console.log(`⏱️ Message duration: ${visibilityDuration}s`);

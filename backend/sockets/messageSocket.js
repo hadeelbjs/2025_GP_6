@@ -144,7 +144,8 @@ module.exports = (io) => {
           attachmentName,
           attachmentMimeType,
           visibilityDuration, 
-          expiresAt,  
+          expiresAt,
+          createdAt  
         } = data;
         
         const senderId = userId;

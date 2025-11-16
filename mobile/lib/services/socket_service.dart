@@ -24,16 +24,18 @@ class SocketService {
   final _statusController = StreamController<Map<String, dynamic>>.broadcast();
   final _deletedController = StreamController<Map<String, dynamic>>.broadcast();
   final _connectionController = StreamController<bool>.broadcast();
-  final _userStatusController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final _userStatusController = StreamController<Map<String, dynamic>>.broadcast();
+  final _messageExpiredController = StreamController<Map<String, dynamic>>.broadcast();
+
 
   Stream<Map<String, dynamic>> get onNewMessage => _messageController.stream;
   Stream<Map<String, dynamic>> get onStatusUpdate => _statusController.stream;
   Stream<Map<String, dynamic>> get onMessageDeleted =>
       _deletedController.stream;
   Stream<bool> get onConnectionChange => _connectionController.stream;
-  Stream<Map<String, dynamic>> get onUserStatusChange =>
-      _userStatusController.stream;
+    Stream<Map<String, dynamic>> get onUserStatusChange => _userStatusController.stream;
+    Stream<Map<String, dynamic>> get onMessageExpired => _messageExpiredController.stream;
+
 
   bool get isConnected => _socket?.connected ?? false;
   String? _userId;
@@ -280,6 +282,29 @@ class SocketService {
         '🔒 Screenshot policy changed from ${data['peerUserId']}: ${data['allowScreenshots']}',
       );
     });
+
+
+
+
+       
+  _socket?.on('message:expired', (data) {
+    print('⏱️ Received message:expired event: $data');
+    
+    if (data != null && data is Map) {
+      final messageId = data['messageId'];
+      if (messageId != null) {
+        _messageExpiredController.add({
+          'messageId': messageId,
+          'reason': data['reason'] ?? 'duration_ended',
+        });
+      }
+    }
+  });
+
+  _socket?.on('conversation:duration:updated', (data) {
+    print('✅ Duration updated confirmed: $data');
+  }); 
+
   }
 
   void sendMessageWithAttachment({
@@ -291,6 +316,8 @@ class SocketService {
     String? attachmentType,
     String? attachmentName,
     String? attachmentMimeType,
+    int? visibilityDuration,       
+    String? expiresAt, 
   }) {
     if (_socket == null || !isConnected) {
       print('❌ Cannot send: Socket not connected');
@@ -308,6 +335,8 @@ class SocketService {
       'attachmentType': attachmentType,
       'attachmentName': attachmentName,
       'attachmentMimeType': attachmentMimeType,
+      'visibilityDuration': visibilityDuration, 
+      'expiresAt': expiresAt,
       'createdAt': DateTime.now().toIso8601String(),
     });
   }
@@ -339,6 +368,20 @@ class SocketService {
     });
   }
 
+
+void updateConversationDuration(String conversationId, int duration) {
+  if (_socket == null || !_socket!.connected) {
+    print('⚠️ Cannot update duration: Socket not connected');
+    return;
+  }
+
+  _socket!.emit('conversation:duration:update', {
+    'conversationId': conversationId,
+    'duration': duration,
+  });
+
+  print('⏱️ Sent duration update: ${duration}s for $conversationId');
+}
   void requestUserStatus(String userId) {
     if (_socket == null) {
       return;
@@ -376,5 +419,7 @@ class SocketService {
     _deletedController.close();
     _connectionController.close();
     _userStatusController.close();
+    _messageExpiredController.close();
+
   }
 }

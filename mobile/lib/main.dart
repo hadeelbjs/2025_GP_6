@@ -122,7 +122,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       final justLoggedOut = await BiometricService.getJustLoggedOut();
       print('Just logged out? $justLoggedOut');
       final isAuth = await _authGuard.isAuthenticated();
-      if (justLoggedOut || !isAuth) {
+      if ( !isAuth) {
         await BiometricService.setJustLoggedOut(false);
         Navigator.of(context).pushReplacementNamed('/onboard');
         return;
@@ -133,10 +133,10 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       
       if (isAuth) {
         BiometricService.setJustLoggedOut(false);
-        // ✅ تهيئة التشفير
+        // تهيئة التشفير
         await _initializeEncryption();
         
-        // ✅ تهيئة MessagingService (Socket + Listeners)
+        // تهيئة MessagingService (Socket + Listeners)
         await _initializeMessaging();
           //   WiFi Security Service
         await _initializeWifiSecurity();
@@ -205,7 +205,6 @@ Future<void> _initializeEncryption() async {
   try {
     print('🔐 جاري تهيئة التشفير...');
 
-    
     
     // 1. جلب userId أولاً
     final storage = const FlutterSecureStorage();

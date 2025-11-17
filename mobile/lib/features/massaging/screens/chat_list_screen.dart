@@ -603,7 +603,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     
     _currentOpenChatId = userId;
     
-    await _signalProtocolManager.initialize();
+    await _signalProtocolManager.initialize(userId: userId);
     
     final hasSession = await _signalProtocolManager.hasSession(userId);
     

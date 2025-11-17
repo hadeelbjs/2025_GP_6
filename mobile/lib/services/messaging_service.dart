@@ -517,7 +517,7 @@ class MessagingService {
           } else {
             lastError = 'Decryption returned null';
             decryptionFailure++;
-            if (decryptionFailure >= 3) {
+            if (decryptionFailure >= 1) {
               await _signalProtocol.deleteSession(senderId);
               await deleteConversation(conversationId);
               return {

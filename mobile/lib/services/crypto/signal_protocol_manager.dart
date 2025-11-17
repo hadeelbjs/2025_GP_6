@@ -153,7 +153,7 @@ String _getStorageKey(String userId, String key) {
 // ============================================
 Future<bool> generateAndUploadKeys() async {
   try {
-    await initialize();
+    
     
     final userId = await _getCurrentUserId();
     print('🔑 Generating keys for user: $userId');
@@ -163,6 +163,8 @@ Future<bool> generateAndUploadKeys() async {
     final registrationId = generateRegistrationId(false);
     final preKeys = generatePreKeys(1, 100);
     final signedPreKey = generateSignedPreKey(identityKeyPair, 1);
+
+    await initialize(userId: userId);
 
     // حفظ النسخة المحلية
     final version = DateTime.now().millisecondsSinceEpoch;

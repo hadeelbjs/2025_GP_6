@@ -22,7 +22,7 @@ class MyPreKeyStore extends PreKeyStore {
   }
 
   // ========================================
-  // ✅ التهيئة - موحّدة
+  // ✅ التهيئة - موحّدة ومُصلحة
   // ========================================
   Future<void> initialize() async {
     print('🔧 Initializing PreKey Store for user: $_userId');
@@ -33,18 +33,17 @@ class MyPreKeyStore extends PreKeyStore {
     int loadedCount = 0;
     
     for (var entry in allKeys.entries) {
-      // ✅ البحث عن المفاتيح التي تبدأ بـ prekey_ وتنتهي بـ _userId
-      if (entry.key.startsWith('prekey_')) {
-        // التحقق من أن المفتاح يخص المستخدم الحالي
+      // ✅ البحث عن المفاتيح التي تبدأ بـ prekey_
+      if (entry.key.contains('prekey_')) {
         bool isForCurrentUser = false;
         int? preKeyId;
         
         if (_userId != null) {
-          // مثال: prekey_123_user456
-          if (entry.key.endsWith('_$_userId')) {
+          // مثال: user456_prekey_123
+          if (entry.key.startsWith('${_userId}_prekey_')) {
             final parts = entry.key.split('_');
             if (parts.length >= 3) {
-              preKeyId = int.tryParse(parts[1]);
+              preKeyId = int.tryParse(parts[2]); // ✅ تصحيح: parts[2] بدلاً من parts[1]
               isForCurrentUser = true;
             }
           }
@@ -107,6 +106,7 @@ class MyPreKeyStore extends PreKeyStore {
     final storageKey = _getStorageKey('prekey_$preKeyId');
     await _storage.write(key: storageKey, value: data);
     
+    print('✅ PreKey $preKeyId saved to: $storageKey');
   }
 
   // ========================================
@@ -131,7 +131,7 @@ class MyPreKeyStore extends PreKeyStore {
   }
 
   // ========================================
-  // ✅ حذف جميع PreKeys
+  // ✅ حذف جميع PreKeys - مُصلحة
   // ========================================
   Future<void> clearAll() async {
     try {
@@ -144,11 +144,10 @@ class MyPreKeyStore extends PreKeyStore {
       
       for (var key in allKeys.keys) {
         if (key.startsWith('prekey_')) {
-          if (_userId != null && key.endsWith('_$_userId')) {
+          if (_userId != null && key.startsWith('${_userId}_prekey_')) {
             await _storage.delete(key: key);
             deletedCount++;
           } else if (_userId == null) {
-            // حذف جميع PreKeys إذا لم يكن هناك userId
             final parts = key.split('_');
             if (parts.length == 2) {
               await _storage.delete(key: key);
@@ -195,7 +194,7 @@ class MyPreKeyStore extends PreKeyStore {
     print('\n💾 Stored PreKeys (on disk):');
     for (var key in allKeys.keys) {
       if (key.startsWith('prekey_')) {
-        if (_userId != null && key.endsWith('_$_userId')) {
+        if (_userId != null && key.startsWith('${_userId}_prekey_')) {
           print('  ✅ $key');
           count++;
         } else if (_userId == null) {

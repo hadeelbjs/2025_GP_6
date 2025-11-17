@@ -542,7 +542,82 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
     const currentUserId = req.user.id;
     const { peerUserId } = req.params;
 
-    console.log('📥 PUT /screenshots request');
+    console.log(' PUT /screenshots request');
+    console.log('   Current User:', currentUserId);
+    console.log('   Peer User:', peerUserId);
+    console.log('   Allow:', allowScreenshots);
+
+    // ✅ التحقق من صحة البيانات
+    if (typeof allowScreenshots !== 'boolean') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'قيمة allowScreenshots يجب أن تكون true أو false' 
+      });
+    }
+
+    // ✅ البحث عن العلاقة
+    const contact = await Contact.findOne({
+      $or: [
+        { requester: currentUserId, recipient: peerUserId },
+        { requester: peerUserId, recipient: currentUserId }
+      ],
+      status: 'accepted'
+    });
+
+    if (!contact) {
+      console.log('❌ Contact not found');
+      return res.status(404).json({ 
+        success: false, 
+        message: 'العلاقة غير موجودة' 
+      });
+    }
+
+    // ✅ تحديث السياسة
+    contact.allowScreenshots = allowScreenshots;
+    await contact.save();
+
+    console.log('✅ Policy updated in database');
+
+    // ✅ إرسال إشعار Socket عبر req.app
+    try {
+      const io = req.app.get('io');
+      if (io && io.sendToUser) {
+        const sent = io.sendToUser(peerUserId, 'privacy:screenshots:changed', {
+          peerUserId: currentUserId,
+          allowScreenshots
+        });
+        console.log(sent ? '✅ Socket notification sent' : '⚠️ User offline');
+      } else {
+        console.warn('⚠️ Socket.IO not available');
+      }
+    } catch (socketErr) {
+      console.error('❌ Socket notification failed:', socketErr);
+      // لا نفشل الـ request - السياسة محفوظة في قاعدة البيانات
+    }
+
+    res.json({
+      success: true,
+      message: allowScreenshots
+        ? 'تم السماح بلقطات الشاشة'
+        : 'تم منع لقطات الشاشة',
+      allowScreenshots
+    });
+
+  } catch (err) {
+    console.error('❌ Privacy update error:', err);
+    res.status(500).json({ 
+      success: false, 
+      message: 'خطأ في تحديث السياسة' 
+    });
+  }
+});
+/*router.put('/:peerUserId/screenshots', auth, async (req, res) => {
+  try {
+    const { allowScreenshots } = req.body;
+    const currentUserId = req.user.id;
+    const { peerUserId } = req.params;
+
+    console.log(' PUT /screenshots request');
     console.log('   Current User:', currentUserId);
     console.log('   Peer User:', peerUserId);
     console.log('   Allow:', allowScreenshots);
@@ -587,6 +662,6 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
       message: 'خطأ في تحديث السياسة' 
     });
   }
-});
+});*/
 
 module.exports = router;

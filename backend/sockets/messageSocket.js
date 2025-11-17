@@ -441,14 +441,49 @@ if (finalExpiresAt && visibilityDuration) {
       }
     });
 
-    // ✅ FIXED: Privacy screenshots update handler (moved inside connection)
+    //  Privacy screenshots update handler 
+    
     socket.on('privacy:screenshots:update', (data) => {
+  try {
+    const { targetUserId, allowScreenshots } = data;
+    const currentUserId = socket.userId;
+
+    console.log('🔒 Privacy update request:');
+    console.log('   From:', currentUserId);
+    console.log('   To:', targetUserId);
+    console.log('   Allow:', allowScreenshots);
+
+    // إرسال الإشعار للطرف الآخر
+    const sent = io.sendToUser(targetUserId, 'privacy:screenshots:changed', {
+      peerUserId: currentUserId,
+      allowScreenshots: allowScreenshots
+    });
+
+    if (sent) {
+      console.log('✅ Privacy notification sent');
+    } else {
+      console.log('⚠️ Target user offline - will receive on next login');
+    }
+
+    // تأكيد للمرسل
+    socket.emit('privacy:screenshots:updated', {
+      success: true,
+      targetUserId,
+      allowScreenshots
+    });
+
+  } catch (err) {
+    console.error('❌ Privacy update error:', err);
+    socket.emit('error', { message: 'فشل تحديث سياسة الخصوصية' });
+  }
+});
+    /*socket.on('privacy:screenshots:update', (data) => {
       const { peerUserId, allowScreenshots } = data;
       io.sendToUser(peerUserId, 'privacy:screenshots:changed', {
         peerUserId: socket.userId,
         allowScreenshots
       });
-    });
+    });*/
 
     socket.on('disconnect', () => {
       console.log(`❌ User disconnected: ${userId}`);

@@ -22,7 +22,6 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:waseed/widgets/unified_screenshot_protector.dart';
 import '../widgets/duration_picker_sheet.dart';
 
-
 class ChatScreen extends StatefulWidget {
   final String userId;
   final String name;
@@ -73,7 +72,6 @@ class _ChatScreenState extends State<ChatScreen> {
   int? currentDuration;
   StreamSubscription? _messageExpiredSubscription;
 
-
   StreamSubscription? _userStatusSubscription;
   bool _isOtherUserOnline = false;
 
@@ -86,11 +84,14 @@ class _ChatScreenState extends State<ChatScreen> {
         final newPolicy = data['allowScreenshots'] == true;
 
         if (mounted) {
-          _applyScreenshotPolicy(newPolicy);
+          setState(() {
+            _screenshotsAllowed = newPolicy;
+          });
+          //_applyScreenshotPolicy(newPolicy);
 
           _showMessage(
             newPolicy
-                ? '${widget.name} سمح بلقطات الشاشة'
+                ? '${widget.name} سماح بلقطات الشاشة'
                 : '${widget.name} منع لقطات الشاشة',
             true,
           );
@@ -133,7 +134,7 @@ class _ChatScreenState extends State<ChatScreen> {
       _applyScreenshotPolicy(false); // هذا ينادي _enableProtection()
     });
 
-    // إضافة: جلب إعداد اللقطات من السيرفر
+    // جلب السياسة من السيرفر عند فتح الشاشة
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadScreenshotPolicyFromServer();
     });
@@ -146,30 +147,40 @@ class _ChatScreenState extends State<ChatScreen> {
     _printDebugInfo();
   }
 
+  // =====================================================
+  //  دالة جلب السياسة من السيرفر
+  // =====================================================
   Future<void> _loadScreenshotPolicyFromServer() async {
     try {
       setState(() => _isLoadingScreenshotPolicy = true);
 
-      // 1️⃣ محاولة الجلب من الـ API
+      //  جلب السياسة الحالية من الـ API
       final result = await ApiService.instance.getJson(
         '/contacts/${widget.userId}/screenshots',
       );
 
       if (result['success'] == true) {
+        //  تعريف المتغير
         final allowScreenshots = result['allowScreenshots'] ?? false;
 
-        await _applyScreenshotPolicy(allowScreenshots);
+        setState(() {
+          _screenshotsAllowed = allowScreenshots;
+        });
 
         print('✅ Screenshot policy loaded: $allowScreenshots');
       } else {
-        // 2️⃣ في حالة الفشل: استخدام القيمة الافتراضية (منع اللقطات)
-        await _applyScreenshotPolicy(false);
+        // ⚠️ في حالة الفشل: استخدام القيمة الافتراضية (منع اللقطات)
+        setState(() {
+          _screenshotsAllowed = false;
+        });
         print('⚠️ Using default policy: screenshots disabled');
       }
     } catch (e) {
       print('❌ Error loading screenshot policy: $e');
       // في حالة الخطأ: منع اللقطات للأمان
-      await _applyScreenshotPolicy(false);
+      setState(() {
+        _screenshotsAllowed = false;
+      });
     } finally {
       if (mounted) {
         setState(() => _isLoadingScreenshotPolicy = false);
@@ -189,6 +200,12 @@ class _ChatScreenState extends State<ChatScreen> {
         _showMessage('فشل حفظ الإعداد في السيرفر', false);
       } else {
         print('✅ Screenshot policy saved to server');
+
+        //  إرسال إشعار للطرف الآخر عبر Socket
+        _socketService.socket?.emit('privacy:screenshots:update', {
+          'targetUserId': widget.userId,
+          'allowScreenshots': allow,
+        });
       }
     } catch (e) {
       print('❌ Error saving screenshot policy: $e');
@@ -240,9 +257,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _loadDuration() async {
     if (_conversationId == null) return;
-    
+
     try {
-      final duration = await _messagingService.getUserDuration(_conversationId!);
+      final duration = await _messagingService.getUserDuration(
+        _conversationId!,
+      );
       if (mounted) {
         setState(() {
           currentDuration = duration;
@@ -255,16 +274,17 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _listenToExpiredMessages() {
-    _messageExpiredSubscription = _messagingService.onMessageExpired.listen((data) {
+    _messageExpiredSubscription = _messagingService.onMessageExpired.listen((
+      data,
+    ) {
       final messageId = data['messageId'] as String;
       print('⏱️ Message expired: $messageId');
-      
-      if (mounted) {
-      setState(() {
-  _messages.removeWhere((m) => m['id'] == messageId);
-  print('🧹 Removed from _messages: $messageId');
-});
 
+      if (mounted) {
+        setState(() {
+          _messages.removeWhere((m) => m['id'] == messageId);
+          print('🧹 Removed from _messages: $messageId');
+        });
       }
     });
   }
@@ -276,16 +296,16 @@ class _ChatScreenState extends State<ChatScreen> {
       context,
       currentDuration: currentDuration,
     );
-    
+
     if (selected != null) {
       try {
         await _messagingService.setUserDuration(_conversationId!, selected);
-        
+
         if (mounted) {
           setState(() {
             currentDuration = selected;
           });
-          
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('✅ تم تحديد المدة: ${_formatDuration(selected)}'),
@@ -761,8 +781,6 @@ class _ChatScreenState extends State<ChatScreen> {
       await _messagingService.markConversationAsRead(_conversationId!);
       await _loadDuration();
 
-
-
       // ✅ فك تشفير الرسائل بعد التهيئة مباشرة
       if (_conversationId != null) {
         setState(() {
@@ -792,61 +810,54 @@ class _ChatScreenState extends State<ChatScreen> {
         limit: 50,
       );
 
-      
       final now = DateTime.now();
       final filteredMessages = messages.where((msg) {
+        // ✅ بعد:
+        final expiresAt = msg['expiresAt'];
+        if (expiresAt != null) {
+          DateTime? expiryDateTime;
 
-      // ✅ بعد:
-      final expiresAt = msg['expiresAt'];
-      if (expiresAt != null) {
-        DateTime? expiryDateTime;
-        
-        if (expiresAt is int) {
-          expiryDateTime = DateTime.fromMillisecondsSinceEpoch(expiresAt);
-        } else if (expiresAt is String) {
-          expiryDateTime = DateTime.tryParse(expiresAt);
+          if (expiresAt is int) {
+            expiryDateTime = DateTime.fromMillisecondsSinceEpoch(expiresAt);
+          } else if (expiresAt is String) {
+            expiryDateTime = DateTime.tryParse(expiresAt);
+          }
+
+          if (expiryDateTime != null && now.isAfter(expiryDateTime)) {
+            DatabaseHelper.instance.deleteMessageById(msg['id']);
+            return false;
+          }
         }
-        
-        if (expiryDateTime != null && now.isAfter(expiryDateTime)) {
-          DatabaseHelper.instance.deleteMessageById(msg['id']);
-          return false;
-        }
-      }
         return true;
       }).toList();
 
-
       if (mounted) {
         setState(() {
-      print('📊 Loading ${filteredMessages.length} messages');
-    
-    for (var msg in filteredMessages) {
-      if (msg['deletedForRecipient'] == 1) {
-        print('🚫 Found deleted for recipient: ${msg['id']}');
+          print('📊 Loading ${filteredMessages.length} messages');
+
+          for (var msg in filteredMessages) {
+            if (msg['deletedForRecipient'] == 1) {
+              print('🚫 Found deleted for recipient: ${msg['id']}');
+            }
+          }
+          _messages.clear();
+          _messages.addAll(filteredMessages);
+
+          print('✅ Total messages in UI: ${_messages.length}');
+        });
+
+        await DatabaseHelper.instance.deleteExpiredMessages();
       }
-    }
-     _messages.clear();
-    _messages.addAll(filteredMessages);
-    
-    print('✅ Total messages in UI: ${_messages.length}');
-  });
-
-await DatabaseHelper.instance.deleteExpiredMessages();
-
-}
-
-
 
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_scrollController.hasClients) {
           _scrollController.jumpTo(_scrollController.position.minScrollExtent);
         }
       });
-     } catch (e) {
-    print('❌ Error loading messages: $e');
+    } catch (e) {
+      print('❌ Error loading messages: $e');
+    }
   }
-}
-
 
   void _subscribeToRealtimeUpdates() {
     _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
@@ -859,25 +870,26 @@ await DatabaseHelper.instance.deleteExpiredMessages();
       }
     });
 
-  _deleteSubscription = _messagingService.onMessageDeleted.listen((data) async {
-  if (!mounted) return;
-  
-  final deletedMessageId = data['messageId'];
-  final deletedFor = data['deletedFor'];
+    _deleteSubscription = _messagingService.onMessageDeleted.listen((
+      data,
+    ) async {
+      if (!mounted) return;
 
-  print('🗑️ UI Delete event: $deletedMessageId (deletedFor: $deletedFor)');
+      final deletedMessageId = data['messageId'];
+      final deletedFor = data['deletedFor'];
 
-  setState(() {
-    if (deletedFor == 'everyone') {
-      _messages.removeWhere((m) => m['id'] == deletedMessageId);
-      print('✅ Removed from UI for everyone');
-      
-    } else if (deletedFor == 'recipient') {
-      _messages.removeWhere((m) => m['id'] == deletedMessageId);
-      print('✅ Removed from UI at recipient');
-    }
-  });
-});
+      print('🗑️ UI Delete event: $deletedMessageId (deletedFor: $deletedFor)');
+
+      setState(() {
+        if (deletedFor == 'everyone') {
+          _messages.removeWhere((m) => m['id'] == deletedMessageId);
+          print('✅ Removed from UI for everyone');
+        } else if (deletedFor == 'recipient') {
+          _messages.removeWhere((m) => m['id'] == deletedMessageId);
+          print('✅ Removed from UI at recipient');
+        }
+      });
+    });
 
     _statusSubscription = _messagingService.onMessageStatusUpdate.listen((
       data,
@@ -1032,7 +1044,7 @@ await DatabaseHelper.instance.deleteExpiredMessages();
   }
 
   Future<void> _sendMessage() async {
-       if (currentDuration == null) {
+    if (currentDuration == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('⚠️ اختر المدة أولاً'),
@@ -1536,8 +1548,9 @@ await DatabaseHelper.instance.deleteExpiredMessages();
         ),
 
         body: UnifiedScreenshotProtector(
-          enabled: !_screenshotsAllowed,
-          warningAsset: 'assets/images/screenshot_blocked.png',
+          enabled: !_screenshotsAllowed, // إذا false = ممنوع الالتقاط
+          /*enabled: !_screenshotsAllowed,
+          warningAsset: 'assets/images/screenshot_blocked.png',*/
           child: _buildBody(hasAttachment),
         ),
       ),
@@ -1610,7 +1623,7 @@ await DatabaseHelper.instance.deleteExpiredMessages();
 
         if (hasAttachment) _buildAttachmentPreview(),
 
-       /* Container(
+        /* Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: Colors.white,
@@ -1739,166 +1752,159 @@ await DatabaseHelper.instance.deleteExpiredMessages();
     );
   }
 
-Widget _buildInputBar() {
-  final canSend = currentDuration != null && 
-                  (_messageController.text.trim().isNotEmpty || 
-                   _pendingImageFile != null || 
-                   _pendingFile != null);
-  
-  final isEnabled = currentDuration != null;
+  Widget _buildInputBar() {
+    final canSend =
+        currentDuration != null &&
+        (_messageController.text.trim().isNotEmpty ||
+            _pendingImageFile != null ||
+            _pendingFile != null);
 
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 6,
-          offset: const Offset(0, -1),
-        ),
-      ],
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        InkWell(
-          onTap: _selectDuration,
-          borderRadius: BorderRadius.circular(20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.timer_outlined,
-                  color: currentDuration == null 
-                      ? Colors.grey.shade400 
-                      : AppColors.primary,
-                  size: 22,
-                ),
-                if (currentDuration != null) ...[
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatDuration(currentDuration!),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppColors.primary,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'IBMPlexSansArabic',
-                    ),
+    final isEnabled = currentDuration != null;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, -1),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          InkWell(
+            onTap: _selectDuration,
+            borderRadius: BorderRadius.circular(20),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.timer_outlined,
+                    color: currentDuration == null
+                        ? Colors.grey.shade400
+                        : AppColors.primary,
+                    size: 22,
                   ),
-                ],
-              ],
-            ),
-          ),
-        ),
-        
-        const SizedBox(width: 4),
-        
-        IconButton(
-          onPressed: isEnabled ? _showAttachmentOptions : null,
-          icon: Icon(Icons.attach_file_rounded),
-          color: isEnabled ? AppColors.primary : Colors.grey.shade400,
-          iconSize: 22,
-          padding: const EdgeInsets.all(8),
-        ),
-        
-        const SizedBox(width: 8),
-        
-        Expanded(
-          child: Container(
-            constraints: const BoxConstraints(
-              minHeight: 42,
-              maxHeight: 120,
-            ),
-            child: TextField(
-              controller: _messageController,
-              enabled: isEnabled && !_isSending,
-              maxLines: null,
-              textDirection: TextDirection.rtl,
-              style: AppTextStyles.bodyMedium.copyWith(
-                height: 1.4,
-              ),
-              decoration: InputDecoration(
-                hintText: isEnabled 
-                    ? 'اكتب رسالتك...' 
-                    : 'اختر المدة أولاً ⏱️',
-                hintStyle: AppTextStyles.bodyMedium.copyWith(
-                  color: isEnabled 
-                      ? AppColors.textHint 
-                      : Colors.red.shade400,
-                  fontSize: 14,
-                ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 11,
-                ),
-                isDense: true,
-              ),
-              onSubmitted: canSend && !_isSending ? (_) => _sendMessage() : null,
-              onChanged: (_) => setState(() {}),
-            ),
-          ),
-        ),
-        
-        const SizedBox(width: 8),
-      
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            gradient: canSend && !_isSending
-                ? LinearGradient(
-                    colors: [
-                      AppColors.primary,
-                      AppColors.primary.withOpacity(0.8),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : null,
-            color: !canSend || _isSending ? Colors.grey.shade300 : null,
-            shape: BoxShape.circle,
-            boxShadow: canSend && !_isSending
-                ? [
-                    BoxShadow(
-                      color: AppColors.primary.withOpacity(0.25),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ]
-                : null,
-          ),
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: canSend && !_isSending ? _sendMessage : null,
-              borderRadius: BorderRadius.circular(22),
-              child: Center(
-                child: _isSending
-                    ? SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2.5,
-                        ),
-                      )
-                    : Icon(
-                        Icons.send_rounded,
-                        color: Colors.white,
-                        size: 20,
+                  if (currentDuration != null) ...[
+                    const SizedBox(width: 4),
+                    Text(
+                      _formatDuration(currentDuration!),
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'IBMPlexSansArabic',
                       ),
+                    ),
+                  ],
+                ],
               ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+
+          const SizedBox(width: 4),
+
+          IconButton(
+            onPressed: isEnabled ? _showAttachmentOptions : null,
+            icon: Icon(Icons.attach_file_rounded),
+            color: isEnabled ? AppColors.primary : Colors.grey.shade400,
+            iconSize: 22,
+            padding: const EdgeInsets.all(8),
+          ),
+
+          const SizedBox(width: 8),
+
+          Expanded(
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 42, maxHeight: 120),
+              child: TextField(
+                controller: _messageController,
+                enabled: isEnabled && !_isSending,
+                maxLines: null,
+                textDirection: TextDirection.rtl,
+                style: AppTextStyles.bodyMedium.copyWith(height: 1.4),
+                decoration: InputDecoration(
+                  hintText: isEnabled
+                      ? 'اكتب رسالتك...'
+                      : 'اختر المدة أولاً ⏱️',
+                  hintStyle: AppTextStyles.bodyMedium.copyWith(
+                    color: isEnabled ? AppColors.textHint : Colors.red.shade400,
+                    fontSize: 14,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 11,
+                  ),
+                  isDense: true,
+                ),
+                onSubmitted: canSend && !_isSending
+                    ? (_) => _sendMessage()
+                    : null,
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+          ),
+
+          const SizedBox(width: 8),
+
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: canSend && !_isSending
+                  ? LinearGradient(
+                      colors: [
+                        AppColors.primary,
+                        AppColors.primary.withOpacity(0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              color: !canSend || _isSending ? Colors.grey.shade300 : null,
+              shape: BoxShape.circle,
+              boxShadow: canSend && !_isSending
+                  ? [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 2),
+                      ),
+                    ]
+                  : null,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: canSend && !_isSending ? _sendMessage : null,
+                borderRadius: BorderRadius.circular(22),
+                child: Center(
+                  child: _isSending
+                      ? SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Icon(Icons.send_rounded, color: Colors.white, size: 20),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMine = message['isMine'] == 1;
     final isLocked = false; // ✅ الرسائل مفكوكة التشفير بعد التحقق

@@ -7,7 +7,6 @@ import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 
-/// 🛡️ حماية موحدة للمنصتين
 /// Android: صورة تحذير + شاشة سوداء
 /// iOS: شاشة سوداء + إشعار
 class UnifiedScreenshotProtector extends StatefulWidget {
@@ -60,13 +59,13 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (!widget.enabled) return;
 
-    // ✅ إخفاء المحتوى عند الخروج (iOS + Android)
+    //  إخفاء المحتوى عند الخروج (iOS + Android)
     setState(() {
       _showBlackScreen = state != AppLifecycleState.resumed;
     });
   }
 
-  /// ✅ تفعيل الحماية حسب المنصة
+  ///  تفعيل الحماية حسب المنصة
   Future<void> _applyProtection() async {
     if (!widget.enabled) {
       await _disableProtection();
@@ -75,69 +74,69 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
 
     try {
       if (Platform.isAndroid) {
-        // 🤖 Android: FLAG_SECURE + Black overlay
+        //  Android: FLAG_SECURE + Black overlay
         await ScreenProtector.preventScreenshotOn();
         await ScreenProtector.protectDataLeakageWithColor(Colors.black);
-        print('✅ Android: FLAG_SECURE + Black overlay enabled');
+        print(' Android: FLAG_SECURE + Black overlay enabled');
       } else if (Platform.isIOS) {
-        // 🍎 iOS: Blur overlay فقط
+        //  iOS: Blur overlay فقط
         await ScreenProtector.protectDataLeakageWithBlur();
-        print('✅ iOS: Blur protection enabled');
+        print(' iOS: Blur protection enabled');
       }
 
-      // ✅ الاستماع للقطات والتسجيل (كلا المنصتين)
+      //  الاستماع للقطات والتسجيل (كلا المنصتين)
       _capture.addScreenShotListener(_onScreenshot);
       _capture.addScreenRecordListener(_onRecording);
       _capture.watch();
 
-      print('✅ Screenshot detection enabled');
+      print(' Screenshot detection enabled');
     } catch (e) {
-      debugPrint('❌ Protection setup failed: $e');
+      debugPrint(' Protection setup failed: $e');
     }
   }
 
-  /// ✅ إيقاف الحماية
+  ///  إيقاف الحماية
   Future<void> _disableProtection() async {
     try {
       await ScreenProtector.protectDataLeakageOff();
       if (Platform.isAndroid) {
         await ScreenProtector.preventScreenshotOff();
       }
-      print('✅ Protection disabled');
+      print(' Protection disabled');
     } catch (e) {
-      debugPrint('❌ Failed to disable: $e');
+      debugPrint(' Failed to disable: $e');
     }
   }
 
-  /// 📸 معالجة لقطة الشاشة
+  ///  معالجة لقطة الشاشة
   Future<void> _onScreenshot(String path) async {
     if (!widget.enabled) return;
 
-    debugPrint('📸 Screenshot detected! Platform: ${Platform.operatingSystem}');
+    debugPrint(' Screenshot detected! Platform: ${Platform.operatingSystem}');
 
-    // ⚡ عرض الشاشة السوداء فوراً (كلا المنصتين)
+    //  عرض الشاشة السوداء فوراً (كلا المنصتين)
     if (mounted) {
       setState(() => _showBlackScreen = true);
     }
 
     if (Platform.isAndroid) {
-      // 🤖 Android: حفظ صورة التحذير + حذف اللقطة الأصلية
+      //  Android: حفظ صورة التحذير + حذف اللقطة الأصلية
       await _handleAndroidScreenshot(path);
     } else if (Platform.isIOS) {
-      // 🍎 iOS: إشعار فقط (بدون حفظ صورة)
+      //  iOS: إشعار فقط (بدون حفظ صورة)
       _handleIOSScreenshot();
     }
 
-    // ⏰ إخفاء الشاشة السوداء بعد نصف ثانية
+    //  إخفاء الشاشة السوداء بعد نصف ثانية
     await Future.delayed(const Duration(milliseconds: 500));
     if (mounted) {
       setState(() => _showBlackScreen = false);
     }
   }
 
-  /// 🤖 معالجة Android
+  ///  معالجة Android
   Future<void> _handleAndroidScreenshot(String path) async {
-    debugPrint('🤖 Android screenshot handling...');
+    debugPrint(' Android screenshot handling...');
 
     // 1️⃣ حذف اللقطة الأصلية
     await _deleteOriginalScreenshot(path);
@@ -146,24 +145,24 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
     await _saveWarningImage();
 
     // 3️⃣ إشعار
-    _showSnackbar('🚫 تم حفظ صورة تحذيرية بدلاً من المحتوى');
+    _showSnackbar(' تم حفظ صورة تحذيرية بدلاً من المحتوى');
   }
 
-  /// 🍎 معالجة iOS
+  ///  معالجة iOS
   Future<void> _handleIOSScreenshot() async {
-    debugPrint('🍎 iOS screenshot handling...');
+    debugPrint(' iOS screenshot handling...');
 
-    // ✅ حفظ صورة التحذير في iOS أيضاً
+    //  حفظ صورة التحذير في iOS أيضاً
     await _saveWarningImage();
 
     // إشعار
-    _showSnackbar('🚫 تم حفظ صورة تحذيرية (اللقطة الأصلية موجودة)');
+    _showSnackbar(' تم حفظ صورة تحذيرية (اللقطة الأصلية موجودة)');
 
     // Dialog تحذيري
     _showIOSWarningDialog();
   }
 
-  /// 🗑️ حذف لقطة الشاشة الأصلية (Android)
+  ///  حذف لقطة الشاشة الأصلية (Android)
   Future<void> _deleteOriginalScreenshot(String path) async {
     if (path.isEmpty) return;
 
@@ -171,14 +170,14 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
       final file = File(path);
       if (await file.exists()) {
         await file.delete();
-        debugPrint('🗑️ Original screenshot deleted: $path');
+        debugPrint(' Original screenshot deleted: $path');
       }
     } catch (e) {
-      debugPrint('⚠️ Could not delete screenshot: $e');
+      debugPrint(' Could not delete screenshot: $e');
     }
   }
 
-  /// 💾 حفظ صورة التحذير (Android فقط)
+  ///  حفظ صورة التحذير (Android فقط)
   Future<void> _saveWarningImage() async {
     try {
       // تحميل صورة التحذير من الأصول
@@ -195,7 +194,7 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
       // حفظ في المعرض
       await Gal.putImage(tempPath, album: 'Waseed');
 
-      debugPrint('✅ Warning image saved to gallery (Android)');
+      debugPrint(' Warning image saved to gallery (Android)');
 
       // حذف الملف المؤقت بعد التأخير
       Future.delayed(const Duration(seconds: 2), () async {
@@ -206,15 +205,15 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
         } catch (_) {}
       });
     } catch (e) {
-      debugPrint('❌ Failed to save warning image: $e');
+      debugPrint(' Failed to save warning image: $e');
     }
   }
 
-  /// 🎥 معالجة التسجيل
+  ///  معالجة التسجيل
   void _onRecording(bool isRecording) {
     if (!widget.enabled) return;
 
-    debugPrint('🎥 Screen recording: $isRecording');
+    debugPrint(' Screen recording: $isRecording');
 
     if (mounted) {
       setState(() {
@@ -225,14 +224,14 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
 
     if (isRecording) {
       if (Platform.isAndroid) {
-        _showSnackbar('🚫 التسجيل ممنوع - سيتم حفظ فيديو أسود');
+        _showSnackbar(' التسجيل ممنوع - سيتم حفظ فيديو أسود');
       } else {
-        _showSnackbar('🚫 لا يُسمح بتسجيل هذا المحتوى');
+        _showSnackbar(' لا يُسمح بتسجيل هذا المحتوى');
       }
     }
   }
 
-  /// 📢 عرض Snackbar
+  ///  عرض Snackbar
   void _showSnackbar(String message) {
     final messenger = ScaffoldMessenger.maybeOf(context);
     messenger?.showSnackBar(
@@ -255,7 +254,7 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
     );
   }
 
-  /// 🍎 Dialog تحذيري لـ iOS
+  ///  Dialog تحذيري لـ iOS
   void _showIOSWarningDialog() {
     showDialog(
       context: context,
@@ -358,10 +357,10 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // ✅ المحتوى الأصلي
+        //  المحتوى الأصلي
         widget.child,
 
-        // ⚫ الشاشة السوداء
+        //  الشاشة السوداء
         if (_showBlackScreen && widget.enabled)
           Positioned.fill(
             child: AnimatedOpacity(
@@ -387,8 +386,8 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
                       // النص الرئيسي
                       Text(
                         _isRecording
-                            ? '🎥 تسجيل الشاشة غير مسموح'
-                            : '🔒 محتوى محمي',
+                            ? ' تسجيل الشاشة غير مسموح'
+                            : ' محتوى محمي',
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 22,

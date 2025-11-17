@@ -349,7 +349,7 @@ class SocketService {
       'attachmentMimeType': attachmentMimeType,
       'visibilityDuration': visibilityDuration,
       'expiresAt': expiresAt,
-      'createdAt': DateTime.now().toIso8601String(),
+      //'createdAt': DateTime.now().toIso8601String(),
     });
   }
 

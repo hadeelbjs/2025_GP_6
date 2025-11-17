@@ -47,14 +47,9 @@ dependencies:
   open_filex: ^4.3.4
   flutter_dotenv: ^5.1.0 
  #screen_capture
-  #flutter_windowmanager: ^0.2.0
   screen_protector: ^1.4.5
   screen_capture_event: ^1.2.0
-  #image_gallery_saver: ^2.0.3
   path_provider: ^2.1.5 
-  #gal: ^2.3.0
-
-
 
   #Local Database
   sqflite: ^2.3.0
@@ -125,7 +120,6 @@ flutter:
      - assets/images/triangle-grey-2.svg
      - assets/icons/back_arrow_white.png
      - .env 
-     - assets/images/screenshot_blocked.png  
 
 
   #   - images/a_dot_ham.jpeg

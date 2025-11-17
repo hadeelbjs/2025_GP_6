@@ -14,11 +14,9 @@ import '../../../services/api_services.dart';
 import '../../../services/socket_service.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/local_db/database_helper.dart';
-// import 'package:flutter_windowmanager/flutter_windowmanager.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-//import 'package:waseed/widgets/screenshot_blocker.dart';
 import 'package:waseed/widgets/unified_screenshot_protector.dart';
 import '../widgets/duration_picker_sheet.dart';
 
@@ -45,9 +43,6 @@ class _ChatScreenState extends State<ChatScreen> {
   final _socketService = SocketService();
   bool _screenshotsAllowed = false;
   bool _isLoadingScreenshotPolicy = true;
-  //final _screenCapture = ScreenCaptureEvent();
-  //late final void Function(String) _onShot;
-  //late final void Function(bool) _onRecord;
 
   int _sessionResetAttempts = 0;
   static const int _maxSessionResetAttempts = 2;
@@ -98,37 +93,6 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
-    // 📸 لقطة الشاشة
-    /*_onShot = (String filePath) {
-      if (!_screenshotsAllowed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('🚫 لا يُسمح بأخذ لقطات شاشة لهذا المحتوى'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
-    };
-    _screenCapture.addScreenShotListener(_onShot);
-
-    // 🎥 تسجيل الشاشة
-    _onRecord = (bool isRecording) {
-      if (isRecording && !_screenshotsAllowed) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            backgroundColor: Colors.red,
-            content: Text('🚫 لا يُسمح بتسجيل الشاشة لهذا المحتوى'),
-            duration: Duration(seconds: 1),
-          ),
-        );
-      }
-    };
-    _screenCapture.addScreenRecordListener(_onRecord);
-
-    // لازم لتفعيل المراقبة
-    _screenCapture.watch();*/
-
     //امنعي اللقطات والتسجيل مباشرةً عند فتح الشاشة
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _applyScreenshotPolicy(false); // هذا ينادي _enableProtection()
@@ -217,44 +181,6 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() => _screenshotsAllowed = allow);
   }
 
-  /* mod to ^^
-  Future<void> _applyScreenshotPolicy(bool allow) async {
-    setState(() => _screenshotsAllowed = allow);
-    if (allow) {
-      await _disableProtection();
-    } else {
-      await _enableProtection();
-    }
-  }*/
-
-  /*Future<void> _enableProtection() async {
-    try {
-      if (Platform.isAndroid) {
-        //await FlutterWindowManager.addFlags(FlutterWindowManager.FLAG_SECURE);
-        await ScreenProtector.preventScreenshotOn();
-      }
-      await ScreenProtector.protectDataLeakageWithColor(Colors.black);
-    } catch (e) {
-      debugPrint('❌ Screen protection failed: $e');
-    }
-  }
-
-  Future<void> _disableProtection() async {
-    try {
-      if (Platform.isAndroid) {
-        // await FlutterWindowManager.clearFlags(FlutterWindowManager.FLAG_SECURE);
-        await ScreenProtector.preventScreenshotOff();
-      }
-      try {
-        await ScreenProtector.protectDataLeakageOff(); // الاسم الصحيح
-      } catch (_) {
-        await ScreenProtector.preventScreenshotOff(); // بديل لبعض الإصدارات
-      }
-    } catch (e) {
-      debugPrint('❌ Failed to disable protection: $e');
-    }
-  }*/
-
   Future<void> _loadDuration() async {
     if (_conversationId == null) return;
 
@@ -329,8 +255,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
-    // _disableProtection();
-    // _screenCapture.dispose();
     _messageController.dispose();
     _scrollController.dispose();
     _newMessageSubscription?.cancel();
@@ -422,7 +346,7 @@ class _ChatScreenState extends State<ChatScreen> {
               false,
             );
           }
-        } 
+        }
       }
     } catch (e) {
       print('❌ Exception during decryption: $e');
@@ -1546,8 +1470,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
         body: UnifiedScreenshotProtector(
           enabled: !_screenshotsAllowed, // إذا false = ممنوع الالتقاط
-          /*enabled: !_screenshotsAllowed,
-          warningAsset: 'assets/images/screenshot_blocked.png',*/
           child: _buildBody(hasAttachment),
         ),
       ),

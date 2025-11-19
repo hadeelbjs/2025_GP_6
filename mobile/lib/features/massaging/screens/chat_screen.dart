@@ -36,7 +36,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _messageController = TextEditingController();
   final _messagingService = MessagingService();
   final _scrollController = ScrollController();
@@ -68,11 +68,13 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription? _messageExpiredSubscription;
 
   StreamSubscription? _userStatusSubscription;
+  StreamSubscription? _connectionSubscription;
   bool _isOtherUserOnline = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this); 
 
     _socketService.socket?.on('privacy:screenshots:changed', (data) {
       if (data['peerUserId'] == widget.userId) {
@@ -255,15 +257,52 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
     _newMessageSubscription?.cancel();
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
     _userStatusSubscription?.cancel();
+    _connectionSubscription?.cancel();
     _messageExpiredSubscription?.cancel();
     _messagingService.setCurrentOpenChat(null);
     super.dispose();
+  }
+
+    //  مراقبة lifecycle للتطبيق
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+     // print('🔄 App resumed - ensuring socket connection...');
+      _ensureSocketConnection();
+    }
+  }
+  
+  Future<void> _ensureSocketConnection() async {
+    try {
+      if (!_messagingService.isConnected) {
+        print('🔌 Socket not connected - initializing...');
+        final success = await _messagingService.initialize();
+        if (success) {
+          print('✅ Socket connected after resume');
+        } else {
+          print('❌ Failed to connect socket after resume');
+          return;
+        }
+      }
+      
+      //  طلب الحالة دائماً عند العودة للتطبيق (حتى لو Socket متصل)
+      // لأن السيرفر يحتاج أن يعرف أن المستخدم عاد online
+      Future.delayed(Duration(milliseconds: 500), () {
+        if (mounted) {
+         // print('🔄 Requesting user status after resume...');
+          _messagingService.requestUserStatus(widget.userId);
+        }
+      });
+    } catch (e) {
+      print('❌Error ensuring socket connection: $e');
+    }
   }
 
   Future<void> _printDebugInfo() async {
@@ -863,6 +902,16 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
+    
+    _connectionSubscription = _socketService.onConnectionChange.listen((isConnected) {
+      if (isConnected && mounted) {
+        Future.delayed(Duration(milliseconds: 500), () {
+          if (mounted) {
+            _messagingService.requestUserStatus(widget.userId);
+          }
+        });
+      }
+    });
   }
 
   Future<void> _pickImage(ImageSource source) async {
@@ -1330,7 +1379,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
-                      color: _messagingService.isConnected
+                      color: _isOtherUserOnline
                           ? Colors.greenAccent
                           : Colors.grey,
                       shape: BoxShape.circle,

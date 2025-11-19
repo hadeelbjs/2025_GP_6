@@ -21,7 +21,7 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen> {
+class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObserver {
   final _apiService = ApiService();
   final _messagingService = MessagingService();
   final _signalProtocolManager = SignalProtocolManager();
@@ -31,6 +31,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
   bool _isLoading = false;
   
   StreamSubscription? _newMessageSubscription;
+  StreamSubscription? _connectionSubscription;
   String? _currentOpenChatId;
 
   final Map<String, int> _verificationAttempts = {};
@@ -39,12 +40,41 @@ class _ChatListScreenState extends State<ChatListScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initializeScreen();
+  }
+
+    //  مراقبة lifecycle للتطبيق
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      print('🔄 ChatListScreen: App resumed - ensuring socket connection...');
+      _ensureSocketConnection();
+    }
+  }
+  
+  // التأكد من الاتصال بالـ Socket عند العودة للتطبيق
+  Future<void> _ensureSocketConnection() async {
+    try {
+      if (!_messagingService.isConnected) {
+        print('🔌ChatListScreen: Socket not connected - initializing...');
+        final success = await _messagingService.initialize();
+        if (success) {
+          print('✅ Socket connected after resume');
+        } else {
+          print('❌ Failed to connect socket after resume');
+        }
+      }
+    } catch (e) {
+      print('❌  Error ensuring socket connection: $e');
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _newMessageSubscription?.cancel();
+    _connectionSubscription?.cancel();
     super.dispose();
   }
 
@@ -53,6 +83,7 @@ class _ChatListScreenState extends State<ChatListScreen> {
     await _loadChats();
     await _loadConversations();
     _listenToNewMessages();
+    _setupConnectionListener(); 
   }
 
   void _listenToNewMessages() {
@@ -142,6 +173,13 @@ class _ChatListScreenState extends State<ChatListScreen> {
           ),
         );
       }
+    });
+  }
+
+  // فقط لإعادة الاتصال عند العودة للتطبيق
+  void _setupConnectionListener() {
+    final socketService = SocketService();
+    _connectionSubscription = socketService.onConnectionChange.listen((isConnected) {
     });
   }
 

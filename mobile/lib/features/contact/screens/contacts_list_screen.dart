@@ -7,6 +7,7 @@ import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
 import 'add_contact_screen.dart';
 import '../../../services/api_services.dart';
+import '../../../services/messaging_service.dart';
 
 class ContactsListScreen extends StatefulWidget {
   const ContactsListScreen({super.key});
@@ -15,8 +16,9 @@ class ContactsListScreen extends StatefulWidget {
   State<ContactsListScreen> createState() => _ContactsListScreenState();
 }
 
-class _ContactsListScreenState extends State<ContactsListScreen> {
+class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBindingObserver {
   final _apiService = ApiService();
+  final _messagingService = MessagingService();
   List<Map<String, dynamic>> _contacts = [];
   List<Map<String, dynamic>> _results = [];
   List<Map<String, dynamic>> _pendingRequests = [];
@@ -27,13 +29,80 @@ class _ContactsListScreenState extends State<ContactsListScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _loadData();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
+  }
+  //  مراقبة lifecycle للتطبيق
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+    //  print('🔄 App resumed from ContactsList - reconnecting socket...');
+      _ensureSocketConnection();
+    } else if (state == AppLifecycleState.paused) {
+    //  print('⏸️ App paused from ContactsList');
+    }
+  }
+
+  //  التأكد من الاتصال بالـ Socket وطلب الحالة لجميع جهات الاتصال
+  Future<void> _ensureSocketConnection() async {
+    try {
+      if (!_messagingService.isConnected) {
+        print('🔌 Socket not connected - initializing...');
+        final success = await _messagingService.initialize();
+        if (success) {
+         // print('✅ Socket connected after resume');
+          //  طلب الحالة لجميع جهات الاتصال بعد الاتصال
+          await _requestAllContactsStatus();
+        } else {
+          print('❌ Failed to connect socket after resume');
+        }
+      } else {
+        print('✅ Socket already connected');
+        //  حتى لو كان متصل، نطلب الحالة عند العودة للتطبيق
+        await _requestAllContactsStatus();
+      }
+    } catch (e) {
+      print('❌ Error ensuring socket connection: $e');
+    }
+  }
+
+  // طلب الحالة لجميع جهات الاتصال
+  Future<void> _requestAllContactsStatus() async {
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      if (!_messagingService.isConnected) {
+        print('⚠️ Socket not connected, skipping status requests');
+        return;
+      }
+
+      // جلب قائمة جهات الاتصال
+      final result = await _apiService.getContactsList();
+      
+      if (result['success'] == true && result['contacts'] != null) {
+        final contacts = result['contacts'] as List;
+        print('Requesting status for ${contacts.length} contacts...');
+        
+        // طلب الحالة لكل جهة اتصال
+        for (var contact in contacts) {
+          final contactId = contact['id']?.toString();
+          if (contactId != null) {
+            _messagingService.requestUserStatus(contactId);
+          }
+        }
+        
+        print('✅ Status requests sent for all contacts');
+      }
+    } catch (e) {
+      print('❌ Error requesting contacts status: $e');
+    }
   }
 
   Future<void> _loadData() async {

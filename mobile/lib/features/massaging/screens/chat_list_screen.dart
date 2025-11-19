@@ -8,7 +8,7 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
-import '../../../services/biometric_service.dart'; // ✅ استيراد BiometricService
+import '../../../services/biometric_service.dart'; 
 import 'chat_screen.dart';
 import '../../../services/local_db/database_helper.dart';
 import '../../../services/socket_service.dart';

@@ -36,7 +36,7 @@ static void openBiometricSettings() {
     }
   }
 
-   /// ✅ دالة جديدة: التحقق من وجود بصمات مسجلة فعلياً في الجهاز
+   ///  دالة جديدة: التحقق من وجود بصمات مسجلة فعلياً في الجهاز
   static Future<bool> hasEnrolledBiometrics() async {
     try {
       final availableBiometrics = await _localAuth.getAvailableBiometrics();

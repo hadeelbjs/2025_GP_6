@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -24,6 +26,22 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>يحتاج التطبيق لاستخدام الكاميرا لالتقاط الصور.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>نحتاج إلى Face ID للتحقق من هويتك</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>نحتاج الوصول للشبكة المحلية لتحليل الأمان</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>نحتاج الموقع لفحص أمان شبكة WiFi</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>نحتاج الوصول للموقع لفحص شبكة WiFi.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>نحتاج إذنك لحفظ الصور</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>نحتاج إذنك للوصول إلى المعرض</string>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -41,34 +59,5 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
-	<key>CADisableMinimumFrameDurationOnPhone</key>
-	<true/>
-	<key>UIApplicationSupportsIndirectInputEvents</key>
-	<true/>
-	<key>NSFaceIDUsageDescription</key>
-	<string>نحتاج إلى Face ID للتحقق من هويتك</string>
-<key>NSCameraUsageDescription</key>
-<string>يحتاج التطبيق لاستخدام الكاميرا لالتقاط الصور.</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>يحتاج التطبيق للوصول إلى الصور لاختيار صورة من المعرض.</string>
-<key>NSPhotoLibraryAddUsageDescription</key>
-<string>يحتاج التطبيق لحفظ الصور في ألبوم الصور.</string>
-
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>This app needs access to your location to provide relevant services while you are using the app.</string>
-<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>This app needs access to your location to provide relevant services even when the app is in the background.</string>
-
-<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-<string>نحتاج الموقع لفحص أمان شبكة WiFi</string>
-
-<key>NSLocalNetworkUsageDescription</key>
-<string>نحتاج الوصول للشبكة المحلية لتحليل الأمان</string>
-
-<key>NSPhotoLibraryAddUsageDescription</key>
-<string>نحتاج إذنك لحفظ الصور</string>
-<key>NSPhotoLibraryUsageDescription</key>
-<string>نحتاج إذنك للوصول إلى المعرض</string>
-
 </dict>
 </plist>

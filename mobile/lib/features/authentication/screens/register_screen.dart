@@ -184,9 +184,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
       _phoneController.text.trim(),
     );
 
-    print("DEBUG sendSmsResult => $sendSmsResult");
-
-
     setState(() => _isLoading = false);
 
     if (!mounted) return;

@@ -37,7 +37,10 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
+  
+  // مكان كتابة الرسائل
   final _messageController = TextEditingController();
+
   final _messagingService = MessagingService();
   final _scrollController = ScrollController();
   final _socketService = SocketService();
@@ -52,10 +55,11 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isSending = false;
   String? _conversationId;
 
-  //  إزالة متغيرات التحقق البيومتري لأنه تم التحقق قبل الدخول
   bool _isDecryptingMessages = false;
 
-  int _decryptionFailureCount = 0; // عدد مرات فشل فك التشفير
+  int _decryptionFailureCount = 0; 
+
+  //delete
   bool _hasShownDecryptionDialog = false; // لتجنب عرض Dialog متعدد
 
   File? _pendingImageFile;
@@ -93,22 +97,19 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
     });
-    //امنعي اللقطات والتسجيل مباشرةً عند فتح الشاشة
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _applyScreenshotPolicy(false); // هذا ينادي _enableProtection()
+      _applyScreenshotPolicy(false); 
     });
 
-    // جلب السياسة من السيرفر عند فتح الشاشة
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadScreenshotPolicyFromServer();
     });
 
-    _initializeChat(); //  مباشرة بدون فحص بايومترك
+    _initializeChat();
     _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
     _listenToExpiredMessages();
 
-    _printDebugInfo();
   }
 
   // =====================================================
@@ -131,9 +132,9 @@ class _ChatScreenState extends State<ChatScreen> {
           _screenshotsAllowed = allowScreenshots;
         });
 
-        print('✅ Screenshot policy loaded: $allowScreenshots');
+        print('Screenshot policy loaded: $allowScreenshots');
       } else {
-        // ⚠️ في حالة الفشل: استخدام القيمة الافتراضية (منع اللقطات)
+        // في حالة الفشل: استخدام القيمة الافتراضية (منع اللقطات)
         setState(() {
           _screenshotsAllowed = false;
         });
@@ -163,7 +164,7 @@ class _ChatScreenState extends State<ChatScreen> {
         print('⚠️ Failed to save screenshot policy to server');
         _showMessage('فشل حفظ الإعداد في السيرفر', false);
       } else {
-        print('✅ Screenshot policy saved to server');
+        print('Screenshot policy saved to server');
 
         //  إرسال إشعار للطرف الآخر عبر Socket
         _socketService.socket?.emit('privacy:screenshots:update', {
@@ -234,7 +235,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('✅ تم تحديد المدة: ${_formatDuration(selected)}'),
+              content: Text('تم تحديد المدة: ${_formatDuration(selected)}'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 2),
             ),
@@ -246,7 +247,7 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  // ✨ تنسيق المدة
+  // تنسيق المدة
   String _formatDuration(int seconds) {
     if (seconds < 60) return '${seconds}ث';
     if (seconds < 3600) return '${seconds ~/ 60}د';
@@ -264,11 +265,6 @@ class _ChatScreenState extends State<ChatScreen> {
     _messageExpiredSubscription?.cancel();
     _messagingService.setCurrentOpenChat(null);
     super.dispose();
-  }
-
-  Future<void> _printDebugInfo() async {
-    final storage = FlutterSecureStorage();
-    final token = await storage.read(key: 'access_token');
   }
 
   Future<void> _decryptAllMessages() async {
@@ -362,6 +358,8 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  //review
+
   // ========================================
   // ✅ جديد: إعادة إنشاء Session تلقائياً (بدون Dialog)
   // ========================================
@@ -369,7 +367,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       print('🔄 Auto-recreating session for ${widget.userId}');
 
-      // ✅ التحقق من آخر محاولة
+      // التحقق من آخر محاولة
       final lastAttemptKey = 'last_session_reset_${widget.userId}';
       final lastAttemptStr = await FlutterSecureStorage().read(
         key: lastAttemptKey,
@@ -477,8 +475,10 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
+  //Review
+
   // ========================================
-  // ✅ الـ Dialog يبقى كما هو (للحالات الأخرى)
+  //  الـ Dialog يبقى كما هو (للحالات الأخرى)
   // ========================================
   Future<void> _showDecryptionFailureDialog() async {
     final shouldRecreate = await showDialog<bool>(
@@ -702,7 +702,7 @@ class _ChatScreenState extends State<ChatScreen> {
       await _messagingService.markConversationAsRead(_conversationId!);
       await _loadDuration();
 
-      // ✅ فك تشفير الرسائل بعد التهيئة مباشرة
+      //فك تشفير الرسائل بعد التهيئة مباشرة
       if (_conversationId != null) {
         setState(() {
           _isDecryptingMessages = true;
@@ -733,7 +733,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
       final now = DateTime.now();
       final filteredMessages = messages.where((msg) {
-        // ✅ بعد:
+      
         final expiresAt = msg['expiresAt'];
         if (expiresAt != null) {
           DateTime? expiryDateTime;
@@ -754,17 +754,10 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (mounted) {
         setState(() {
-          print('📊 Loading ${filteredMessages.length} messages');
-
-          for (var msg in filteredMessages) {
-            if (msg['deletedForRecipient'] == 1) {
-              print('🚫 Found deleted for recipient: ${msg['id']}');
-            }
-          }
+  
           _messages.clear();
           _messages.addAll(filteredMessages);
 
-          print('✅ Total messages in UI: ${_messages.length}');
         });
 
         await DatabaseHelper.instance.deleteExpiredMessages();
@@ -783,7 +776,7 @@ class _ChatScreenState extends State<ChatScreen> {
   void _subscribeToRealtimeUpdates() {
     _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
       if (data['conversationId'] == _conversationId) {
-        // ✅ فك تشفير الرسائل الجديدة تلقائيًا
+        //فك تشفير الرسائل الجديدة تلقائيًا
         Future.delayed(Duration(milliseconds: 300), () {
           _decryptAllMessages();
         });
@@ -799,15 +792,11 @@ class _ChatScreenState extends State<ChatScreen> {
       final deletedMessageId = data['messageId'];
       final deletedFor = data['deletedFor'];
 
-      print('🗑️ UI Delete event: $deletedMessageId (deletedFor: $deletedFor)');
-
       setState(() {
         if (deletedFor == 'everyone') {
           _messages.removeWhere((m) => m['id'] == deletedMessageId);
-          print('✅ Removed from UI for everyone');
         } else if (deletedFor == 'recipient') {
           _messages.removeWhere((m) => m['id'] == deletedMessageId);
-          print('✅ Removed from UI at recipient');
         }
       });
     });
@@ -815,17 +804,17 @@ class _ChatScreenState extends State<ChatScreen> {
     _statusSubscription = _messagingService.onMessageStatusUpdate.listen((
       data,
     ) {
-      // ✅ التعامل مع فشل التحقق عند المستقبل
+      // التعامل مع فشل التحقق عند المستقبل
       if (data['type'] == 'recipient_failed_verification') {
         final recipientId = data['recipientId'];
         if (recipientId == widget.userId && mounted) {
-          // ✅ إعادة تحميل الرسائل لتحديث العلامات
+          // إعادة تحميل الرسائل لتحديث العلامات
           _loadMessagesFromDatabase();
         }
         return;
       }
 
-      // ✅ التعامل العادي مع تحديثات الحالة
+      // التعامل العادي مع تحديثات الحالة
       final messageId = data['messageId'];
       final newStatus = data['status'];
 
@@ -968,8 +957,8 @@ class _ChatScreenState extends State<ChatScreen> {
     if (currentDuration == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('⚠️ اختر المدة أولاً'),
-          backgroundColor: Colors.red,
+          content: Text('اختر المدة أولاً من خلال الضغط على الساعة'),
+          backgroundColor: Color.fromARGB(255, 68, 66, 66),
         ),
       );
       return;
@@ -1412,10 +1401,10 @@ class _ChatScreenState extends State<ChatScreen> {
                                       onChanged: _isLoadingScreenshotPolicy
                                           ? null // تعطيل أثناء التحميل
                                           : (v) async {
-                                              // 1️⃣ تطبيق التغيير محلياً
+                                              // تطبيق التغيير محلياً
                                               await _applyScreenshotPolicy(v);
 
-                                              // 2️⃣ حفظ في السيرفر
+                                              // حفظ في السيرفر
                                               await _saveScreenshotPolicyToServer(
                                                 v,
                                               );
@@ -1477,7 +1466,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _buildBody(bool hasAttachment) {
-    // ✅ حالة فك تشفير الرسائل فقط (تم إزالة حالات التحقق البيومتري)
+    //  حالة فك تشفير الرسائل فقط
     if (_isDecryptingMessages) {
       return Center(
         child: Column(
@@ -1542,75 +1531,6 @@ class _ChatScreenState extends State<ChatScreen> {
 
         if (hasAttachment) _buildAttachmentPreview(),
 
-        /* Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 10,
-                offset: const Offset(0, -2),
-              ),
-            ],
-          ),
-          child: Row(
-            children: [
-              IconButton(
-                onPressed: _showAttachmentOptions,
-                icon: Icon(Icons.attach_file),
-                color: AppColors.primary,
-              ),
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  enabled: !_isSending,
-                  maxLines: null,
-                  textDirection: TextDirection.rtl,
-                  style: AppTextStyles.bodyMedium,
-                  decoration: InputDecoration(
-                    hintText: 'اكتب رسالتك...',
-                    hintStyle: AppTextStyles.bodyMedium.copyWith(
-                      color: AppColors.textHint,
-                    ),
-                    filled: true,
-                    fillColor: AppColors.background,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(25),
-                      borderSide: BorderSide.none,
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 20,
-                      vertical: 12,
-                    ),
-                  ),
-                  onSubmitted: (_) => _sendMessage(),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Container(
-                decoration: const BoxDecoration(
-                  color: AppColors.primary,
-                  shape: BoxShape.circle,
-                ),
-                child: IconButton(
-                  icon: _isSending
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : const Icon(Icons.send, color: Colors.white),
-                  onPressed: _isSending ? null : _sendMessage,
-                ),
-              ),
-            ],
-          ),
-        ),
-        */
         _buildInputBar(),
       ],
     );
@@ -1751,7 +1671,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 decoration: InputDecoration(
                   hintText: isEnabled
                       ? 'اكتب رسالتك...'
-                      : 'اختر المدة أولاً ⏱️',
+                      : 'اختر المدة أولاً من خلال الضغط على الساعة',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
                     color: isEnabled ? AppColors.textHint : Colors.red.shade400,
                     fontSize: 14,
@@ -1826,7 +1746,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMine = message['isMine'] == 1;
-    final isLocked = false; // ✅ الرسائل مفكوكة التشفير بعد التحقق
+    final isLocked = false; 
     final isDeleted = message['status'] == 'deleted';
     final isDeletedForRecipient = message['deletedForRecipient'] == 1;
     final failedVerificationAtRecipient =
@@ -1952,32 +1872,7 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 SizedBox(height: 8),
               ],
-
-              if (text.isNotEmpty || isLocked)
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (isLocked) ...[
-                      Icon(
-                        Icons.lock,
-                        size: 16,
-                        color: isMine ? Colors.white : AppColors.textPrimary,
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                    Flexible(
-                      child: Text(
-                        isLocked ? 'اضغط للمشاهدة' : text,
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: isMine ? Colors.white : AppColors.textPrimary,
-                          fontStyle: isLocked
-                              ? FontStyle.italic
-                              : FontStyle.normal,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+              
               if (failedVerificationAtRecipient && isMine) ...[
                 const SizedBox(height: 4),
                 Row(

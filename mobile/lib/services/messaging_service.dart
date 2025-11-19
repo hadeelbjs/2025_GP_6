@@ -11,6 +11,7 @@ import 'biometric_service.dart';
 import 'local_db/database_helper.dart';
 import 'crypto/signal_protocol_manager.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'media_service.dart';
 
 class MessagingService {
   static bool _hasStartedTimer = false; 
@@ -24,6 +25,7 @@ class MessagingService {
   final _db = DatabaseHelper.instance;
   final _signalProtocol = SignalProtocolManager();
   final _storage = const FlutterSecureStorage();
+   final _mediaService = MediaService.instance; 
 
   final _uuid = const Uuid();
   String? _userIdCache;
@@ -152,24 +154,54 @@ class MessagingService {
     final expiresAt = now.add(Duration(seconds: duration));
 
       //  تحويل الملفات إلى Base64
-      String? attachmentData;
+      String? attachmentUrl;
       String? attachmentType;
       String? attachmentName;
-      String? attachmentMimeType;
 
       if (imageFile != null) {
-        final bytes = await imageFile.readAsBytes();
-        attachmentData = base64Encode(bytes);
+         debugPrint('📤 Uploading image via HTTPS...');
+
+        final uploadResult = await _mediaService.uploadImage(imageFile);
+
+        if (!uploadResult.success) {
+          throw Exception(uploadResult.errorMessage ?? 'فشل رفع الصورة');
+        }
+
+        attachmentUrl = uploadResult.url;
         attachmentType = 'image';
-        attachmentName = imageFile.path.split('/').last;
-        attachmentMimeType = 'image/${attachmentName.split('.').last}';
+        attachmentName = uploadResult.fileName;
       } else if (attachmentFile != null) {
-        final bytes = await attachmentFile.readAsBytes();
-        attachmentData = base64Encode(bytes);
+        final uploadResult = await _mediaService.uploadFile(attachmentFile);
+
+        if (!uploadResult.success) {
+          throw Exception(uploadResult.errorMessage ?? 'فشل رفع الملف');
+        }
+
+        attachmentUrl = uploadResult.url;
         attachmentType = 'file';
-        attachmentName = fileName ?? attachmentFile.path.split('/').last;
-        attachmentMimeType = 'application/octet-stream';
+        attachmentName = fileName ?? uploadResult.fileName;
       }
+
+     String? encryptedAttachmentUrl = attachmentUrl;
+      String? localAttachmentUrl = attachmentUrl;
+      
+      const int attachmentEncryptionType = 3; 
+
+      if (attachmentUrl != null) {
+        final encryptedUrl = await _signalProtocol.encryptMessage(
+          recipientId,
+          attachmentUrl,
+        );
+
+        if (encryptedUrl == null) {
+          throw Exception('Failed to encrypt attachment URL');
+        }
+        
+      encryptedAttachmentUrl = encryptedUrl['body'];  
+      print('✅ Attachment URL encrypted. Type: ${encryptedUrl['type']}, Body: ${encryptedAttachmentUrl!.substring(0, 10)}...');    
+
+
+  }
 
       final hasSession = await _signalProtocol.sessionExists(recipientId);
       if (!hasSession) {
@@ -204,7 +236,7 @@ class MessagingService {
         'isMine': 1,
         'requiresBiometric': 0,
         'isDecrypted': 1,
-        'attachmentData': attachmentData,
+        'attachmentData': localAttachmentUrl,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
         'visibilityDuration': duration,
@@ -227,18 +259,18 @@ class MessagingService {
         'updatedAt': timestamp,
       });
 
-      // 4️⃣ إرسال عبر Socket مع المرفقات
+      //  إرسال عبر Socket مع المرفقات
       _socketService.sendMessageWithAttachment(
         messageId: messageId,
         recipientId: recipientId,
         encryptedType: encrypted['type'],
         encryptedBody: encrypted['body'],
-        attachmentData: attachmentData,
+        attachmentData: encryptedAttachmentUrl,
         attachmentType: attachmentType,
         attachmentName: attachmentName,
-        attachmentMimeType: attachmentMimeType,
         visibilityDuration: duration,                 
         expiresAt: expiresAt.toUtc().toIso8601String(),
+        
 
       );
 
@@ -274,11 +306,32 @@ class MessagingService {
       final visibilityDuration = data['visibilityDuration'] as int?;
       final expiresAtStr = data['expiresAt'] as String?;
 
+      String? decryptedAttachmentUrl = attachmentData;
+
       int? expiresAt;
       if (expiresAtStr != null) {
         try {
           expiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
         } catch (e) {
+        }
+      }
+      if (attachmentData != null) {
+        try {
+        
+          decryptedAttachmentUrl = await _signalProtocol.decryptMessage(
+            senderId,
+            3,
+            attachmentData,
+          );
+          if (decryptedAttachmentUrl == null) {
+            print('❌ Failed to decrypt attachment URL, storing encrypted value');
+            decryptedAttachmentUrl = attachmentData; 
+          } else {
+            print('✅ Attachment URL decrypted successfully: ${decryptedAttachmentUrl.substring(0, 10)}...');
+          }
+        } catch (e) {
+          print('❌ Error decrypting attachment URL: $e');
+          decryptedAttachmentUrl = attachmentData; 
         }
       }
 
@@ -306,7 +359,7 @@ class MessagingService {
         'requiresBiometric': 1,
         // ✅ نضع isDecrypted = 0 بغض النظر
         'isDecrypted': 0,
-        'attachmentData': attachmentData,
+        'attachmentData': decryptedAttachmentUrl,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
         'visibilityDuration': visibilityDuration,

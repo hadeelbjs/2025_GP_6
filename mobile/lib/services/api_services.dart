@@ -7,6 +7,7 @@ import 'package:waseed/services/crypto/signal_protocol_manager.dart';
 import 'dart:async';
 import 'socket_service.dart';
 import 'package:path/path.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:waseed/config/appConfig.dart';
 
 class ApiService {
@@ -36,7 +37,7 @@ class ApiService {
   final _storage = const FlutterSecureStorage();
 
   // ============================================
-  // Upload Methods - رفع الصور والملفات
+  // رفع الصور والملفات
   // ============================================
 
   Future<Map<String, dynamic>> uploadImage(File imageFile) async {
@@ -44,22 +45,84 @@ class ApiService {
       final token = await _storage.read(key: 'access_token');
 
       if (token == null) {
+        print('❌ [API] No token found');
         return {'success': false, 'message': 'يجب تسجيل الدخول أولاً'};
+      }
+
+      if (!await imageFile.exists()) {
+        print('❌ [API] Image file does not exist: ${imageFile.path}');
+        return {'success': false, 'message': 'الملف غير موجود'};
       }
 
       final uri = Uri.parse('$baseUrl/upload/image');
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
+      
+      final extension = basename(imageFile.path).split('.').last.toLowerCase();
+      String mimeType;
+      
+      switch (extension) {
+        case 'jpg':
+        case 'jpeg':
+          mimeType = 'image/jpeg';
+          break;
+        case 'png':
+          mimeType = 'image/png';
+          break;
+        case 'gif':
+          mimeType = 'image/gif';
+          break;
+        case 'webp':
+          mimeType = 'image/webp';
+          break;
+        case 'heic':
+          mimeType = 'image/heic';
+          break;
+        default:
+          mimeType = 'image/jpeg'; // default fallback
+      }
+      
+    
       request.files.add(
-        await http.MultipartFile.fromPath('image', imageFile.path),
+        await http.MultipartFile.fromPath(
+          'image',
+          imageFile.path,
+          contentType: MediaType.parse(mimeType),
+        ),
       );
 
       final streamedResponse = await request.send().timeout(
         const Duration(seconds: 30),
       );
       final response = await http.Response.fromStream(streamedResponse);
-      return jsonDecode(response.body);
+      
+      
+      if (response.statusCode != 200) {
+        print('❌ [API] UPLOAD FAILED - Status: ${response.statusCode}');
+        print('❌ [API] Response Body: ${response.body}');
+        
+        try {
+          final errorData = jsonDecode(response.body);
+          return {
+            'success': false,
+            'message': errorData['message'] ?? 'فشل الرفع (HTTP ${response.statusCode})',
+            'statusCode': response.statusCode,
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'فشل الرفع (HTTP Status ${response.statusCode})',
+            'statusCode': response.statusCode,
+          };
+        }
+      }
+      
+      final result = jsonDecode(response.body);
+      print('✅ [API] Upload successful: ${result['url']}');
+      return result;
+      
     } catch (e) {
+      print('❌ Upload error: $e');
       return {'success': false, 'message': 'فشل رفع الصورة: $e'};
     }
   }
@@ -96,8 +159,18 @@ class ApiService {
         ? relativePath.substring(1)
         : relativePath;
 
+    if (cleanPath.startsWith('uploads/')) {
+      //نشيل API  ما ضبطت الا كذا في الملفات 
+        final rootUrl = baseUrl.endsWith('/api') 
+            ? baseUrl.substring(0, baseUrl.length - 4)
+            : baseUrl;
+        
+        return '$rootUrl/$cleanPath';
+    }
+
     return '$baseUrl/$cleanPath';
-  }
+}
+
 
   static const String _tokenKey = 'access_token';
   static const String _refreshTokenKey = 'refresh_token';
@@ -1206,7 +1279,7 @@ class ApiService {
   }
 
   // ===================================
-  // 🗑️ حذف Bundle (عند حذف الحساب)
+  //  حذف Bundle (عند حذف الحساب)
   // ===================================
   Future<Map<String, dynamic>> deletePreKeyBundle() async {
     try {
@@ -1231,7 +1304,7 @@ class ApiService {
   }
 
   // ===================================
-  // 🔧 Helper: الحصول على Headers مع التوكن
+  //  Helper: الحصول على Headers مع التوكن
   // ===================================
   Future<Map<String, String>> _getAuthHeaders() async {
     final token = await _storage.read(key: 'access_token');

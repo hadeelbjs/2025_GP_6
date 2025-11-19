@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -19,6 +21,8 @@ import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:waseed/widgets/unified_screenshot_protector.dart';
 import '../widgets/duration_picker_sheet.dart';
+import 'package:http/http.dart' as http;
+import '../../../services/media_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -46,6 +50,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _socketService = SocketService();
   bool _screenshotsAllowed = false;
   bool _isLoadingScreenshotPolicy = true;
+   final _mediaService = MediaService.instance;
 
   int _sessionResetAttempts = 0;
   static const int _maxSessionResetAttempts = 2;
@@ -74,6 +79,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   StreamSubscription? _userStatusSubscription;
   StreamSubscription? _connectionSubscription;
   bool _isOtherUserOnline = false;
+
+  
 
   @override
   void initState() {
@@ -908,40 +915,55 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    try {
-      final XFile? picked = await ImagePicker().pickImage(
-        source: source,
-        maxWidth: 1600,
-        imageQuality: 85,
-      );
+   Future<void> _pickImage(ImageSource source) async {
+  try {
+    final XFile? picked = await ImagePicker().pickImage(
+      source: source,
+      maxWidth: 1920,
+      maxHeight: 1920,
+      imageQuality: 85, // ضغط مباشر
+    );
 
-      if (picked == null) return;
+    if (picked == null) return;
 
-      setState(() {
-        _pendingImageFile = File(picked.path);
-      });
-    } catch (e) {
-      _showMessage('تعذر اختيار الصورة', false);
-    }
+    setState(() {
+      _pendingImageFile = File(picked.path);
+    });
+
+    print('✅ Image selected: ${picked.path}');
+  } catch (e) {
+    print('❌ Pick image error: $e');
+    _showMessage('تعذر اختيار الصورة', false);
   }
+}
 
-  Future<void> _pickFile() async {
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
-        type: FileType.any,
-      );
+ Future<void> _pickFile() async {
+  try {
+    final mediaResult = await _mediaService.pickFile(); 
 
-      if (result == null || result.files.isEmpty) return;
-
-      setState(() {
-        _pendingFile = result.files.single;
-      });
-    } catch (e) {
-      _showMessage('تعذر اختيار الملف', false);
+    if (!mediaResult.success || mediaResult.file == null) {
+      if (mediaResult.errorMessage != null) {
+        _showMessage(mediaResult.errorMessage!, false);
+      }
+      return;
     }
+    
+    setState(() {
+      _pendingFile = PlatformFile(
+          name: mediaResult.fileName!,
+          size: mediaResult.fileSize!,
+          path: mediaResult.file!.path,
+          bytes: null,
+      );
+    });
+
+    print('✅ File selected: ${mediaResult.fileName}');
+  } catch (e) {
+    print('❌ Pick file error: $e');
+    _showMessage('تعذر اختيار الملف', false);
   }
+}
+
 
   void _showAttachmentOptions() {
     showModalBottomSheet(
@@ -1863,8 +1885,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 if (attachmentType == 'image')
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(
-                      base64Decode(attachmentData),
+                    child: Image.network(
+                      attachmentData,
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
@@ -2040,40 +2062,191 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _openAttachment(String base64Data, String type, String? name) async {
+  void _openAttachment(String data, String type, String? name) async {
+
+  try {
     if (type == 'image') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _ImageViewerScreen(base64Data: base64Data),
-        ),
-      );
-    } else if (type == 'file') {
-      try {
-        final bytes = base64Decode(base64Data);
-        final tempDir = await getTemporaryDirectory();
-        final fileName =
-            name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
-        final tempFile = File('${tempDir.path}/$fileName');
-
-        await tempFile.writeAsBytes(bytes);
-
-        final result = await OpenFilex.open(tempFile.path);
-
-        if (result.type != ResultType.done) {
-          _showMessage('تعذر فتح الملف: ${result.message}', false);
-        }
-      } catch (e) {
-        _showMessage('فشل فتح الملف', false);
+      if (data.startsWith('http://') || data.startsWith('https://')) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _NetworkImageViewer(imageUrl: data),
+          ),
+        );
+      } else {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _Base64ImageViewer(base64Data: data),
+          ),
+        );
       }
+    } else if (type == 'file') {
+      _showMessage('جاري تحميل الملف...', true);
+
+      Uint8List bytes;
+
+      if (data.startsWith('http://') || data.startsWith('https://')) {
+        final response = await http.get(Uri.parse(data));
+        
+        if (response.statusCode != 200) {
+          throw Exception('فشل تحميل الملف (${response.statusCode})');
+        }
+        
+        bytes = response.bodyBytes;
+        print('✅ File downloaded: ${bytes.length} bytes');
+      } else {
+        bytes = base64Decode(data);
+        print('✅ File decoded: ${bytes.length} bytes');
+      }
+
+      final tempDir = await getTemporaryDirectory();
+      final fileName = name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
+      final tempFile = File('${tempDir.path}/$fileName');
+
+      await tempFile.writeAsBytes(bytes);
+      print('✅ File saved to: ${tempFile.path}');
+
+      final result = await OpenFilex.open(tempFile.path);
+
+      if (result.type != ResultType.done) {
+        _showMessage('تعذر فتح الملف: ${result.message}', false);
+      } else {
+        _showMessage('تم فتح الملف', true);
+      }
+    }
+  } catch (e, stackTrace) {
+    print('❌ Open attachment error: $e');
+    print('Stack trace: $stackTrace');
+    _showMessage('فشل فتح المرفق: $e', false);
+  }
+}Widget _buildImage(String data) {
+  if (data.startsWith('http://') || data.startsWith('https://')) {
+    // URL
+    return Image.network(
+      data,
+      width: double.infinity,
+      fit: BoxFit.cover,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) return child;
+        return Container(
+          height: 200,
+          color: Colors.grey.shade300,
+          child: Center(
+            child: CircularProgressIndicator(
+              value: loadingProgress.expectedTotalBytes != null
+                  ? loadingProgress.cumulativeBytesLoaded /
+                      loadingProgress.expectedTotalBytes!
+                  : null,
+            ),
+          ),
+        );
+      },
+      errorBuilder: (context, error, stackTrace) {
+        print('❌ Image load error: $error');
+        return _buildImageError();
+      },
+    );
+  } else {
+    // Base64
+    try {
+      return Image.memory(
+        base64Decode(data),
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) {
+          print('❌ Base64 decode error: $error');
+          return _buildImageError();
+        },
+      );
+    } catch (e) {
+      print('❌ Base64 exception: $e');
+      return _buildImageError();
     }
   }
 }
+Widget _buildImageError() {
+  return Container(
+    height: 200,
+    color: Colors.grey.shade300,
+    child: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.broken_image, size: 48, color: Colors.grey),
+          SizedBox(height: 8),
+          Text('فشل عرض الصورة', style: AppTextStyles.bodySmall),
+        ],
+      ),
+    ),
+  );
+}
+}
 
-class _ImageViewerScreen extends StatelessWidget {
+class _NetworkImageViewer extends StatelessWidget {
+  final String imageUrl;
+
+  const _NetworkImageViewer({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          leading: IconButton(
+            icon: Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text('صورة', style: TextStyle(color: Colors.white)),
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                            loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: Colors.white,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 64, color: Colors.white),
+                      SizedBox(height: 16),
+                      Text(
+                        'فشل عرض الصورة',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// عرض صورة من Base64
+class _Base64ImageViewer extends StatelessWidget {
   final String base64Data;
 
-  const _ImageViewerScreen({required this.base64Data});
+  const _Base64ImageViewer({required this.base64Data});
 
   @override
   Widget build(BuildContext context) {

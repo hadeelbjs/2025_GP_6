@@ -15,6 +15,7 @@ router.post('/send', auth, async (req, res) => {
       attachmentType,    // 'image' or 'file'
       attachmentName,
       attachmentMimeType,
+      attachmentEncryptionType,
     } = req.body;
 
     const messageId = require('uuid').v4();
@@ -29,12 +30,13 @@ router.post('/send', auth, async (req, res) => {
       attachmentType: attachmentType || null,
       attachmentName: attachmentName || null,
       attachmentMimeType: attachmentMimeType || null,
+       attachmentEncryptionType: attachmentEncryptionType || null,
       status: 'sent',
     });
 
     await message.save();
 
-    // ✅ إرسال عبر Socket
+    //  إرسال عبر Socket
     const io = req.app.get('io');
     if (io && io.sendToUser) {
       const sent = io.sendToUser(recipientId, 'message:new', {
@@ -46,6 +48,7 @@ router.post('/send', auth, async (req, res) => {
         attachmentType: message.attachmentType,
         attachmentName: message.attachmentName,
         attachmentMimeType: message.attachmentMimeType,
+        attachmentEncryptionType: message.attachmentEncryptionType,
         createdAt: message.createdAt.toISOString(),
       });
 

@@ -1993,66 +1993,7 @@ UploadProgress? _currentProgress;
   }
 }
 
-//  عرض الصور
 
-class _NetworkImageViewer extends StatelessWidget {
-  final String imageUrl;
-
-  const _NetworkImageViewer({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          leading: IconButton(
-            icon: Icon(Icons.close, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text('صورة', style: TextStyle(color: Colors.white)),
-        ),
-        body: Center(
-          child: InteractiveViewer(
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.contain,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                            loadingProgress.expectedTotalBytes!
-                        : null,
-                    color: Colors.white,
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, size: 64, color: Colors.white),
-                      SizedBox(height: 16),
-                      Text(
-                        'فشل عرض الصورة',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 class _Base64ImageViewer extends StatelessWidget {
   final String base64Data;

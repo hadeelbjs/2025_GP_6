@@ -233,12 +233,16 @@ class MessagingService {
       }
       //تشفير الملف 
       String? encryptedAttachmentData;
+       String? attachmentEncryptionType;
+
       if (attachmentData != null) {
         final encryptedAttachment = await _signalProtocol.encryptMessage(recipientId, attachmentData);
+
         if (encryptedAttachment == null) {
           throw Exception('Failed to encrypt attachment');
         }
         encryptedAttachmentData = encryptedAttachment['body'];
+        attachmentEncryptionType = encryptedAttachment['type']?.toString();
         print('✅ Attachment encrypted');
       }
 
@@ -294,6 +298,7 @@ class MessagingService {
         attachmentData: encryptedAttachmentData,
         attachmentType: attachmentType,
         attachmentName: attachmentName,
+        attachmentEncryptionType: attachmentEncryptionType,
         visibilityDuration: duration,                 
         expiresAt: expiresAt.toUtc().toIso8601String(),
         
@@ -347,6 +352,7 @@ class MessagingService {
       final encryptedAttachmentData  = data['attachmentData'] as String?;
       final attachmentType = data['attachmentType'] as String?;
       final attachmentName = data['attachmentName'] as String?;
+      final attachmentEncryptionType = data['attachmentEncryptionType'] as String?;
       final visibilityDuration = data['visibilityDuration'] as int?;
       final expiresAtStr = data['expiresAt'] as String?;
 
@@ -360,25 +366,28 @@ class MessagingService {
       }
      
       //  فك تشفير 
-      String? decryptedAttachmentData;
-      if (encryptedAttachmentData != null) {
-        try {
-          decryptedAttachmentData = await _signalProtocol.decryptMessage(
-            senderId,
-            3, // نفس الـ encryptionType
-            encryptedAttachmentData,
-          );
-          if (decryptedAttachmentData == null) {
-            print('❌ Failed to decrypt attachment');
-            decryptedAttachmentData = encryptedAttachmentData; // نحفظ المشفر
-          } else {
-            print('✅ Attachment decrypted');
-          }
-        } catch (e) {
-          print('❌ Error decrypting attachment: $e');
-          decryptedAttachmentData = encryptedAttachmentData;
+     String? decryptedAttachmentData;
+    if (encryptedAttachmentData != null && attachmentEncryptionType != null) {
+      try {
+        final attachmentType = int.tryParse(attachmentEncryptionType) ?? 3;
+        
+        decryptedAttachmentData = await _signalProtocol.decryptMessage(
+          senderId,
+          attachmentType,
+          encryptedAttachmentData,
+        );
+        
+        if (decryptedAttachmentData == null) {
+          print('❌ Failed to decrypt attachment - returned null');
+          throw Exception('Attachment decryption returned null');
         }
+        
+        print('✅ Attachment decrypted successfully');
+      } catch (e) {
+        print('❌ Error decrypting attachment: $e');
+        decryptedAttachmentData = null;
       }
+    }
 
 
       final timestamp = data['createdAt'] != null
@@ -593,6 +602,7 @@ class MessagingService {
             message['encryptionType'],
             message['ciphertext'],
           );
+          
 
           if (decrypted != null) {
             await _db.updateMessage(messageId, {

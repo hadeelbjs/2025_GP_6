@@ -48,6 +48,8 @@ class MessagingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final _messageExpiredController = 
       StreamController<Map<String, dynamic>>.broadcast();
+  final _uploadProgressController = StreamController<UploadProgress>.broadcast();
+
 
 
   Stream<Map<String, dynamic>> get onNewMessage => _newMessageController.stream;
@@ -57,6 +59,8 @@ class MessagingService {
       _messageStatusController.stream;
          Stream<Map<String, dynamic>> get onMessageExpired => 
       _messageExpiredController.stream;
+        Stream<UploadProgress> get onUploadProgress => _uploadProgressController.stream;
+
 
 
   bool get isConnected => _socketService.isConnected;
@@ -153,55 +157,61 @@ class MessagingService {
     final now = DateTime.now();
     final expiresAt = now.add(Duration(seconds: duration));
 
-      //  تحويل الملفات إلى Base64
-      String? attachmentUrl;
+        String? attachmentData;
       String? attachmentType;
       String? attachmentName;
 
       if (imageFile != null) {
-         debugPrint('📤 Uploading image via HTTPS...');
+        _emitProgress(UploadProgress(
+          stage: UploadStage.compressing,
+          progress: 0.1,
+          message: 'جاري ضغط الصورة...',
+        ));
 
-        final uploadResult = await _mediaService.uploadImage(imageFile);
+        //  ضغط الصورة
+        final mediaResult = await _mediaService.processImage(imageFile);
 
-        if (!uploadResult.success) {
-          throw Exception(uploadResult.errorMessage ?? 'فشل رفع الصورة');
+        if (!mediaResult.success || mediaResult.file == null) {
+          throw Exception(mediaResult.errorMessage ?? 'فشل معالجة الصورة');
         }
 
-        attachmentUrl = uploadResult.url;
+        _emitProgress(UploadProgress(
+          stage: UploadStage.encoding,
+          progress: 0.4,
+          message: 'جاري تحويل الصورة...',
+        ));
+
+        //  تحويل ل Base64
+        attachmentData = await _mediaService.fileToBase64(mediaResult.file!);
         attachmentType = 'image';
-        attachmentName = uploadResult.fileName;
+        attachmentName = mediaResult.fileName;
+
+
       } else if (attachmentFile != null) {
-        final uploadResult = await _mediaService.uploadFile(attachmentFile);
+        _emitProgress(UploadProgress(
+          stage: UploadStage.validating,
+          progress: 0.2,
+          message: 'جاري التحقق من الملف...',
+        ));
 
-        if (!uploadResult.success) {
-          throw Exception(uploadResult.errorMessage ?? 'فشل رفع الملف');
+        //  التحقق من الحجم
+        final fileSize = await attachmentFile.length();
+        if (fileSize > MediaService.maxFileSizeMB * 1024 * 1024) {
+          throw Exception('الملف كبير جداً (الحد الأقصى ${MediaService.maxFileSizeMB}MB)');
         }
 
-        attachmentUrl = uploadResult.url;
+        _emitProgress(UploadProgress(
+          stage: UploadStage.encoding,
+          progress: 0.5,
+          message: 'جاري تحويل الملف...',
+        ));
+
+        //  تحويل ل Base64
+        attachmentData = await _mediaService.fileToBase64(attachmentFile);
         attachmentType = 'file';
-        attachmentName = fileName ?? uploadResult.fileName;
+        attachmentName = fileName ?? attachmentFile.path.split('/').last;
+
       }
-
-     String? encryptedAttachmentUrl = attachmentUrl;
-      String? localAttachmentUrl = attachmentUrl;
-      
-      const int attachmentEncryptionType = 3; 
-
-      if (attachmentUrl != null) {
-        final encryptedUrl = await _signalProtocol.encryptMessage(
-          recipientId,
-          attachmentUrl,
-        );
-
-        if (encryptedUrl == null) {
-          throw Exception('Failed to encrypt attachment URL');
-        }
-        
-      encryptedAttachmentUrl = encryptedUrl['body'];  
-      print('✅ Attachment URL encrypted. Type: ${encryptedUrl['type']}, Body: ${encryptedAttachmentUrl!.substring(0, 10)}...');    
-
-
-  }
 
       final hasSession = await _signalProtocol.sessionExists(recipientId);
       if (!hasSession) {
@@ -221,6 +231,17 @@ class MessagingService {
       if (encrypted == null) {
         throw Exception('Encryption failed');
       }
+      //تشفير الملف 
+      String? encryptedAttachmentData;
+      if (attachmentData != null) {
+        final encryptedAttachment = await _signalProtocol.encryptMessage(recipientId, attachmentData);
+        if (encryptedAttachment == null) {
+          throw Exception('Failed to encrypt attachment');
+        }
+        encryptedAttachmentData = encryptedAttachment['body'];
+        print('✅ Attachment encrypted');
+      }
+
 
       //  حفظ في SQLite
       await _db.saveMessage({
@@ -236,7 +257,7 @@ class MessagingService {
         'isMine': 1,
         'requiresBiometric': 0,
         'isDecrypted': 1,
-        'attachmentData': localAttachmentUrl,
+        'attachmentData': attachmentData,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
         'visibilityDuration': duration,
@@ -258,6 +279,11 @@ class MessagingService {
         'unreadCount': 0,
         'updatedAt': timestamp,
       });
+       _emitProgress(UploadProgress(
+        stage: UploadStage.sending,
+        progress: 0.9,
+        message: 'جاري الإرسال...',
+      ));
 
       //  إرسال عبر Socket مع المرفقات
       _socketService.sendMessageWithAttachment(
@@ -265,7 +291,7 @@ class MessagingService {
         recipientId: recipientId,
         encryptedType: encrypted['type'],
         encryptedBody: encrypted['body'],
-        attachmentData: encryptedAttachmentUrl,
+        attachmentData: encryptedAttachmentData,
         attachmentType: attachmentType,
         attachmentName: attachmentName,
         visibilityDuration: duration,                 
@@ -273,10 +299,28 @@ class MessagingService {
         
 
       );
+     _emitProgress(UploadProgress(
+        stage: UploadStage.complete,
+        progress: 1.0,
+        message: 'تم الإرسال بنجاح',
+      ));
+      print('✅ Message sent with encrypted Base64 attachment');
+      Future.delayed(Duration(seconds: 1), () {
+      });
 
       return {'success': true, 'messageId': messageId};
     } catch (e) {
-      return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
+      _emitProgress(UploadProgress(
+        stage: UploadStage.error,
+        progress: 0.0,
+        message: 'فشل الإرسال: $e',
+      ));      return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
+    }
+  }
+
+   void _emitProgress(UploadProgress progress) {
+    if (!_uploadProgressController.isClosed) {
+      _uploadProgressController.add(progress);
     }
   }
 
@@ -300,13 +344,12 @@ class MessagingService {
       final senderId = data['senderId'] as String;
       final encryptedType = data['encryptedType'] as int;
       final encryptedBody = data['encryptedBody'] as String;
-      final attachmentData = data['attachmentData'] as String?;
+      final encryptedAttachmentData  = data['attachmentData'] as String?;
       final attachmentType = data['attachmentType'] as String?;
       final attachmentName = data['attachmentName'] as String?;
       final visibilityDuration = data['visibilityDuration'] as int?;
       final expiresAtStr = data['expiresAt'] as String?;
 
-      String? decryptedAttachmentUrl = attachmentData;
 
       int? expiresAt;
       if (expiresAtStr != null) {
@@ -315,25 +358,28 @@ class MessagingService {
         } catch (e) {
         }
       }
-      if (attachmentData != null) {
+     
+      //  فك تشفير 
+      String? decryptedAttachmentData;
+      if (encryptedAttachmentData != null) {
         try {
-        
-          decryptedAttachmentUrl = await _signalProtocol.decryptMessage(
+          decryptedAttachmentData = await _signalProtocol.decryptMessage(
             senderId,
-            3,
-            attachmentData,
+            3, // نفس الـ encryptionType
+            encryptedAttachmentData,
           );
-          if (decryptedAttachmentUrl == null) {
-            print('❌ Failed to decrypt attachment URL, storing encrypted value');
-            decryptedAttachmentUrl = attachmentData; 
+          if (decryptedAttachmentData == null) {
+            print('❌ Failed to decrypt attachment');
+            decryptedAttachmentData = encryptedAttachmentData; // نحفظ المشفر
           } else {
-            print('✅ Attachment URL decrypted successfully: ${decryptedAttachmentUrl.substring(0, 10)}...');
+            print('✅ Attachment decrypted');
           }
         } catch (e) {
-          print('❌ Error decrypting attachment URL: $e');
-          decryptedAttachmentUrl = attachmentData; 
+          print('❌ Error decrypting attachment: $e');
+          decryptedAttachmentData = encryptedAttachmentData;
         }
       }
+
 
       final timestamp = data['createdAt'] != null
           ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
@@ -359,7 +405,7 @@ class MessagingService {
         'requiresBiometric': 1,
         // ✅ نضع isDecrypted = 0 بغض النظر
         'isDecrypted': 0,
-        'attachmentData': decryptedAttachmentUrl,
+        'attachmentData': decryptedAttachmentData,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
         'visibilityDuration': visibilityDuration,
@@ -415,9 +461,8 @@ class MessagingService {
 
       final messageId = data['messageId'];
       final newStatus = data['status'];
-
-          final visibilityDuration = data['visibilityDuration'] as int?;
-    final expiresAtStr = data['expiresAt'] as String?;
+      final visibilityDuration = data['visibilityDuration'] as int?;
+      final expiresAtStr = data['expiresAt'] as String?;
 
    
     int? expiresAt;
@@ -876,6 +921,7 @@ class MessagingService {
     _messageDeletedController.close();
     _messageStatusController.close();
      _messageExpiredController.close();
+     _uploadProgressController.close();
     _expiryTimer?.cancel();
     _cleanupTimer?.cancel();
   }
@@ -962,4 +1008,40 @@ Future<void> deleteExpiredMessages() async {
     );
   }
 
+}
+enum UploadStage {
+  idle,
+  validating,
+  compressing,
+  encoding,
+  encrypting,
+  saving,
+  sending,
+  complete,
+  error,
+}
+
+class UploadProgress {
+  final UploadStage stage;
+  final double progress; //حسبناها على اساس من صفر لواحد 
+  final String message;
+
+  UploadProgress({
+    required this.stage,
+    required this.progress,
+    required this.message,
+  });
+
+  factory UploadProgress.idle() {
+    return UploadProgress(
+      stage: UploadStage.idle,
+      progress: 0.0,
+      message: '',
+    );
+  }
+
+  bool get isIdle => stage == UploadStage.idle;
+  bool get isComplete => stage == UploadStage.complete;
+  bool get isError => stage == UploadStage.error;
+  bool get isProcessing => !isIdle && !isComplete && !isError;
 }

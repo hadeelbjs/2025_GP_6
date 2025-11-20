@@ -85,6 +85,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   //  للكشف عن Screenshot في iOS
   // StreamSubscription? _screenshotSubscription;
+StreamSubscription? _uploadProgressSubscription;
+UploadProgress? _currentProgress;
 
   @override
   void initState() {
@@ -141,6 +143,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
     _listenToExpiredMessages();
+
+    _listenToUploadProgress();
+  }
+
+   void _listenToUploadProgress() {
+    _uploadProgressSubscription = _messagingService.onUploadProgress.listen((progress) {
+      if (mounted) {
+        setState(() {
+          _currentProgress = progress;
+        });
+
+        // ✅ إخفاء المؤشر بعد الانتهاء أو الخطأ
+        if (progress.isComplete || progress.isError) {
+          Future.delayed(Duration(seconds: 2), () {
+            if (mounted) {
+              setState(() {
+                _currentProgress = null;
+              });
+            }
+          });
+        }
+      }
+    });
   }
 
   // =====================================================
@@ -321,7 +346,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _userStatusSubscription?.cancel();
     _connectionSubscription?.cancel();
     _messageExpiredSubscription?.cancel();
-
+    _uploadProgressSubscription?.cancel();
     //_screenshotSubscription?.cancel();
     _messagingService.setCurrentOpenChat(null);
     WidgetsBinding.instance.removeObserver(this);
@@ -1348,6 +1373,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     return Column(
       children: [
+         if (_currentProgress != null && _currentProgress!.isProcessing)
+          _buildProgressIndicator(),
         Expanded(
           child: _isLoading && _messages.isEmpty
               ? const Center(
@@ -1399,6 +1426,73 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _buildProgressIndicator() {
+    final progress = _currentProgress!;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: progress.isError ? Colors.red.shade50 : AppColors.primary.withOpacity(0.1),
+        border: Border(
+          bottom: BorderSide(
+            color: progress.isError ? Colors.red.shade200 : AppColors.primary.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (progress.isError)
+                Icon(Icons.error_outline, color: Colors.red, size: 20)
+              else
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    value: progress.progress,
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                  ),
+                ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  progress.message,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: progress.isError ? Colors.red : AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Text(
+                '${(progress.progress * 100).toInt()}%',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: progress.isError ? Colors.red : AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress.progress,
+              minHeight: 4,
+              backgroundColor: progress.isError 
+                  ? Colors.red.shade100 
+                  : AppColors.primary.withOpacity(0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                progress.isError ? Colors.red : AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
   Widget _buildAttachmentPreview() {
     return Container(
       padding: EdgeInsets.all(12),
@@ -1672,8 +1766,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 if (attachmentType == 'image')
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      attachmentData,
+                    child: Image.memory(
+                      base64Decode(attachmentData),
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
@@ -1860,43 +1954,24 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _openAttachment(String data, String type, String? name) async {
     try {
       if (type == 'image') {
-        if (data.startsWith('http://') || data.startsWith('https://')) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => _NetworkImageViewer(imageUrl: data),
-            ),
-          );
-        } else {
+          
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => _Base64ImageViewer(base64Data: data),
             ),
           );
-        }
+        
       } else if (type == 'file') {
         _showMessage('جاري تحميل الملف...', true);
 
         Uint8List bytes;
 
-        if (data.startsWith('http://') || data.startsWith('https://')) {
-          final response = await http.get(Uri.parse(data));
-
-          if (response.statusCode != 200) {
-            throw Exception('فشل تحميل الملف (${response.statusCode})');
-          }
-
-          bytes = response.bodyBytes;
-          print('✅ File downloaded: ${bytes.length} bytes');
-        } else {
-          bytes = base64Decode(data);
-          print('✅ File decoded: ${bytes.length} bytes');
-        }
+         bytes = base64Decode(data);
+         print('✅ File decoded: ${bytes.length} bytes');
 
         final tempDir = await getTemporaryDirectory();
-        final fileName =
-            name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
+        final fileName = name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
         final tempFile = File('${tempDir.path}/$fileName');
 
         await tempFile.writeAsBytes(bytes);
@@ -1916,70 +1991,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _showMessage('فشل فتح المرفق: $e', false);
     }
   }
-
-  Widget _buildImage(String data) {
-    if (data.startsWith('http://') || data.startsWith('https://')) {
-      // URL
-      return Image.network(
-        data,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            height: 200,
-            color: Colors.grey.shade300,
-            child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          print('❌ Image load error: $error');
-          return _buildImageError();
-        },
-      );
-    } else {
-      // Base64
-      try {
-        return Image.memory(
-          base64Decode(data),
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            print('❌ Base64 decode error: $error');
-            return _buildImageError();
-          },
-        );
-      } catch (e) {
-        print('❌ Base64 exception: $e');
-        return _buildImageError();
-      }
-    }
-  }
-
-  Widget _buildImageError() {
-    return Container(
-      height: 200,
-      color: Colors.grey.shade300,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.broken_image, size: 48, color: Colors.grey),
-            SizedBox(height: 8),
-            Text('فشل عرض الصورة', style: AppTextStyles.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
 }
+
+//  عرض الصور
 
 class _NetworkImageViewer extends StatelessWidget {
   final String imageUrl;
@@ -2011,7 +2025,7 @@ class _NetworkImageViewer extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: loadingProgress.expectedTotalBytes != null
                         ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
+                            loadingProgress.expectedTotalBytes!
                         : null,
                     color: Colors.white,
                   ),
@@ -2040,7 +2054,6 @@ class _NetworkImageViewer extends StatelessWidget {
   }
 }
 
-// عرض صورة من Base64
 class _Base64ImageViewer extends StatelessWidget {
   final String base64Data;
 

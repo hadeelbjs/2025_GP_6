@@ -331,113 +331,88 @@ class MessagingService {
 
   // استقبال رسالة مع Base64
   Future<void> _handleIncomingMessage(Map data) async {
-    try {
-      final messageId = data['messageId'] as String;
+  try {
+    final messageId = data['messageId'] as String;
 
-      if (_processedMessageIds.contains(messageId)) {
-        return;
-      }
+    if (_processedMessageIds.contains(messageId)) {
+      return;
+    }
 
-      final existing = await _db.getMessage(messageId);
-      if (existing != null) {
-        _processedMessageIds.add(messageId);
-        return;
-      }
-
+    final existing = await _db.getMessage(messageId);
+    if (existing != null) {
       _processedMessageIds.add(messageId);
+      return;
+    }
 
-      final senderId = data['senderId'] as String;
-      final encryptedType = data['encryptedType'] as int;
-      final encryptedBody = data['encryptedBody'] as String;
-      final encryptedAttachmentData  = data['attachmentData'] as String?;
-      final attachmentType = data['attachmentType'] as String?;
-      final attachmentName = data['attachmentName'] as String?;
-      final attachmentEncryptionType = data['attachmentEncryptionType'] as String?;
-      final visibilityDuration = data['visibilityDuration'] as int?;
-      final expiresAtStr = data['expiresAt'] as String?;
+    _processedMessageIds.add(messageId);
 
+    final senderId = data['senderId'] as String;
+    final encryptedType = data['encryptedType'] as int;
+    final encryptedBody = data['encryptedBody'] as String;
+    final encryptedAttachmentData = data['attachmentData'] as String?;
+    final attachmentType = data['attachmentType'] as String?;
+    final attachmentName = data['attachmentName'] as String?;
+    final attachmentEncryptionType = data['attachmentEncryptionType'] as String?;
+    final visibilityDuration = data['visibilityDuration'] as int?;
+    final expiresAtStr = data['expiresAt'] as String?;
 
-      int? expiresAt;
-      if (expiresAtStr != null) {
-        try {
-          expiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
-        } catch (e) {
-        }
-      }
-     
-      //  فك تشفير 
-     String? decryptedAttachmentData;
-    if (encryptedAttachmentData != null && attachmentEncryptionType != null) {
+    int? expiresAt;
+    if (expiresAtStr != null) {
       try {
-        final attachmentType = int.tryParse(attachmentEncryptionType) ?? 3;
-        
-        decryptedAttachmentData = await _signalProtocol.decryptMessage(
-          senderId,
-          attachmentType,
-          encryptedAttachmentData,
-        );
-        
-        if (decryptedAttachmentData == null) {
-          print('❌ Failed to decrypt attachment - returned null');
-          throw Exception('Attachment decryption returned null');
-        }
-        
-        print('✅ Attachment decrypted successfully');
+        expiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
       } catch (e) {
-        print('❌ Error decrypting attachment: $e');
-        decryptedAttachmentData = null;
+        print('⚠️ Failed to parse expiresAt: $e');
       }
     }
 
+    // ⚠️ لا تحاول فك التشفير هنا - احفظ المشفر فقط
+    // سيتم فك التشفير لاحقاً في decryptAllConversationMessages
+    
+    final timestamp = data['createdAt'] != null
+        ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
+        : DateTime.now().millisecondsSinceEpoch;
 
-      final timestamp = data['createdAt'] != null
-          ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
-          : DateTime.now().millisecondsSinceEpoch;
+    final conversationId = _generateConversationId(senderId);
+    final bool isCurrentChat = _currentOpenChatUserId == senderId;
 
-      final conversationId = _generateConversationId(senderId);
+    // حفظ الرسالة مع المرفق المشفر كما هو
+    await _db.saveMessage({
+      'id': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'receiverId': await _getCurrentUserId(),
+      'ciphertext': encryptedBody,
+      'encryptionType': encryptedType,
+      'plaintext': null,
+      'status': 'delivered',
+      'createdAt': timestamp,
+      'deliveredAt': DateTime.now().millisecondsSinceEpoch,
+      'isMine': 0,
+      'requiresBiometric': 1,
+      'isDecrypted': 0, // ✅ ضع 0 - ستُفك لاحقاً
+      'attachmentData': encryptedAttachmentData, // ✅ احفظ المشفر
+      'attachmentType': attachmentType,
+      'attachmentName': attachmentName,
+      'visibilityDuration': visibilityDuration,
+      'expiresAt': expiresAt,
+      'isExpired': 0,
+    });
 
-      final bool isCurrentChat = _currentOpenChatUserId == senderId;
+    if (!isCurrentChat) {
+      await _db.incrementUnreadCount(conversationId);
+    } else {
+      await _db.markConversationAsRead(conversationId);
+    }
 
-      // حفظ الرسالة المشفرة مع المرفقات
-      await _db.saveMessage({
-        'id': messageId,
-        'conversationId': conversationId,
-        'senderId': senderId,
-        'receiverId': await _getCurrentUserId(),
-        'ciphertext': encryptedBody,
-        'encryptionType': encryptedType,
-        'plaintext': null,
-        'status': 'delivered',
-        'createdAt': timestamp,
-        'deliveredAt': DateTime.now().millisecondsSinceEpoch,
-        'isMine': 0,
-        'requiresBiometric': 1,
-        // ✅ نضع isDecrypted = 0 بغض النظر
-        'isDecrypted': 0,
-        'attachmentData': decryptedAttachmentData,
-        'attachmentType': attachmentType,
-        'attachmentName': attachmentName,
-        'visibilityDuration': visibilityDuration,
-        'expiresAt': expiresAt,
-        'isExpired': 0,
-      });
-
-      if (!isCurrentChat) {
-        await _db.incrementUnreadCount(conversationId);
-      } else {
-        await _db.markConversationAsRead(conversationId);
-      }
-
-      _newMessageController.add({
-        'messageId': messageId,
-        'conversationId': conversationId,
-        'senderId': senderId,
-        'isLocked': true,
-      });
-    } catch (e) {
+    _newMessageController.add({
+      'messageId': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'isLocked': true,
+    });
+  } catch (e) {
     print('❌ Error in _handleIncomingMessage: $e');
-
-    }
+  }
 
     Future<void> updateConversationPrivacyPolicy({
       required String peerUserId,
@@ -565,167 +540,185 @@ class MessagingService {
     }
   }
 
-  Future<Map<String, dynamic>> decryptAllConversationMessages(
-    String conversationId,
-  ) async {
-    try {
-      print('Starting decryption for conversation: $conversationId');
+  // في MessagingService - تحديث decryptAllConversationMessages
 
-      // نجلب الرسائل المشفرة غير المفكوكة للمحادثة
-      final encryptedMessages = await _db.getEncryptedMessages(conversationId);
+Future<Map<String, dynamic>> decryptAllConversationMessages(
+  String conversationId,
+) async {
+  try {
+    print('Starting decryption for conversation: $conversationId');
 
-      if (encryptedMessages.isEmpty) {
-        print('No encrypted messages to decrypt');
-        return {
-          'success': true,
-          'message': 'لا توجد رسائل تحتاج فك تشفير',
-          'count': 0,
-        };
-      }
+    // جلب الرسائل المشفرة غير المفكوكة
+    final encryptedMessages = await _db.getEncryptedMessages(conversationId);
 
-      print('Found ${encryptedMessages.length} encrypted messages');
-
-      // نفك التشفير لكل رسالة ونحدثها بقاعدة البيانات
-      int successCount = 0;
-      String? lastError;
-      String? lastErrorType;
-
-      for (final message in encryptedMessages) {
-        try {
-          final messageId = message['id'];
-          final senderId = message['senderId'];
-
-          print('Decrypting message $messageId from $senderId');
-
-          final decrypted = await _signalProtocol.decryptMessage(
-            senderId,
-            message['encryptionType'],
-            message['ciphertext'],
-          );
-          
-
-          if (decrypted != null) {
-            await _db.updateMessage(messageId, {
-              'plaintext': decrypted,
-              'isDecrypted': 1,
-              'requiresBiometric': 1,
-              'status': 'read',
-              'readAt': DateTime.now().millisecondsSinceEpoch,
-            });
-
-            // إرسال حالة القراءة للمرسل
-            _socketService.updateMessageStatus(
-              messageId: messageId,
-              status: 'verified',
-              recipientId: senderId,
-            );
-
-            successCount++;
-            print('Message $messageId decrypted successfully');
-          } else {
-            lastError = 'Decryption returned null';
-            decryptionFailure++;
-            if (decryptionFailure >= 1) {
-              await _signalProtocol.deleteSession(senderId);
-              await deleteConversation(conversationId);
-              return {
-                'success': false,
-                'error': 'SessionReset',
-                'message': 'Session reset due to decryption errors',
-              };
-              print ('session reset due to decryption failuer');
-            }
-            lastErrorType = 'DecryptionFailure';
-            print('Decryption returned null for message $messageId');
-          }
-        } catch (e) {
-          lastError = e.toString();
-
-          decryptionFailure++;
-
-          // استخراج نوع الخطأ بشكل أفضل
-          if (e.toString().contains('InvalidKeyException')) {
-            lastErrorType = 'InvalidKeyException';
-          } else if (e.toString().contains('InvalidMessageException')) {
-            lastErrorType = 'InvalidMessageException';
-          } else if (e.toString().contains('InvalidSessionException') ||
-              e.toString().contains('NoSessionException')) {
-            lastErrorType = 'InvalidSessionException';
-          } else if (e.toString().contains('UntrustedIdentityException')) {
-            lastErrorType = 'UntrustedIdentityException';
-          } else if (e.toString().contains('session') ||
-              e.toString().contains('Session')) {
-            lastErrorType = 'InvalidSessionException';
-          } else {
-            lastErrorType = 'UnknownError';
-          }
-
-          print('Failed to decrypt message: $lastErrorType - $e');
-        }
-      }
-
-      //  إذا نجحت جميع الرسائل
-      if (successCount == encryptedMessages.length) {
-        print(
-          'All messages decrypted successfully ($successCount/${encryptedMessages.length})',
-        );
-        return {
-          'success': true,
-          'message': 'تم فك تشفير $successCount رسائل',
-          'count': successCount,
-        };
-      }
-
-      //  إذا فشلت جميع الرسائل
-      if (successCount == 0) {
-        print('All messages failed to decrypt. Error: $lastErrorType');
-        return {
-          'success': false,
-          'message': 'فشل فك تشفير جميع الرسائل',
-          'count': 0,
-          'error': lastErrorType,
-          'errorMessage': lastError,
-        };
-      }
-
-      //  إذا نجح البعض وفشل البعض
-      print(
-        'Partial success: $successCount/${encryptedMessages.length} decrypted',
-      );
+    if (encryptedMessages.isEmpty) {
+      print('No encrypted messages to decrypt');
       return {
-        'success': true, // نعتبره نجاح جزئي
-        'message':
-            'تم فك تشفير $successCount من ${encryptedMessages.length} رسائل',
-        'count': successCount,
-        'error': lastErrorType, // نرجع آخر خطأ حدث
-        'errorMessage': lastError,
-      };
-    } catch (e) {
-      print('Critical error in decryptAllConversationMessages: $e');
-
-      //  تحديد نوع الخطأ
-      String errorType = 'UnknownError';
-
-      if (e.toString().contains('InvalidKeyException')) {
-        errorType = 'InvalidKeyException';
-      } else if (e.toString().contains('InvalidSessionException') ||
-          e.toString().contains('NoSessionException')) {
-        errorType = 'InvalidSessionException';
-      } else if (e.toString().contains('session') ||
-          e.toString().contains('Session')) {
-        errorType = 'InvalidSessionException';
-      }
-
-      return {
-        'success': false,
-        'message': 'فشل فك تشفير الرسائل',
+        'success': true,
+        'message': 'لا توجد رسائل تحتاج فك تشفير',
         'count': 0,
-        'error': errorType,
-        'errorMessage': e.toString(),
       };
     }
-  }
 
+    print('Found ${encryptedMessages.length} encrypted messages');
+
+    int successCount = 0;
+    String? lastError;
+    String? lastErrorType;
+
+    for (final message in encryptedMessages) {
+      try {
+        final messageId = message['id'];
+        final senderId = message['senderId'];
+        final encryptionType = message['encryptionType'];
+        
+        print('Decrypting message $messageId from $senderId');
+
+        // فك تشفير النص
+        final decrypted = await _signalProtocol.decryptMessage(
+          senderId,
+          encryptionType,
+          message['ciphertext'],
+        );
+
+        if (decrypted != null) {
+          // ✅ فك تشفير المرفق أيضاً إذا كان موجود
+          String? decryptedAttachmentData;
+          if (message['attachmentData'] != null && 
+              message['attachmentType'] != null) {
+            try {
+              print('🔓 Attempting to decrypt attachment for message $messageId');
+              
+              decryptedAttachmentData = await _signalProtocol.decryptMessage(
+                senderId,
+                encryptionType, // استخدم نفس encryptionType
+                message['attachmentData'],
+              );
+              
+              if (decryptedAttachmentData != null) {
+                print('✅ Attachment decrypted successfully');
+              } else {
+                print('⚠️ Attachment decryption returned null - keeping encrypted data');
+                decryptedAttachmentData = message['attachmentData'];
+              }
+            } catch (e) {
+              print('❌ Error decrypting attachment: $e');
+              decryptedAttachmentData = message['attachmentData'];
+            }
+          }
+
+          // تحديث الرسالة مع النص والمرفق المفكوكين
+          await _db.updateMessage(messageId, {
+            'plaintext': decrypted,
+            'attachmentData': decryptedAttachmentData, // ✅ حفظ المرفق المفكوك
+            'isDecrypted': 1,
+            'requiresBiometric': 1,
+            'status': 'read',
+            'readAt': DateTime.now().millisecondsSinceEpoch,
+          });
+
+          // إرسال حالة القراءة للمرسل
+          _socketService.updateMessageStatus(
+            messageId: messageId,
+            status: 'verified',
+            recipientId: senderId,
+          );
+
+          successCount++;
+          print('Message $messageId decrypted successfully ✅');
+        } else {
+          lastError = 'Decryption returned null';
+          decryptionFailure++;
+          
+          if (decryptionFailure >= 1) {
+            await _signalProtocol.deleteSession(senderId);
+            await deleteConversation(conversationId);
+            return {
+              'success': false,
+              'error': 'SessionReset',
+              'message': 'Session reset due to decryption errors',
+            };
+          }
+          
+          lastErrorType = 'DecryptionFailure';
+          print('Decryption returned null for message $messageId');
+        }
+      } catch (e) {
+        lastError = e.toString();
+        decryptionFailure++;
+
+        if (e.toString().contains('InvalidKeyException')) {
+          lastErrorType = 'InvalidKeyException';
+        } else if (e.toString().contains('InvalidMessageException')) {
+          lastErrorType = 'InvalidMessageException';
+        } else if (e.toString().contains('InvalidSessionException') ||
+            e.toString().contains('NoSessionException')) {
+          lastErrorType = 'InvalidSessionException';
+        } else if (e.toString().contains('UntrustedIdentityException')) {
+          lastErrorType = 'UntrustedIdentityException';
+        } else if (e.toString().contains('session') ||
+            e.toString().contains('Session')) {
+          lastErrorType = 'InvalidSessionException';
+        } else {
+          lastErrorType = 'UnknownError';
+        }
+
+        print('Failed to decrypt message: $lastErrorType - $e');
+      }
+    }
+
+    if (successCount == encryptedMessages.length) {
+      print('All messages decrypted successfully ($successCount/${encryptedMessages.length})');
+      return {
+        'success': true,
+        'message': 'تم فك تشفير $successCount رسائل',
+        'count': successCount,
+      };
+    }
+
+    if (successCount == 0) {
+      print('All messages failed to decrypt. Error: $lastErrorType');
+      return {
+        'success': false,
+        'message': 'فشل فك تشفير جميع الرسائل',
+        'count': 0,
+        'error': lastErrorType,
+        'errorMessage': lastError,
+      };
+    }
+
+    print('Partial success: $successCount/${encryptedMessages.length} decrypted');
+    return {
+      'success': true,
+      'message': 'تم فك تشفير $successCount من ${encryptedMessages.length} رسائل',
+      'count': successCount,
+      'error': lastErrorType,
+      'errorMessage': lastError,
+    };
+  } catch (e) {
+    print('Critical error in decryptAllConversationMessages: $e');
+
+    String errorType = 'UnknownError';
+
+    if (e.toString().contains('InvalidKeyException')) {
+      errorType = 'InvalidKeyException';
+    } else if (e.toString().contains('InvalidSessionException') ||
+        e.toString().contains('NoSessionException')) {
+      errorType = 'InvalidSessionException';
+    } else if (e.toString().contains('session') ||
+        e.toString().contains('Session')) {
+      errorType = 'InvalidSessionException';
+    }
+
+    return {
+      'success': false,
+      'message': 'فشل فك تشفير الرسائل',
+      'count': 0,
+      'error': errorType,
+      'errorMessage': e.toString(),
+    };
+  }
+}
   //فك تشفير رسالة واحدة (يطلب التحقق كل مرة) - نبقي هذه الدالة كاحتياط
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {

@@ -29,9 +29,6 @@ class _QRScreenState extends State<QRScreen> {
       _scannedResult = null;
     });
   }
-  Future<BarcodeCapture?> analyzeImage(String path) {
-    return MobileScannerPlatform.instance.analyzeImage(path);
-  }
 
   // دالة فحص الصورة من الألبوم
   Future<void> _scanImageFromGallery() async {

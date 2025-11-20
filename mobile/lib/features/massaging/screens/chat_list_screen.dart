@@ -232,10 +232,10 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
         });
       }
       
-      print('✅ Loaded ${conversations.length} conversations');
+      print('Loaded ${conversations.length} conversations');
       
       for (var conv in conversations) {
-        print('📊 ${conv['contactName']}: unread = ${conv['unreadCount']}');
+        print('${conv['contactName']}: unread = ${conv['unreadCount']}');
       }
       
     } catch (e) {
@@ -344,9 +344,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   }
 
   Widget _buildChatList() {
-    final Map<String, Map<String, dynamic>> mergedMap = {}; // ✅ استخدم Map بدل List
-    
-    // ✅ إضافة الـ conversations أولاً
+    final Map<String, Map<String, dynamic>> mergedMap = {}; 
     for (var conv in _conversations) {
       final contactId = conv['contactId'];
       final contact = _chats.firstWhere(
@@ -355,7 +353,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       );
       
       if (contact.isNotEmpty) {
-        mergedMap[contactId] = { // ✅ استخدم contactId كـ key
+        mergedMap[contactId] = { 
           ...contact,
           'lastMessage': conv['lastMessage'],
           'lastMessageTime': conv['lastMessageTime'],
@@ -366,7 +364,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
     
     for (var contact in _chats) {
       final contactId = contact['id'];
-      if (!mergedMap.containsKey(contactId)) { // ✅ فقط إذا مو موجود
+      if (!mergedMap.containsKey(contactId)) { 
         mergedMap[contactId] = {
           ...contact,
           'lastMessage': null,
@@ -378,7 +376,6 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
 
     final mergedList = mergedMap.values.toList();
     
-    // ✅ ترتيب حسب آخر رسالة
     mergedList.sort((a, b) {
       final timeA = a['lastMessageTime'] ?? 0;
       final timeB = b['lastMessageTime'] ?? 0;
@@ -613,7 +610,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       return;
     }
 
-    // ✅ 3. طلب التحقق البيومتري
+    //  3. طلب التحقق البيومتري
     final verified = await BiometricService.authenticateWithBiometrics(
       reason: 'تحقق من هويتك لفتح المحادثة',
     );
@@ -642,6 +639,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
     _currentOpenChatId = userId;
     
     await _signalProtocolManager.initialize(userId: userId);
+    await _signalProtocolManager.checkKeysStatus();
     
     final hasSession = await _signalProtocolManager.hasSession(userId);
     

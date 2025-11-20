@@ -223,17 +223,17 @@ Future<void> _initializeEncryption() async {
     // 2. تهيئة SignalProtocolManager
     final signalManager = SignalProtocolManager();
     await signalManager.initialize(userId: userId);
-    await signalManager.ensureSignedPreKeyRotation(userId);
+    
     
     // 3. الفحص باستخدام userId
     final userIdentityKey = await storage.read(key: '${userId}_identity_key');
 
     
     if (userIdentityKey != null) {
-      print('✅ المفاتيح موجودة للمستخدم $userId');
+      print('Kesy exist $userId');
       await signalManager.checkAndRefreshPreKeys();
+      await signalManager.ensureSignedPreKeyRotation(userId);
     } else {
-      print('🆕 توليد مفاتيح جديدة للمستخدم $userId');
       await signalManager.generateAndUploadKeys();
     } 
     
@@ -248,23 +248,23 @@ Future<void> _initializeEncryption() async {
       print('📡 [3/3] Initializing WiFi Security Service...');
       final success = await _wifiService.initialize();
       if (success) {
-        print('✅ WiFi Security Service initialized successfully');
+        print('WiFi Security Service initialized successfully');
       }
     } catch (e) {
-      print('❌ WiFi Security Service initialization failed: $e');
+      print('WiFi Security Service initialization failed: $e');
     }
   }
 
   /// فحص الشبكة مرة واحدة فقط عند فتح التطبيق
   Future<void> _checkWifiOnce() async {
     try {
-      print('📡 Checking WiFi security once...');
+      print('Checking WiFi security once...');
       
       final result = await _wifiService.checkNetworkOnAppLaunch();
       
       switch (result.type) {
         case WifiCheckResultType.needsPermission:
-          print('ℹ️ Need to request permissions');
+          print('Need to request permissions');
           // سيتم طلبها من Dashboard
           break;
           
@@ -279,29 +279,29 @@ Future<void> _initializeEncryption() async {
           
         case WifiCheckResultType.success:
           if (result.status != null && !result.status!.isSecure) {
-            print('⚠️ Insecure network detected: ${result.status!.ssid}');
+            print('Insecure network detected: ${result.status!.ssid}');
             // سيتم عرض التحذير من Dashboard
           } else if (result.status != null) {
-            print('✅ Secure network: ${result.status!.ssid}');
+            print('Secure network: ${result.status!.ssid}');
           }
           break;
         
           
         case WifiCheckResultType.notConnected:
-          print('ℹ️ Not connected to WiFi');
+          print('Not connected to WiFi');
           break;
           
         case WifiCheckResultType.alreadyChecked:
-          print('ℹ️ Already checked in this session');
+          print('Already checked in this session');
           break;
           
         case WifiCheckResultType.error:
-          print('❌ Error: ${result.errorMessage}');
+          print('Error: ${result.errorMessage}');
           break;
       }
       
     } catch (e) {
-      print('❌ Error checking WiFi: $e');
+      print('Error checking WiFi: $e');
     }
   }
   @override

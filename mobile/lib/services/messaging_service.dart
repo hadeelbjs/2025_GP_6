@@ -462,13 +462,13 @@ class MessagingService {
     String conversationId,
   ) async {
     try {
-      print('🔓 Starting decryption for conversation: $conversationId');
+      print('Starting decryption for conversation: $conversationId');
 
       // نجلب الرسائل المشفرة غير المفكوكة للمحادثة
       final encryptedMessages = await _db.getEncryptedMessages(conversationId);
 
       if (encryptedMessages.isEmpty) {
-        print('ℹ️ No encrypted messages to decrypt');
+        print('No encrypted messages to decrypt');
         return {
           'success': true,
           'message': 'لا توجد رسائل تحتاج فك تشفير',
@@ -476,7 +476,7 @@ class MessagingService {
         };
       }
 
-      print('📊 Found ${encryptedMessages.length} encrypted messages');
+      print('Found ${encryptedMessages.length} encrypted messages');
 
       // نفك التشفير لكل رسالة ونحدثها بقاعدة البيانات
       int successCount = 0;
@@ -488,7 +488,7 @@ class MessagingService {
           final messageId = message['id'];
           final senderId = message['senderId'];
 
-          print('🔐 Decrypting message $messageId from $senderId');
+          print('Decrypting message $messageId from $senderId');
 
           final decrypted = await _signalProtocol.decryptMessage(
             senderId,
@@ -513,7 +513,7 @@ class MessagingService {
             );
 
             successCount++;
-            print('✅ Message $messageId decrypted successfully');
+            print('Message $messageId decrypted successfully');
           } else {
             lastError = 'Decryption returned null';
             decryptionFailure++;
@@ -528,14 +528,14 @@ class MessagingService {
               print ('session reset due to decryption failuer');
             }
             lastErrorType = 'DecryptionFailure';
-            print('❌ Decryption returned null for message $messageId');
+            print('Decryption returned null for message $messageId');
           }
         } catch (e) {
           lastError = e.toString();
 
           decryptionFailure++;
 
-          // ✅ استخراج نوع الخطأ بشكل أفضل
+          // استخراج نوع الخطأ بشكل أفضل
           if (e.toString().contains('InvalidKeyException')) {
             lastErrorType = 'InvalidKeyException';
           } else if (e.toString().contains('InvalidMessageException')) {
@@ -552,14 +552,14 @@ class MessagingService {
             lastErrorType = 'UnknownError';
           }
 
-          print('❌ Failed to decrypt message: $lastErrorType - $e');
+          print('Failed to decrypt message: $lastErrorType - $e');
         }
       }
 
-      // ✅ إذا نجحت جميع الرسائل
+      //  إذا نجحت جميع الرسائل
       if (successCount == encryptedMessages.length) {
         print(
-          '✅ All messages decrypted successfully ($successCount/${encryptedMessages.length})',
+          'All messages decrypted successfully ($successCount/${encryptedMessages.length})',
         );
         return {
           'success': true,
@@ -568,9 +568,9 @@ class MessagingService {
         };
       }
 
-      // ✅ إذا فشلت جميع الرسائل
+      //  إذا فشلت جميع الرسائل
       if (successCount == 0) {
-        print('❌ All messages failed to decrypt. Error: $lastErrorType');
+        print('All messages failed to decrypt. Error: $lastErrorType');
         return {
           'success': false,
           'message': 'فشل فك تشفير جميع الرسائل',
@@ -580,9 +580,9 @@ class MessagingService {
         };
       }
 
-      // ✅ إذا نجح البعض وفشل البعض
+      //  إذا نجح البعض وفشل البعض
       print(
-        '⚠️ Partial success: $successCount/${encryptedMessages.length} decrypted',
+        'Partial success: $successCount/${encryptedMessages.length} decrypted',
       );
       return {
         'success': true, // نعتبره نجاح جزئي
@@ -593,9 +593,9 @@ class MessagingService {
         'errorMessage': lastError,
       };
     } catch (e) {
-      print('❌ Critical error in decryptAllConversationMessages: $e');
+      print('Critical error in decryptAllConversationMessages: $e');
 
-      // ✅ تحديد نوع الخطأ
+      //  تحديد نوع الخطأ
       String errorType = 'UnknownError';
 
       if (e.toString().contains('InvalidKeyException')) {

@@ -96,11 +96,11 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
       key: 'access_token',
       value: result['accessToken'],
     );
-    print(  "DEBUG accessToken after verify phone => ${result['accessToken']}");
     await storage.write(
       key: 'refresh_token',
       value: result['refreshToken'],
-    );  
+    );
+      //للمستخدم الجديد
   await _generateAndUploadKeys();
   await Future.delayed(const Duration(seconds: 1));
   if (!mounted) return;
@@ -126,7 +126,6 @@ class _VerifyPhoneScreenState extends State<VerifyPhoneScreen> {
       FlutterSecureStorage storage = const FlutterSecureStorage();
       final userData = await storage.read(key: 'user_data');
       final accessToken = await storage.read(key: 'access_token');
-      print ("DEBUG accessToken => $accessToken");
       final userId = jsonDecode(userData!)['id'].toString();
 
       final signalManager = SignalProtocolManager();

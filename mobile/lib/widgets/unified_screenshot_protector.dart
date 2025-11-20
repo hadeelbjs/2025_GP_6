@@ -1,4 +1,285 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:screen_protector/screen_protector.dart';
+import 'package:screen_capture_event/screen_capture_event.dart';
+
+/// ✅ حماية موحدة للـ Screenshots (Android + iOS)
+///
+/// **Android**: منع تام
+/// **iOS**: إخفاء المحتوى (مثل Telegram/WhatsApp)
+class UnifiedScreenshotProtector extends StatefulWidget {
+  final Widget child;
+  final bool enabled;
+  final VoidCallback? onScreenshotAttempt;
+
+  const UnifiedScreenshotProtector({
+    Key? key,
+    required this.child,
+    this.enabled = true,
+    this.onScreenshotAttempt,
+  }) : super(key: key);
+
+  @override
+  State<UnifiedScreenshotProtector> createState() =>
+      _UnifiedScreenshotProtectorState();
+}
+
+class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
+    with WidgetsBindingObserver {
+  StreamSubscription? _screenshotSubscription;
+  bool _isScreenshotInProgress = false;
+  OverlayEntry? _blockOverlay;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _setupProtection();
+  }
+
+  @override
+  void didUpdateWidget(UnifiedScreenshotProtector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled != widget.enabled) {
+      _setupProtection();
+    }
+  }
+
+  Future<void> _setupProtection() async {
+    if (!widget.enabled) {
+      await _disableProtection();
+      return;
+    }
+
+    if (Platform.isAndroid) {
+      // ✅ Android: منع تام
+      await _setupAndroidProtection();
+    } else if (Platform.isIOS) {
+      // ✅ iOS: إخفاء المحتوى (مثل Telegram)
+      await _setupIOSProtection();
+    }
+  }
+
+  // =====================================================
+  //  Android Protection (منع تام)
+  // =====================================================
+  Future<void> _setupAndroidProtection() async {
+    try {
+      await ScreenProtector.protectDataLeakageOn();
+
+      print('✅ Android screenshot protection enabled');
+    } catch (e) {
+      print('❌ Android protection error: $e');
+    }
+  }
+
+  // =====================================================
+  //  iOS Protection (إخفاء المحتوى)
+  // =====================================================
+  Future<void> _setupIOSProtection() async {
+    try {
+      _screenshotSubscription?.cancel();
+
+      // استخدم addScreenShotListener بدلاً من watch
+      final screenCaptureEvent = ScreenCaptureEvent();
+      screenCaptureEvent.addScreenShotListener((path) {
+        if (!_isScreenshotInProgress) {
+          _handleIOSScreenshot();
+        }
+      });
+
+      screenCaptureEvent.addScreenRecordListener((isRecording) {
+        if (isRecording && !_isScreenshotInProgress) {
+          _handleIOSScreenshot();
+        }
+      });
+
+      ScreenProtector.protectDataLeakageWithBlur();
+      print('✅ iOS screenshot protection enabled (alternative)');
+    } catch (e) {
+      print('❌ iOS protection error: $e');
+    }
+  }
+  /* Future<void> _setupIOSProtection() async {
+    try {
+      // ✅ الكشف عن Screenshot في iOS
+      _screenshotSubscription?.cancel();
+      _screenshotSubscription = ScreenCaptureEvent.watch().listen((event) {
+        if (event.hasContent && !_isScreenshotInProgress) {
+          _handleIOSScreenshot();
+        }
+      });
+
+      // ✅ حماية عند التصغير (App Background)
+      // هذا يحمي من الـ Snapshot الذي يأخذه iOS
+      await ScreenProtector.protectDataLeakageWithBlur();
+
+      print('✅ iOS screenshot protection enabled');
+    } catch (e) {
+      print('❌ iOS protection error: $e');
+    }
+  }*/
+
+  // =====================================================
+  // 🔒 معالج Screenshot في iOS
+  // =====================================================
+  void _handleIOSScreenshot() {
+    if (!mounted) return;
+
+    setState(() {
+      _isScreenshotInProgress = true;
+    });
+
+    // ✅ إخفاء المحتوى فوراً
+    _showBlockOverlay();
+
+    // ✅ استدعاء Callback (لإرسال إشعار للطرف الآخر)
+    widget.onScreenshotAttempt?.call();
+
+    // ✅ إزالة الـ Overlay بعد ثانية
+    Future.delayed(Duration(milliseconds: 1000), () {
+      if (mounted) {
+        _removeBlockOverlay();
+        setState(() {
+          _isScreenshotInProgress = false;
+        });
+      }
+    });
+  }
+
+  // =====================================================
+  // 🎭 عرض Overlay للحجب (مثل Telegram)
+  // =====================================================
+  void _showBlockOverlay() {
+    if (_blockOverlay != null) return;
+
+    _blockOverlay = OverlayEntry(
+      builder: (context) => Positioned.fill(
+        child: Container(
+          color: Colors.black,
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.block,
+                  size: 80,
+                  color: Colors.white.withOpacity(0.7),
+                ),
+                SizedBox(height: 20),
+                Text(
+                  'Screenshot Blocked',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'لقطات الشاشة محظورة في هذه المحادثة',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.5),
+                    fontSize: 14,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    Overlay.of(context).insert(_blockOverlay!);
+  }
+
+  void _removeBlockOverlay() {
+    _blockOverlay?.remove();
+    _blockOverlay = null;
+  }
+
+  // =====================================================
+  // 🔓 تعطيل الحماية
+  // =====================================================
+  Future<void> _disableProtection() async {
+    try {
+      if (Platform.isAndroid) {
+        await ScreenProtector.protectDataLeakageOff();
+      } else if (Platform.isIOS) {
+        _screenshotSubscription?.cancel();
+        await ScreenProtector.protectDataLeakageOff();
+      }
+      print('✅ Screenshot protection disabled');
+    } catch (e) {
+      print('❌ Disable protection error: $e');
+    }
+  }
+
+  // =====================================================
+  // 🌓 حماية عند التصغير (App Lifecycle)
+  // =====================================================
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!widget.enabled) return;
+
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
+      // ✅ إخفاء المحتوى عند التصغير
+      if (Platform.isIOS) {
+        _showBlockOverlay();
+      }
+    } else if (state == AppLifecycleState.resumed) {
+      // ✅ إعادة عرض المحتوى
+      _removeBlockOverlay();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _screenshotSubscription?.cancel();
+    _removeBlockOverlay();
+    _disableProtection();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // ✅ في iOS: نستخدم TextField مخفي للحماية (تقنية WhatsApp)
+    if (Platform.isIOS && widget.enabled) {
+      return Stack(
+        children: [
+          widget.child,
+          // ✅ TextField مخفي للحماية
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: true,
+              child: Opacity(
+                opacity: 0.0,
+                child: TextField(
+                  obscureText: true, // ✅ هذا يمنع Screenshot في iOS
+                  decoration: InputDecoration(
+                    border: InputBorder.none,
+                    fillColor: Colors.transparent,
+                  ),
+                  style: TextStyle(color: Colors.transparent),
+                ),
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // ✅ في Android: نعرض المحتوى مباشرة
+    return widget.child;
+  }
+}
+
+/*import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:screen_protector/screen_protector.dart';
@@ -283,4 +564,4 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
       ],
     );
   }
-}
+}*/

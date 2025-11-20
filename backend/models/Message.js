@@ -33,9 +33,8 @@ const MessageSchema = new mongoose.Schema({
     required: true,
   },
   
-  // ✅ الصور والملفات كـ Base64
   attachmentData: {
-    type: String, // Base64 encoded
+    type: String, 
     default: null,
   },
   
@@ -50,10 +49,7 @@ const MessageSchema = new mongoose.Schema({
     default: null,
   },
   
-  attachmentMimeType: {
-    type: String,
-    default: null,
-  },
+  
   
   status: {
     type: String,

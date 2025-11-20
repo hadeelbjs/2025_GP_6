@@ -45,7 +45,7 @@ class SocketService {
 
   final Set<String> _processedMessages = {};
   bool _isConnecting = false;
-  
+
   // لمنع الطلبات المكررة للحالة
   final Map<String, DateTime> _lastStatusRequest = {};
   static const Duration _statusRequestCooldown = Duration(seconds: 2);
@@ -96,8 +96,8 @@ class SocketService {
             .enableForceNew() // إجبار اتصال جديد
             .enableAutoConnect()
             .enableReconnection()
-            .setReconnectionDelay(2000) 
-            .setReconnectionAttempts(3) 
+            .setReconnectionDelay(2000)
+            .setReconnectionAttempts(3)
             .setAuth({'token': token})
             .setTimeout(10000)
             .disableMultiplex() // تعطيل multiplexing
@@ -106,7 +106,7 @@ class SocketService {
       );
 
       _socket!.onConnectError((data) {
-        if (data.toString().contains('host lookup') || 
+        if (data.toString().contains('host lookup') ||
             data.toString().contains('No address')) {
           return;
         }
@@ -114,7 +114,7 @@ class SocketService {
       });
 
       _socket!.onError((data) {
-        if (data.toString().contains('host lookup') || 
+        if (data.toString().contains('host lookup') ||
             data.toString().contains('No address')) {
           return;
         }
@@ -170,13 +170,13 @@ class SocketService {
       print('✅ Socket connected');
       _connectionController.add(true);
       MessagingService().resendPendingMessages(); // 🔁 إعادة الإرسال
-      
+
       // بعد الاتصال، الشاشات سوف تطلب حالة الاتصال تلقائياً
       print('🔄 Connected - screens will request status');
     });
     _socket!.on('connect_error', (error) {
       final errorStr = error.toString();
-      if (errorStr.contains('host lookup') || 
+      if (errorStr.contains('host lookup') ||
           errorStr.contains('No address') ||
           errorStr.contains('Failed host lookup')) {
         return;
@@ -190,7 +190,7 @@ class SocketService {
 
     _socket!.on('error', (data) {
       final errorStr = data.toString();
-      if (errorStr.contains('host lookup') || 
+      if (errorStr.contains('host lookup') ||
           errorStr.contains('No address') ||
           errorStr.contains('Failed host lookup')) {
         return;
@@ -302,7 +302,7 @@ class SocketService {
       print('🔄 Reconnected after $attempt attempts');
       _connectionController.add(true);
       _processedMessages.clear();
-      
+
       // إعادة طلب حالة الاتصال للمستخدمين بعد إعادة الاتصال
       print('🔄 Reconnected - status will be requested by screens');
     });
@@ -327,6 +327,22 @@ class SocketService {
         '🔒 Screenshot policy changed from ${data['peerUserId']}: ${data['allowScreenshots']}',
       );
     });*/
+    _socket!.on('screenshot:notification', (data) {
+      print('📸 Received screenshot notification: $data');
+
+      final takenBy = data['takenBy'];
+      final timestamp = data['timestamp'];
+
+      //  عرض رسالة للمستخدم
+      if (!_statusController.isClosed) {
+        _statusController.add({
+          'type': 'screenshot_taken',
+          'takenBy': takenBy,
+          'timestamp': timestamp,
+          'message': data['message'],
+        });
+      }
+    });
 
     _socket?.on('message:expired', (data) {
       print('⏱️ Received message:expired event: $data');
@@ -437,7 +453,7 @@ class SocketService {
     // منع الطلبات المكررة لنفس المستخدم في فترة قصيرة
     final now = DateTime.now();
     final lastRequest = _lastStatusRequest[userId];
-    
+
     if (lastRequest != null) {
       final timeSinceLastRequest = now.difference(lastRequest);
       if (timeSinceLastRequest < _statusRequestCooldown) {
@@ -445,10 +461,10 @@ class SocketService {
         return;
       }
     }
-    
+
     // تحديث وقت آخر طلب
     _lastStatusRequest[userId] = now;
-    
+
     _socket!.emit('request:user_status', {'targetUserId': userId});
   }
 

@@ -81,7 +81,7 @@ module.exports = (io) => {
       message: 'Connected to messaging server'
     });
 
-    // ✅ إرسال الرسائل المعلقة فوراً
+    //  إرسال الرسائل المعلقة فوراً
     (async () => {
       try {
         const pendingMessages = await Message.find({
@@ -477,6 +477,29 @@ if (finalExpiresAt && visibilityDuration) {
     socket.emit('error', { message: 'فشل تحديث سياسة الخصوصية' });
   }
 });
+
+
+  //  معالج الكشف عن Screenshot في iOS
+  socket.on('screenshot:taken', async (data) => {
+    try {
+      const { targetUserId } = data;
+      const takenBy = socket.userId; // المستخدم الذي أخذ Screenshot
+
+      console.log(`📸 Screenshot detected by ${takenBy} in chat with ${targetUserId}`);
+
+      //  إرسال إشعار للطرف الآخر
+      io.sendToUser(targetUserId, 'screenshot:notification', {
+        takenBy,
+        timestamp: new Date().toISOString(),
+        message: ' قام الطرف الآخر بالتقاط  الشاشة'
+      });
+
+      console.log(` Screenshot notification sent to ${targetUserId}`);
+
+    } catch (err) {
+      console.error('❌ Screenshot handler error:', err);
+    }
+  });
     /*socket.on('privacy:screenshots:update', (data) => {
       const { peerUserId, allowScreenshots } = data;
       io.sendToUser(peerUserId, 'privacy:screenshots:changed', {

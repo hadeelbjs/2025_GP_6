@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
@@ -19,6 +21,8 @@ import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:waseed/widgets/unified_screenshot_protector.dart';
 import '../widgets/duration_picker_sheet.dart';
+import 'package:http/http.dart' as http;
+import '../../../services/media_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -37,7 +41,6 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
-  
   // مكان كتابة الرسائل
   final _messageController = TextEditingController();
 
@@ -46,6 +49,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   final _socketService = SocketService();
   bool _screenshotsAllowed = false;
   bool _isLoadingScreenshotPolicy = true;
+  final _mediaService = MediaService.instance;
+  final ScreenCaptureEvent _screenListener = ScreenCaptureEvent();
+  //  منع تكرار التنبيهات
+  bool _hasShownScreenshotChangeMessage = false;
+  String? _lastScreenshotPolicyHash;
 
   int _sessionResetAttempts = 0;
   static const int _maxSessionResetAttempts = 2;
@@ -57,7 +65,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   bool _isDecryptingMessages = false;
 
-  int _decryptionFailureCount = 0; 
+  int _decryptionFailureCount = 0;
 
   //delete
   bool _hasShownDecryptionDialog = false; // لتجنب عرض Dialog متعدد
@@ -75,43 +83,64 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   StreamSubscription? _connectionSubscription;
   bool _isOtherUserOnline = false;
 
+  //  للكشف عن Screenshot في iOS
+  // StreamSubscription? _screenshotSubscription;
+
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); 
+    WidgetsBinding.instance.addObserver(this);
 
     _socketService.socket?.on('privacy:screenshots:changed', (data) {
       if (data['peerUserId'] == widget.userId) {
         final newPolicy = data['allowScreenshots'] == true;
+        final policyHash = '${widget.userId}_$newPolicy';
+
+        //  منع التكرار
+        if (_lastScreenshotPolicyHash == policyHash) {
+          return;
+        }
+        _lastScreenshotPolicyHash = policyHash;
 
         if (mounted) {
           setState(() {
             _screenshotsAllowed = newPolicy;
           });
           //_applyScreenshotPolicy(newPolicy);
-
-          _showMessage(
-            newPolicy
-                ? '${widget.name} سماح بلقطات الشاشة'
-                : '${widget.name} منع لقطات الشاشة',
-            true,
-          );
+          if (!_hasShownScreenshotChangeMessage) {
+            _hasShownScreenshotChangeMessage = true;
+            _showMessage(
+              newPolicy
+                  ? '${widget.name} سماح بلقطات الشاشة'
+                  : '${widget.name} منع لقطات الشاشة',
+              true,
+            );
+            Future.delayed(Duration(seconds: 2), () {
+              _hasShownScreenshotChangeMessage = false;
+            });
+          }
         }
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _applyScreenshotPolicy(false); 
-    });
+
+    /*WidgetsBinding.instance.addPostFrameCallback((_) {
+      _applyScreenshotPolicy(false);
+    });*/
 
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _loadScreenshotPolicyFromServer();
+
+      if (mounted) {
+        _applyScreenshotPolicy(_screenshotsAllowed);
+      }
     });
+
+    _setupScreenshotDetection();
 
     _initializeChat();
     _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
     _listenToExpiredMessages();
-
   }
 
   // =====================================================
@@ -155,6 +184,28 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
+  // =====================================================
+  //  الكشف عن Screenshot في iOS
+  // =====================================================
+  void _setupScreenshotDetection() {
+    if (Platform.isIOS) {
+      _screenListener.addScreenShotListener((filePath) {
+        print(' Screenshot detected on iOS!');
+
+        // إرسال إشعار للطرف الآخر عبر الـ socket
+        _socketService.socket?.emit('screenshot:taken', {
+          'targetUserId': widget.userId,
+          'takenBy': 'me', // السيرفر يستبدلها بالـ userId الحقيقي لو حابّين
+        });
+
+        // عرض رسالة تحذيرية عندي في الجهاز
+        _showMessage('⚠️ تم أخذ لقطة شاشة', false);
+      });
+
+      _screenListener.watch();
+    }
+  }
+
   Future<void> _saveScreenshotPolicyToServer(bool allow) async {
     try {
       final result = await ApiService.instance.putJson(
@@ -181,6 +232,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _applyScreenshotPolicy(bool allow) async {
+    if (!mounted) return;
+
     setState(() => _screenshotsAllowed = allow);
   }
 
@@ -261,25 +314,29 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _messageController.dispose();
     _scrollController.dispose();
+    _screenListener.dispose();
     _newMessageSubscription?.cancel();
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
     _userStatusSubscription?.cancel();
     _connectionSubscription?.cancel();
     _messageExpiredSubscription?.cancel();
+
+    //_screenshotSubscription?.cancel();
     _messagingService.setCurrentOpenChat(null);
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-    //  مراقبة lifecycle للتطبيق
+  //  مراقبة lifecycle للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-     // print('🔄 App resumed - ensuring socket connection...');
+      // print('🔄 App resumed - ensuring socket connection...');
       _ensureSocketConnection();
     }
   }
-  
+
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
@@ -292,12 +349,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           return;
         }
       }
-      
+
       //  طلب الحالة دائماً عند العودة للتطبيق (حتى لو Socket متصل)
       // لأن السيرفر يحتاج أن يعرف أن المستخدم عاد online
       Future.delayed(Duration(milliseconds: 500), () {
         if (mounted) {
-         // print('🔄 Requesting user status after resume...');
+          // print('🔄 Requesting user status after resume...');
           _messagingService.requestUserStatus(widget.userId);
         }
       });
@@ -508,7 +565,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       final now = DateTime.now();
       final filteredMessages = messages.where((msg) {
-      
         final expiresAt = msg['expiresAt'];
         if (expiresAt != null) {
           DateTime? expiryDateTime;
@@ -529,10 +585,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       if (mounted) {
         setState(() {
-  
           _messages.clear();
           _messages.addAll(filteredMessages);
-
         });
 
         await DatabaseHelper.instance.deleteExpiredMessages();
@@ -627,8 +681,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }
       }
     });
-    
-    _connectionSubscription = _socketService.onConnectionChange.listen((isConnected) {
+
+    _connectionSubscription = _socketService.onConnectionChange.listen((
+      isConnected,
+    ) {
       if (isConnected && mounted) {
         Future.delayed(Duration(milliseconds: 500), () {
           if (mounted) {
@@ -643,8 +699,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       final XFile? picked = await ImagePicker().pickImage(
         source: source,
-        maxWidth: 1600,
-        imageQuality: 85,
+        maxWidth: 1920,
+        maxHeight: 1920,
+        imageQuality: 85, // ضغط مباشر
       );
 
       if (picked == null) return;
@@ -652,24 +709,37 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       setState(() {
         _pendingImageFile = File(picked.path);
       });
+
+      print('✅ Image selected: ${picked.path}');
     } catch (e) {
+      print('❌ Pick image error: $e');
       _showMessage('تعذر اختيار الصورة', false);
     }
   }
 
   Future<void> _pickFile() async {
     try {
-      final result = await FilePicker.platform.pickFiles(
-        allowMultiple: false,
-        type: FileType.any,
-      );
+      final mediaResult = await _mediaService.pickFile();
 
-      if (result == null || result.files.isEmpty) return;
+      if (!mediaResult.success || mediaResult.file == null) {
+        if (mediaResult.errorMessage != null) {
+          _showMessage(mediaResult.errorMessage!, false);
+        }
+        return;
+      }
 
       setState(() {
-        _pendingFile = result.files.single;
+        _pendingFile = PlatformFile(
+          name: mediaResult.fileName!,
+          size: mediaResult.fileSize!,
+          path: mediaResult.file!.path,
+          bytes: null,
+        );
       });
+
+      print('✅ File selected: ${mediaResult.fileName}');
     } catch (e) {
+      print('❌ Pick file error: $e');
       _showMessage('تعذر اختيار الملف', false);
     }
   }
@@ -1242,10 +1312,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           ],
         ),
 
-        body: UnifiedScreenshotProtector(
-          enabled: !_screenshotsAllowed, // إذا false = ممنوع الالتقاط
-          child: _buildBody(hasAttachment),
-        ),
+        body: _isLoadingScreenshotPolicy
+            ? Center(child: CircularProgressIndicator(color: AppColors.primary))
+            : UnifiedScreenshotProtector(
+                enabled: !_screenshotsAllowed, // إذا false = ممنوع الالتقاط
+                onScreenshotAttempt: () {
+                  //  إرسال إشعار للطرف الآخر
+                  _socketService.socket?.emit('screenshot:taken', {
+                    'targetUserId': widget.userId,
+                  });
+                },
+                child: _buildBody(hasAttachment),
+              ),
       ),
     );
   }
@@ -1531,7 +1609,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMine = message['isMine'] == 1;
-    final isLocked = false; 
+    final isLocked = false;
     final isDeleted = message['status'] == 'deleted';
     final isDeletedForRecipient = message['deletedForRecipient'] == 1;
     final failedVerificationAtRecipient =
@@ -1594,8 +1672,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 if (attachmentType == 'image')
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.memory(
-                      base64Decode(attachmentData),
+                    child: Image.network(
+                      attachmentData,
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
@@ -1657,7 +1735,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 SizedBox(height: 8),
               ],
-              
+              if (text.isNotEmpty)
+                Text(
+                  text,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: isMine ? Colors.white : AppColors.textPrimary,
+                    fontSize: 14,
+                  ),
+                ),
+
               if (failedVerificationAtRecipient && isMine) ...[
                 const SizedBox(height: 4),
                 Row(
@@ -1771,40 +1857,194 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _openAttachment(String base64Data, String type, String? name) async {
-    if (type == 'image') {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => _ImageViewerScreen(base64Data: base64Data),
-        ),
-      );
-    } else if (type == 'file') {
-      try {
-        final bytes = base64Decode(base64Data);
+  void _openAttachment(String data, String type, String? name) async {
+    try {
+      if (type == 'image') {
+        if (data.startsWith('http://') || data.startsWith('https://')) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => _NetworkImageViewer(imageUrl: data),
+            ),
+          );
+        } else {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => _Base64ImageViewer(base64Data: data),
+            ),
+          );
+        }
+      } else if (type == 'file') {
+        _showMessage('جاري تحميل الملف...', true);
+
+        Uint8List bytes;
+
+        if (data.startsWith('http://') || data.startsWith('https://')) {
+          final response = await http.get(Uri.parse(data));
+
+          if (response.statusCode != 200) {
+            throw Exception('فشل تحميل الملف (${response.statusCode})');
+          }
+
+          bytes = response.bodyBytes;
+          print('✅ File downloaded: ${bytes.length} bytes');
+        } else {
+          bytes = base64Decode(data);
+          print('✅ File decoded: ${bytes.length} bytes');
+        }
+
         final tempDir = await getTemporaryDirectory();
         final fileName =
             name ?? 'file_${DateTime.now().millisecondsSinceEpoch}';
         final tempFile = File('${tempDir.path}/$fileName');
 
         await tempFile.writeAsBytes(bytes);
+        print('✅ File saved to: ${tempFile.path}');
 
         final result = await OpenFilex.open(tempFile.path);
 
         if (result.type != ResultType.done) {
           _showMessage('تعذر فتح الملف: ${result.message}', false);
+        } else {
+          _showMessage('تم فتح الملف', true);
         }
+      }
+    } catch (e, stackTrace) {
+      print('❌ Open attachment error: $e');
+      print('Stack trace: $stackTrace');
+      _showMessage('فشل فتح المرفق: $e', false);
+    }
+  }
+
+  Widget _buildImage(String data) {
+    if (data.startsWith('http://') || data.startsWith('https://')) {
+      // URL
+      return Image.network(
+        data,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return Container(
+            height: 200,
+            color: Colors.grey.shade300,
+            child: Center(
+              child: CircularProgressIndicator(
+                value: loadingProgress.expectedTotalBytes != null
+                    ? loadingProgress.cumulativeBytesLoaded /
+                          loadingProgress.expectedTotalBytes!
+                    : null,
+              ),
+            ),
+          );
+        },
+        errorBuilder: (context, error, stackTrace) {
+          print('❌ Image load error: $error');
+          return _buildImageError();
+        },
+      );
+    } else {
+      // Base64
+      try {
+        return Image.memory(
+          base64Decode(data),
+          width: double.infinity,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            print('❌ Base64 decode error: $error');
+            return _buildImageError();
+          },
+        );
       } catch (e) {
-        _showMessage('فشل فتح الملف', false);
+        print('❌ Base64 exception: $e');
+        return _buildImageError();
       }
     }
   }
+
+  Widget _buildImageError() {
+    return Container(
+      height: 200,
+      color: Colors.grey.shade300,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.broken_image, size: 48, color: Colors.grey),
+            SizedBox(height: 8),
+            Text('فشل عرض الصورة', style: AppTextStyles.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-class _ImageViewerScreen extends StatelessWidget {
+class _NetworkImageViewer extends StatelessWidget {
+  final String imageUrl;
+
+  const _NetworkImageViewer({required this.imageUrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        appBar: AppBar(
+          backgroundColor: Colors.black,
+          leading: IconButton(
+            icon: Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+          title: Text('صورة', style: TextStyle(color: Colors.white)),
+        ),
+        body: Center(
+          child: InteractiveViewer(
+            child: Image.network(
+              imageUrl,
+              fit: BoxFit.contain,
+              loadingBuilder: (context, child, loadingProgress) {
+                if (loadingProgress == null) return child;
+                return Center(
+                  child: CircularProgressIndicator(
+                    value: loadingProgress.expectedTotalBytes != null
+                        ? loadingProgress.cumulativeBytesLoaded /
+                              loadingProgress.expectedTotalBytes!
+                        : null,
+                    color: Colors.white,
+                  ),
+                );
+              },
+              errorBuilder: (context, error, stackTrace) {
+                return Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.broken_image, size: 64, color: Colors.white),
+                      SizedBox(height: 16),
+                      Text(
+                        'فشل عرض الصورة',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// عرض صورة من Base64
+class _Base64ImageViewer extends StatelessWidget {
   final String base64Data;
 
-  const _ImageViewerScreen({required this.base64Data});
+  const _Base64ImageViewer({required this.base64Data});
 
   @override
   Widget build(BuildContext context) {

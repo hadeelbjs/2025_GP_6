@@ -21,43 +21,41 @@ const filesDir = path.join(uploadDir, 'files');
   }
 });
 
-// ============================================
 // إعدادات Multer للصور
-// ============================================
+
 const imageStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, imagesDir);
   },
   filename: (req, file, cb) => {
-    // ✅ اسم فريد: userId_timestamp_random.ext
     const uniqueName = `${req.user.id}_${Date.now()}_${crypto.randomBytes(8).toString('hex')}${path.extname(file.originalname)}`;
     cb(null, uniqueName);
   }
 });
 
 const imageFilter = (req, file, cb) => {
-  const allowedTypes = /jpeg|jpg|png|gif|png|webp|heic/;
-  const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
-  const mimetype = allowedTypes.test(file.mimetype);
+const allowedExtensions = /\.(jpeg|jpg|png|gif|webp|heic)$/i; 
+const extnameValid = allowedExtensions.test(path.extname(file.originalname));
 
-  if (extname && mimetype) {
-    cb(null, true);
-  } else {
-    cb(new Error('الملف يجب أن يكون صورة (JPEG, PNG, GIF, WebP, HEIC)'));
-  }
+const mimetypeStartsWithImage = file.mimetype.startsWith('image/'); 
+
+  if (extnameValid || mimetypeStartsWithImage) {
+ cb(null, true);
+ } else {
+ cb(new Error('الملف يجب أن يكون صورة (JPEG, PNG, GIF, WebP, HEIC)'));
+ }
 };
 
 const uploadImage = multer({
-  storage: imageStorage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // ✅ 10MB حد أقصى
-  },
-  fileFilter: imageFilter
+storage: imageStorage,
+ limits: {
+ fileSize: 10 * 1024 * 1024,
+ },
+ fileFilter: imageFilter // استخدام الفلتر المعدل
 });
 
-// ============================================
 // إعدادات Multer للملفات
-// ============================================
+
 const fileStorage = multer.diskStorage({
   destination: (req, file, cb) => {
     cb(null, filesDir);
@@ -69,7 +67,6 @@ const fileStorage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  // ✅ ممنوع: ملفات تنفيذية خطيرة
   const blockedExtensions = /\.exe|\.bat|\.cmd|\.sh|\.app|\.dmg|\.deb|\.rpm/i;
   
   if (blockedExtensions.test(file.originalname)) {
@@ -82,14 +79,13 @@ const fileFilter = (req, file, cb) => {
 const uploadFile = multer({
   storage: fileStorage,
   limits: {
-    fileSize: 50 * 1024 * 1024, // ✅ 50MB حد أقصى
+    fileSize: 50 * 1024 * 1024, //  50MB حد أقصى
   },
   fileFilter: fileFilter
 });
 
-// ============================================
-// ✅ رفع صورة
-// ============================================
+//  رفع صورة
+
 router.post('/image', auth, uploadImage.single('image'), async (req, res) => {
   try {
     if (!req.file) {
@@ -99,7 +95,7 @@ router.post('/image', auth, uploadImage.single('image'), async (req, res) => {
       });
     }
 
-    // ✅ رابط الصورة
+    //  رابط الصورة
     const imageUrl = `/uploads/images/${req.file.filename}`;
     
     console.log(`✅ Image uploaded: ${req.file.filename} by user ${req.user.id}`);
@@ -130,9 +126,7 @@ router.post('/image', auth, uploadImage.single('image'), async (req, res) => {
   }
 });
 
-// ============================================
-// ✅ رفع ملف
-// ============================================
+//  رفع ملف
 router.post('/file', auth, uploadFile.single('file'), async (req, res) => {
   try {
     if (!req.file) {
@@ -142,7 +136,7 @@ router.post('/file', auth, uploadFile.single('file'), async (req, res) => {
       });
     }
 
-    // ✅ رابط الملف
+    //  رابط الملف
     const fileUrl = `/uploads/files/${req.file.filename}`;
     
     console.log(`✅ File uploaded: ${req.file.filename} by user ${req.user.id}`);
@@ -151,7 +145,7 @@ router.post('/file', auth, uploadFile.single('file'), async (req, res) => {
       success: true,
       message: 'تم رفع الملف بنجاح',
       url: fileUrl,
-      filename: req.file.originalname, // ✅ الاسم الأصلي
+      filename: req.file.originalname, //  الاسم الصدقي
       savedAs: req.file.filename, // الاسم المحفوظ
       size: req.file.size,
       mimetype: req.file.mimetype,
@@ -160,7 +154,7 @@ router.post('/file', auth, uploadFile.single('file'), async (req, res) => {
   } catch (error) {
     console.error('❌ File upload error:', error);
     
-    // ✅ حذف الملف إذا حصل خطأ
+    //  حذف الملف إذا صار فيه خطأ
     if (req.file && req.file.path) {
       fs.unlink(req.file.path, (err) => {
         if (err) console.error('Failed to delete file:', err);
@@ -174,14 +168,12 @@ router.post('/file', auth, uploadFile.single('file'), async (req, res) => {
   }
 });
 
-// ============================================
-// ✅ حذف صورة (optional - للتنظيف)
-// ============================================
+//  حذف صور 
+
 router.delete('/image/:filename', auth, async (req, res) => {
   try {
     const { filename } = req.params;
     
-    // ✅ تحقق أن الملف يخص المستخدم (اسم الملف يبدأ بـ userId)
     if (!filename.startsWith(req.user.id)) {
       return res.status(403).json({
         success: false,
@@ -191,7 +183,6 @@ router.delete('/image/:filename', auth, async (req, res) => {
 
     const filePath = path.join(imagesDir, filename);
 
-    // ✅ تحقق من وجود الملف
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({
         success: false,
@@ -199,7 +190,6 @@ router.delete('/image/:filename', auth, async (req, res) => {
       });
     }
 
-    // ✅ حذف الملف
     fs.unlinkSync(filePath);
     
     console.log(`🗑️ Image deleted: ${filename}`);
@@ -218,9 +208,7 @@ router.delete('/image/:filename', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// ✅ حذف ملف (optional - للتنظيف)
-// ============================================
+//  حذف ملف 
 router.delete('/file/:filename', auth, async (req, res) => {
   try {
     const { filename } = req.params;
@@ -259,9 +247,7 @@ router.delete('/file/:filename', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// ✅ Middleware للتعامل مع أخطاء Multer
-// ============================================
+//  Middleware للتعامل مع أخطاء Multer
 router.use((error, req, res, next) => {
   if (error instanceof multer.MulterError) {
     if (error.code === 'LIMIT_FILE_SIZE') {

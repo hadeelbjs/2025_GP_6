@@ -1,5 +1,4 @@
 
-/*
 
 // backend/routes/upload.js
 const express = require('express');
@@ -275,4 +274,4 @@ router.use((error, req, res, next) => {
   next();
 });
 
-module.exports = router;*/
+module.exports = router;

@@ -1948,6 +1948,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                   ),
                 SizedBox(height: 8),
               ],
+              if (text.isNotEmpty) 
+                Text(
+                  text,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: isMine ? Colors.white : AppColors.textPrimary,
+                    fontSize: 14,
+                  ),
+                ),
               
               if (failedVerificationAtRecipient && isMine) ...[
                 const SizedBox(height: 4),

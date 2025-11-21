@@ -3,7 +3,8 @@ const jwt = require('jsonwebtoken');
 const Message = require('../models/Message');
 
 const userSockets = new Map();
-const onlineUsers = new Set(); 
+const onlineUsers = new Set();
+const disconnectTimeouts = new Map(); 
 
 
 function generateConversationId(userId1, userId2) {
@@ -71,10 +72,17 @@ module.exports = (io) => {
 
   io.on('connection', (socket) => {
     const userId = socket.userId;
+    const userIdStr = userId.toString();
     console.log(`✅ User connected: ${userId}`);
 
-    userSockets.set(userId.toString(), socket.id);
-    onlineUsers.add(userId.toString());
+    if (disconnectTimeouts.has(userIdStr)) {
+      clearTimeout(disconnectTimeouts.get(userIdStr));
+      disconnectTimeouts.delete(userIdStr);
+      console.log(`⚠️ User ${userId} reconnected - cancelled offline broadcast`);
+    }
+
+    userSockets.set(userIdStr, socket.id);
+    onlineUsers.add(userIdStr);
 
     socket.emit('connected', {
       userId,
@@ -508,21 +516,42 @@ if (finalExpiresAt && visibilityDuration) {
       });
     });*/
 
-    socket.on('disconnect', () => {
-      console.log(`❌ User disconnected: ${userId}`);
+    socket.on('disconnect', (reason) => {
+      const userIdStr = userId.toString();
+      console.log(`❌ User disconnected: ${userId} (reason: ${reason})`);
       
-      userSockets.delete(userId.toString());
-      onlineUsers.delete(userId.toString());
+      const wasOnline = onlineUsers.has(userIdStr);
       
-      setTimeout(() => {
-        if (!onlineUsers.has(userId.toString())) {
-          broadcastStatusToContacts(userId.toString(), false, io);
-        }
-      }, 1000);
+      userSockets.delete(userIdStr);
+      onlineUsers.delete(userIdStr);
+      
+      if (disconnectTimeouts.has(userIdStr)) {
+        clearTimeout(disconnectTimeouts.get(userIdStr));
+        disconnectTimeouts.delete(userIdStr);
+      }
+      
+      if (wasOnline) {
+        
+        const disconnectTimeout = setTimeout(() => {
+          const stillOffline = !onlineUsers.has(userIdStr) && 
+                               !userSockets.has(userIdStr);
+          
+          if (stillOffline) {
+            console.log(`📡 Broadcasting offline status for ${userId}`);
+            broadcastStatusToContacts(userIdStr, false, io);
+          } else {
+            console.log(`⚠️ User ${userId} reconnected before offline broadcast - skipped`);
+          }
+          
+          disconnectTimeouts.delete(userIdStr);
+        }, 1500);
+        
+        disconnectTimeouts.set(userIdStr, disconnectTimeout);
+        console.log(`⏱️ Scheduled offline broadcast for ${userId} in 1500ms`);
+      }
     });
   });
 
-  // ✅ دالة إرسال محسّنة
   io.sendToUser = (userId, event, data) => {
     const socketId = userSockets.get(userId.toString());
     

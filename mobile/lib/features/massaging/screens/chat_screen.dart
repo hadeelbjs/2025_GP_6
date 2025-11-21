@@ -716,6 +716,8 @@ UploadProgress? _currentProgress;
             _messagingService.requestUserStatus(widget.userId);
           }
         });
+      } else if (!isConnected && mounted) {
+
       }
     });
   }

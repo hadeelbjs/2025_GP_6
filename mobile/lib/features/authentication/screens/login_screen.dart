@@ -27,6 +27,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
 
   @override
   void dispose() {
@@ -279,7 +281,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         hint: 'أدخل كلمة المرور',
                         icon: Icons.lock,
                         isPassword: true,
+                        obscureText: _obscurePassword,
                         enabled: !_isLoading,
+                        suffixIcon: IconButton(
+                        icon: Icon(
+                          !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.grey.shade600,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'الرجاء إدخال كلمة المرور';

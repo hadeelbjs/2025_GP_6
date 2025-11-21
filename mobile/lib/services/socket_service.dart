@@ -374,6 +374,7 @@ class SocketService {
     String? attachmentEncryptionType,
     int? visibilityDuration,
     String? expiresAt,
+    String? createdAt,
   }) {
     if (_socket == null || !isConnected) {
       print('❌ Cannot send: Socket not connected');
@@ -393,7 +394,7 @@ class SocketService {
       'attachmentEncryptionType': attachmentEncryptionType,
       'visibilityDuration': visibilityDuration,
       'expiresAt': expiresAt,
-      //'createdAt': DateTime.now().toIso8601String(),
+      'createdAt': createdAt, // ✅ إرسال createdAt الصحيح
     });
   }
 

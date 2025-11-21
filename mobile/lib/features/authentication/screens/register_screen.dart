@@ -30,6 +30,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
 
   @override
   void dispose() {
@@ -389,46 +391,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       const SizedBox(height: 16),
                       PhoneTextField(
-  locale: const Locale('ar'),
-  decoration: const InputDecoration(
-    filled: true,
-    fillColor: Colors.white,
-    
-    labelText: 'رقم الهاتف',
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-      
-    ),
-    prefixIcon: Icon(Icons.phone),
-  ),
-  searchFieldInputDecoration: const InputDecoration(
-    filled: true,
-    
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.all(Radius.circular(12)),
-    ),
-    suffixIcon: Icon(Icons.search),
-    hintText: 'بحث عن بالاسم او الرمز',
-  ),
-  dialogTitle: 'اختر الدولة',
-  initialCountryCode: 'SA',
-  onChanged: (phoneNumber) {
-    debugPrint('رقم الهاتف: ${phoneNumber.completeNumber}');
-     _phoneController.text = phoneNumber.completeNumber;
-  },
-  invalidNumberMessage: "الرجاء إدخال رقم هاتف صالح",
-),
+                        locale: const Locale('ar'),
+                        decoration: const InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          
+                          labelText: 'رقم الهاتف',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                            
+                          ),
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                        searchFieldInputDecoration: const InputDecoration(
+                          filled: true,
+                          
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                          ),
+                          suffixIcon: Icon(Icons.search),
+                          hintText: 'بحث عن بالاسم او الرمز',
+                        ),
+                        dialogTitle: 'اختر الدولة',
+                        initialCountryCode: 'SA',
+                        onChanged: (phoneNumber) {
+                          debugPrint('رقم الهاتف: ${phoneNumber.completeNumber}');
+                          _phoneController.text = phoneNumber.completeNumber;
+                        },
+                        invalidNumberMessage: "الرجاء إدخال رقم هاتف صالح",
+                      ),
 
 
                       
                       const SizedBox(height: 16),
                       CustomTextField(
                         controller: _passwordController,
+                        obscureText: _obscurePassword,
+
                         label: 'كلمة المرور',
                         hint: 'أدخل كلمة المرور',
                         icon: Icons.lock,
                         isPassword: true,
                         enabled: !_isLoading,
+                        suffixIcon: IconButton(
+                        icon: Icon(
+                          !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.grey.shade600,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'الرجاء إدخال كلمة المرور';

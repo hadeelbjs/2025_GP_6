@@ -175,14 +175,12 @@ import CoreLocation
     // ============================================
     
     private func getWifiInfo() -> [String: Any]? {
-        // ✅ تم التحديث: iOS 15.0 بدلاً من 14.0
         if #available(iOS 15.0, *) {
             return getWifiInfoModern()
         }
         return getWifiInfoLegacy()
     }
     
-    // ✅ تم التحديث: iOS 15.0 بدلاً من 14.0
     @available(iOS 15.0, *)
     private func getWifiInfoModern() -> [String: Any]? {
         var wifiInfo: [String: Any]?
@@ -245,7 +243,6 @@ import CoreLocation
         return nil
     }
     
-    // ✅ تم التحديث: iOS 15.0 بدلاً من 14.0
     @available(iOS 15.0, *)
     private func mapSecurityType(_ type: NEHotspotNetworkSecurityType) -> String {
         switch type {

@@ -39,6 +39,8 @@ class MessagingService {
   Timer? _cleanupTimer;
   Timer? _expiryTimer;
   static int decryptionFailure = 0;
+  
+  final Map<String, Timer> _messageTimers = {};
 
   final _newMessageController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -84,6 +86,8 @@ class MessagingService {
       } else {}
         print('🔍 Checking for expired messages on app start...');
     await deleteExpiredMessages(); 
+    
+      await _loadMessageTimers();
     
       if (!_hasStartedTimer) {
         startLocalExpiryTimer();
@@ -268,6 +272,10 @@ class MessagingService {
         'expiresAt': expiresAt?.millisecondsSinceEpoch,
         'isExpired': 0,
       });
+      
+      if (expiresAt != null) {
+        _scheduleMessageExpiry(messageId, expiresAt.millisecondsSinceEpoch);
+      }
 
       // حفظ المحادثة
       await _db.saveConversation({
@@ -301,8 +309,7 @@ class MessagingService {
         attachmentEncryptionType: attachmentEncryptionType,
         visibilityDuration: duration,                 
         expiresAt: expiresAt.toUtc().toIso8601String(),
-        
-
+        createdAt: DateTime.fromMillisecondsSinceEpoch(timestamp).toUtc().toIso8601String(),
       );
      _emitProgress(UploadProgress(
         stage: UploadStage.complete,
@@ -356,21 +363,41 @@ class MessagingService {
     final visibilityDuration = data['visibilityDuration'] as int?;
     final expiresAtStr = data['expiresAt'] as String?;
 
-    int? expiresAt;
-    if (expiresAtStr != null) {
-      try {
-        expiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
-      } catch (e) {
-        print('⚠️ Failed to parse expiresAt: $e');
-      }
-    }
-
     // ⚠️ لا تحاول فك التشفير هنا - احفظ المشفر فقط
     // سيتم فك التشفير لاحقاً في decryptAllConversationMessages
     
     final timestamp = data['createdAt'] != null
         ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
         : DateTime.now().millisecondsSinceEpoch;
+    
+    final nowUtc = DateTime.now().toUtc();
+    final now = nowUtc.millisecondsSinceEpoch;
+  
+    int? expiresAt;
+    if (expiresAtStr != null && visibilityDuration != null) {
+      try {
+        final originalExpiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
+        final createdAt = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
+        
+        // حساب الوقت المتبقي من وقت الإنشاء الأصلي
+        final timeSinceCreation = nowUtc.difference(createdAt);
+        final originalLifetime = Duration(seconds: visibilityDuration);
+        
+        // هذا يضمن أن المستقبل يرى الرسالة للمدة المحددة (10 ثواني مثلاً)
+        // بغض النظر عن وقت الوصول (حتى لو وصلت متأخرة)
+        expiresAt = now + (visibilityDuration * 1000);
+      } catch (e) {
+        print('⚠️ Failed to parse expiresAt: $e');
+        // في حالة الخطأ، استخدم المدة المحددة من وقت الاستقبال
+        if (visibilityDuration != null) {
+          expiresAt = now + (visibilityDuration * 1000);
+        }
+      }
+    } else if (visibilityDuration != null) {
+      // إذا لم يكن هناك expiresAt، احسبه من وقت الاستقبال
+      expiresAt = now + (visibilityDuration * 1000);
+      print('📥 Message received: no expiresAt, using duration from receive time: ${DateTime.fromMillisecondsSinceEpoch(expiresAt, isUtc: true).toIso8601String()}');
+    }
 
     final conversationId = _generateConversationId(senderId);
     final bool isCurrentChat = _currentOpenChatUserId == senderId;
@@ -397,6 +424,11 @@ class MessagingService {
       'expiresAt': expiresAt,
       'isExpired': 0,
     });
+    
+    // ✅ جدولة حذف الرسالة المستقبلة في الوقت المحدد بالضبط
+    if (expiresAt != null) {
+      _scheduleMessageExpiry(messageId, expiresAt);
+    }
 
     if (!isCurrentChat) {
       await _db.incrementUnreadCount(conversationId);
@@ -492,6 +524,25 @@ class MessagingService {
     for (final msg in pending) {
       try {
         print('🔁 Re-sending pending message ${msg['id']}');
+        
+        // إعادة حساب expiresAt إذا كانت موجودة
+        String? expiresAtStr;
+        String? createdAtStr;
+        
+        if (msg['createdAt'] != null) {
+          final createdAt = DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int);
+          createdAtStr = createdAt.toUtc().toIso8601String();
+          
+          if (msg['expiresAt'] != null) {
+            final expiresAt = DateTime.fromMillisecondsSinceEpoch(msg['expiresAt'] as int);
+            expiresAtStr = expiresAt.toUtc().toIso8601String();
+          } else if (msg['visibilityDuration'] != null) {
+            // إعادة حساب expiresAt بناءً على createdAt الأصلي
+            final expiresAt = createdAt.add(Duration(seconds: msg['visibilityDuration'] as int));
+            expiresAtStr = expiresAt.toUtc().toIso8601String();
+          }
+        }
+        
         _socketService.sendMessageWithAttachment(
           messageId: msg['id'],
           recipientId: msg['receiverId'],
@@ -500,6 +551,9 @@ class MessagingService {
           attachmentData: msg['attachmentData'],
           attachmentType: msg['attachmentType'],
           attachmentName: msg['attachmentName'],
+          visibilityDuration: msg['visibilityDuration'],
+          expiresAt: expiresAtStr,
+          createdAt: createdAtStr,
         );
         await db.updateMessageStatus(msg['id'], 'sent');
       } catch (e) {
@@ -821,6 +875,10 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
     print('   deleteForEveryone: $deleteForEveryone');
 
 
+      // إلغاء Timer الخاص بالرسالة
+      _messageTimers[messageId]?.cancel();
+      _messageTimers.remove(messageId);
+      
       if (deleteForEveryone) {
         await _db.deleteMessage(messageId);
         _socketService.socket?.emit('message:delete_local', {
@@ -833,7 +891,10 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
 
         return {'success': true, 'message': 'تم الحذف للجميع'};
       } else {
-     
+        // إلغاء Timer الخاص بالرسالة
+        _messageTimers[messageId]?.cancel();
+        _messageTimers.remove(messageId);
+        
         await _db.updateMessage(messageId, {'deletedForRecipient': 1});
                 print('✅ Updated deletedForRecipient = 1 for message: $messageId');
 
@@ -923,8 +984,15 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
     _newMessageController.close();
     _messageDeletedController.close();
     _messageStatusController.close();
-     _messageExpiredController.close();
-     _uploadProgressController.close();
+    
+    // إلغاء جميع Timers الخاصة بالرسائل
+    for (final timer in _messageTimers.values) {
+      timer.cancel();
+    }
+    _messageTimers.clear();
+    
+    _messageExpiredController.close();
+    _uploadProgressController.close();
     _expiryTimer?.cancel();
     _cleanupTimer?.cancel();
   }
@@ -995,14 +1063,125 @@ Future<void> deleteExpiredMessages() async {
  
 }
 
+  //  إنشاء Timer ديناميكي لحذف رسالة في الوقت المحدد بالضبط
+  void _scheduleMessageExpiry(String messageId, int expiresAtMillis) {
+    // إلغاء Timer القديم إذا كان موجوداً
+    _messageTimers[messageId]?.cancel();
+    _messageTimers.remove(messageId);
+    
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(expiresAtMillis, isUtc: true);
+    final nowUtc = DateTime.now().toUtc();
+    
+    // حساب الفترة الزمنية حتى انتهاء الصلاحية
+    final delay = expiresAt.difference(nowUtc);
+    
+    // إذا انتهت الصلاحية بالفعل، احذف مباشرة
+    if (delay.isNegative || delay.inMilliseconds <= 0) {
+      _deleteSingleMessage(messageId);
+      return;
+    }
+    
+    // إنشاء Timer لحذف الرسالة في الوقت المحدد بالضبط
+    _messageTimers[messageId] = Timer(delay, () {
+      _deleteSingleMessage(messageId);
+      _messageTimers.remove(messageId);
+    });
+    
+  }
+  
+  // حذف رسالة واحدة
+  Future<void> _deleteSingleMessage(String messageId) async {
+    try {
+      final message = await _db.getMessage(messageId);
+      if (message == null) return;
+      
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final nowReadable = DateTime.now().toIso8601String();
+      final expiresAt = message['expiresAt'] as int?;
+      final createdAt = message['createdAt'] as int;
+      final deliveredAt = message['deliveredAt'] as int?;
+      final isMine = (message['isMine'] as int?) == 1;
+      final duration = message['visibilityDuration'] as int?;
+      
+      if (expiresAt != null) {
+        final expiresAtReadable = DateTime.fromMillisecondsSinceEpoch(expiresAt, isUtc: true).toIso8601String();
+        final createdAtReadable = DateTime.fromMillisecondsSinceEpoch(createdAt, isUtc: true).toIso8601String();
+        final delay = now - expiresAt;
+        
+        // حساب Actual Lifetime بناءً على نوع الرسالة
+        // للمرسل: من createdAt (وقت الإرسال)
+        // للمستقبل: من deliveredAt (وقت الاستقبال) إذا كان موجوداً، وإلا من createdAt
+        final viewStartTime = (isMine || deliveredAt == null) ? createdAt : deliveredAt;
+        final actualLifetime = now - viewStartTime;
+        
+        String lifetimeInfo;
+        if (isMine) {
+          lifetimeInfo = 'From creation';
+        } else if (deliveredAt != null) {
+          final deliveredAtReadable = DateTime.fromMillisecondsSinceEpoch(deliveredAt, isUtc: true).toIso8601String();
+          lifetimeInfo = 'From delivery ($deliveredAtReadable)';
+        } else {
+          lifetimeInfo = 'From creation (no delivery time)';
+        }
+        
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        print('⏱️  MESSAGE EXPIRED (Precise Timer):');
+        print('   📝 Message ID: $messageId');
+        print('   ⏱️ Duration Set: ${duration}s');
+        print('   📅 Created: $createdAtReadable');
+        print('   ⏰ Should expire: $expiresAtReadable');
+        print('   🕐 Actually deleted: $nowReadable');
+        print('   ⏳ Deletion Delay: ${delay}ms (${(delay / 1000).toStringAsFixed(3)}s)');
+        print('   ⌛ Actual Lifetime: ${(actualLifetime / 1000).toStringAsFixed(3)}s (Expected: ${duration}s) - $lifetimeInfo');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      }
+      
+      await _db.deleteMessage(messageId);
+      _messageExpiredController.add({'messageId': messageId});
+      _messageTimers.remove(messageId);
+      
+      print('✅ [DB] Deleted expired message: $messageId');
+    } catch (e) {
+      print('❌ Error deleting message $messageId: $e');
+    }
+  }
+
+  // تحميل جميع الرسائل وإنشاء Timers لها عند بدء التطبيق
+  Future<void> _loadMessageTimers() async {
+    try {
+      final db = DatabaseHelper.instance;
+      final messages = await db.database;
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      
+      // جلب جميع الرسائل التي لديها expiresAt ولم تنته صلاحيتها بعد
+      final messagesWithExpiry = await messages.query(
+        'messages',
+        where: 'expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) > ?',
+        whereArgs: [now],
+        columns: ['id', 'expiresAt'],
+      );
+      
+      for (final msg in messagesWithExpiry) {
+        final messageId = msg['id'] as String;
+        final expiresAt = msg['expiresAt'] as int;
+        _scheduleMessageExpiry(messageId, expiresAt);
+      }
+      
+      print('✅ Loaded ${messagesWithExpiry.length} message timers');
+    } catch (e) {
+      print('⚠️ Error loading message timers: $e');
+    }
+  }
+
  void startLocalExpiryTimer() {
-    
-    // _expiryTimer?.cancel();
-    
+    //  لا نحتاج Timer عام بعد الآن - نستخدم Timer ديناميكي لكل رسالة
+    // لكن نبقي Timer عام كنسخة احتياطية لحذف أي رسائل فاتتها
     if (_expiryTimer != null && _expiryTimer!.isActive) {
       return;
     }
     
+    // Timer كل 5 ثوانٍ لحذف أي رسائل فاتتها
     _expiryTimer = Timer.periodic(
       const Duration(seconds: 5), 
       (timer) async {

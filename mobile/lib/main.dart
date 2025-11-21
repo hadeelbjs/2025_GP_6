@@ -233,6 +233,7 @@ Future<void> _initializeEncryption() async {
       print('Kesy exist $userId');
       await signalManager.checkAndRefreshPreKeys();
       await signalManager.ensureSignedPreKeyRotation(userId);
+      print(await signalManager.checkKeysStatus());
     } else {
       await signalManager.generateAndUploadKeys();
     } 

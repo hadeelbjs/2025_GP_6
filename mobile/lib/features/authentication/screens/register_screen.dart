@@ -414,6 +414,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
   initialCountryCode: 'SA',
   onChanged: (phoneNumber) {
     debugPrint('رقم الهاتف: ${phoneNumber.completeNumber}');
+     _phoneController.text = phoneNumber.completeNumber;
   },
   invalidNumberMessage: "الرجاء إدخال رقم هاتف صالح",
 ),

@@ -19,10 +19,11 @@ import '../../../services/local_db/database_helper.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:waseed/widgets/unified_screenshot_protector.dart';
+import 'package:waseed/features/massaging/widgets/unified_screenshot_protector.dart';
 import '../widgets/duration_picker_sheet.dart';
 import 'package:http/http.dart' as http;
 import '../../../services/media_service.dart';
+import '../../../services/screenshot_protection_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String userId;
@@ -97,18 +98,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
-    // تهيئة Pulse Animation (سيتم التحكم فيه بعد تحميل المدة)
-    _pulseAnimationController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1000),
-    );
-    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.15).animate(
-      CurvedAnimation(
-        parent: _pulseAnimationController,
-        curve: Curves.easeInOut,
-      ),
-    );
-    // سيتم بدء Animation فقط إذا لم تكن المدة موجودة (في _loadDuration)
+    _initScreenshotProtection();
 
     _socketService.socket?.on('privacy:screenshots:changed', (data) {
       if (data['peerUserId'] == widget.userId) {
@@ -199,6 +189,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         }
       }
     });
+  }
+
+  /// تهيئة خدمة حماية الشاشة
+  Future<void> _initScreenshotProtection() async {
+    await ScreenshotProtectionService.initialize(
+      onScreenshotTaken: () {
+        // عند التقاط الشاشة - إرسال إشعار للطرف الآخر
+        if (!_peerAllowsMyScreenshots) {
+          _socketService.socket?.emit('screenshot:taken', {
+            'targetUserId': widget.userId,
+          });
+          print('📸 Screenshot taken - notification sent to ${widget.userId}');
+        }
+      },
+      onScreenRecordingChanged: (isRecording) {
+        if (isRecording && !_peerAllowsMyScreenshots) {
+          print('🎥 Screen recording detected');
+        }
+      },
+    );
   }
 
   // =====================================================

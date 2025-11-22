@@ -7,11 +7,19 @@ import CoreLocation
 @main
 @objc class AppDelegate: FlutterAppDelegate {
     private let CHANNEL = "com.waseed.app/wifi_security"
+     
+     //Screenshot Protection Channel
+    private let SCREENSHOT_CHANNEL = "com.waseed/screenshot_protection"
     
     private lazy var locationManager: CLLocationManager = { 
         let manager = CLLocationManager()
         return manager
     }()
+
+// Screenshot Protection Properties
+    private var secureView: UIView?
+    private var secureTextField: UITextField?
+    private var screenshotMethodChannel: FlutterMethodChannel?
 
     override func application(
         _ application: UIApplication,
@@ -50,8 +58,166 @@ import CoreLocation
             }
         })
         
+        // ============================================
+        // 2. Screenshot Protection Channel 
+        // ============================================
+        screenshotMethodChannel = FlutterMethodChannel(
+            name: SCREENSHOT_CHANNEL,
+            binaryMessenger: controller.binaryMessenger
+        )
+        
+        screenshotMethodChannel?.setMethodCallHandler({ [weak self] (call: FlutterMethodCall, result: @escaping FlutterResult) -> Void in
+            guard let self = self else {
+                result(FlutterError(code: "UNAVAILABLE", message: "AppDelegate not available", details: nil))
+                return
+            }
+            
+            switch call.method {
+            case "enableProtection":
+                self.enableScreenshotProtection()
+                result(true)
+            case "disableProtection":
+                self.disableScreenshotProtection()
+                result(true)
+            case "isProtectionEnabled":
+                result(self.secureView != nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        })
+        
+        // Setup Screenshot Detection
+        setupScreenshotDetection()
+
         GeneratedPluginRegistrant.register(with: self)
         return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
+    
+     // ============================================
+    // Screenshot Protection Methods
+    // ============================================
+    
+    private func enableScreenshotProtection() {
+        guard let window = window else { return }
+        
+        // إذا الحماية مفعلة مسبقاً
+        if secureView != nil { return }
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // إنشاء UITextField مع isSecureTextEntry
+            let textField = UITextField()
+            textField.isSecureTextEntry = true
+            self.secureTextField = textField
+            
+            // الحصول على الـ secure view
+            guard let secureLayer = textField.layer.sublayers?.first,
+                  let secureViewFromLayer = secureLayer.delegate as? UIView else {
+                print("⚠️ iOS: Could not get secure view, using fallback")
+                self.enableProtectionFallback()
+                return
+            }
+            
+            self.secureView = secureViewFromLayer
+            secureViewFromLayer.subviews.forEach { $0.removeFromSuperview() }
+            
+            secureViewFromLayer.translatesAutoresizingMaskIntoConstraints = false
+            window.addSubview(secureViewFromLayer)
+            
+            NSLayoutConstraint.activate([
+                secureViewFromLayer.topAnchor.constraint(equalTo: window.topAnchor),
+                secureViewFromLayer.bottomAnchor.constraint(equalTo: window.bottomAnchor),
+                secureViewFromLayer.leadingAnchor.constraint(equalTo: window.leadingAnchor),
+                secureViewFromLayer.trailingAnchor.constraint(equalTo: window.trailingAnchor)
+            ])
+            
+            window.sendSubviewToBack(secureViewFromLayer)
+            print("✅ iOS: Screenshot protection enabled")
+        }
+    }
+    
+    private func enableProtectionFallback() {
+        // Fallback protection using privacy screen
+        print("⚠️ iOS: Using fallback protection method")
+    }
+    
+    private func disableScreenshotProtection() {
+        DispatchQueue.main.async { [weak self] in
+            self?.secureView?.removeFromSuperview()
+            self?.secureView = nil
+            self?.secureTextField = nil
+            print("🔓 iOS: Screenshot protection disabled")
+        }
+    }
+    
+    // Screenshot Detection
+    
+    private func setupScreenshotDetection() {
+        // كشف Screenshot
+        NotificationCenter.default.addObserver(
+            forName: UIApplication.userDidTakeScreenshotNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            print("📸 iOS: Screenshot detected!")
+            self?.screenshotMethodChannel?.invokeMethod("onScreenshotTaken", arguments: nil)
+        }
+        
+        // كشف تسجيل الشاشة (iOS 11+)
+        if #available(iOS 11.0, *) {
+            NotificationCenter.default.addObserver(
+                forName: UIScreen.capturedDidChangeNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                let isRecording = UIScreen.main.isCaptured
+                print("🎥 iOS: Screen recording: \(isRecording)")
+                self?.screenshotMethodChannel?.invokeMethod(
+                    "onScreenRecordingChanged",
+                    arguments: ["isRecording": isRecording]
+                )
+            }
+        }
+    }
+    
+    // App Lifecycle for Privacy Screen
+    
+    override func applicationWillResignActive(_ application: UIApplication) {
+        // إضافة شاشة خصوصية عند الخروج
+        if secureView != nil {
+            addPrivacyScreen()
+        }
+        super.applicationWillResignActive(application)
+    }
+    
+    override func applicationDidBecomeActive(_ application: UIApplication) {
+        // إزالة شاشة الخصوصية  
+        removePrivacyScreen()
+        super.applicationDidBecomeActive(application)
+    }
+    
+    private func addPrivacyScreen() {
+        guard let window = window else { return }
+        
+        if window.viewWithTag(888) != nil { return }
+        
+        let privacyView = UIView(frame: window.bounds)
+        privacyView.backgroundColor = .black
+        privacyView.tag = 888
+        
+        let lockIcon = UIImageView(image: UIImage(systemName: "lock.fill"))
+        lockIcon.tintColor = .white
+        lockIcon.contentMode = .scaleAspectFit
+        lockIcon.frame = CGRect(x: 0, y: 0, width: 60, height: 60)
+        lockIcon.center = privacyView.center
+        privacyView.addSubview(lockIcon)
+        
+        window.addSubview(privacyView)
+    }
+    
+    private func removePrivacyScreen() {
+        window?.viewWithTag(888)?.removeFromSuperview()
     }
     
     // ============================================

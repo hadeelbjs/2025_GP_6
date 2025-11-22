@@ -1,4 +1,5 @@
 //lib/features/dashboard/screens/main_dashboard.dart
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '/shared/widgets/header_widget.dart';
@@ -18,12 +19,14 @@ class MainDashboard extends StatefulWidget {
 
   @override
   State<MainDashboard> createState() => _MainDashboardState();
+  
 }
 
 class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserver {
   final _apiService = ApiService();
     final _wifiService = WifiSecurityService();
   final _messagingService = MessagingService();
+  StreamSubscription<WifiSecurityStatus>? _wifiSubscription;
 
   int _notificationCount = 0;
   bool _hasCheckedWifiThisSession = false;
@@ -46,10 +49,22 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
     
     // التأكد من الاتصال بالـ Socket عند فتح Dashboard
     _ensureSocketConnection();
-  }
+    _wifiSubscription = _wifiService.onNetworkChanged.listen((status) {
+    if (mounted) {
+      if (status.shouldShowWarning) {
+        _showSecurityAlert(status);
+      } else {
+        _showSecureNetworkAlert(status);
+      }
+    }
+  });
+}
+
+  
   
   @override
   void dispose() {
+    _wifiSubscription?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -233,6 +248,10 @@ Future<void> _initializeSocket() async {
           // نجح الفحص - نعرض التحذير إذا لزم الأمر
           if (result.status != null && result.status!.shouldShowWarning) {
             _showSecurityAlert(result.status!);
+            
+          }else{
+          _showSecureNetworkAlert(result.status!);
+
           }
           break;
           
@@ -258,89 +277,152 @@ Future<void> _initializeSocket() async {
   
 // Dialog لطلب الصلاحيات لأول مرة
   void _showPermissionRequestDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              const Icon(Icons.shield_outlined, color: Colors.white, size: 32),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'فحص أمان الشبكات',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: const Text(
-            'للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.\n\nهذا الفحص يتم مرة واحدة فقط عند الاتصال بشبكة جديدة.',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // تسجيل أن المستخدم اختار "ليس الآن" - لا نزعجه مرة أخرى
-                _wifiService.markUserDeclinedPermanently();
-              },
-              child: const Text(
-                'ليس الآن',
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.shield_outlined, color: Colors.white, size: 32),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'فحص أمان الشبكات',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: Colors.white,
                   fontFamily: 'IBMPlexSansArabic',
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                final granted = await _wifiService.requestPermissions();
-                if (granted && mounted) {
-                  // أعد الفحص بعد منح الصلاحيات
-                  _hasCheckedWifiThisSession = false;
-                  _checkWifiOnDashboardOpen();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF2D1B69),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'منح الصلاحية',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
+        content: const Text(
+          'للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.\n\nهذا الفحص يتم مرة واحدة فقط عند الاتصال بشبكة جديدة.',
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 14,
+            height: 1.6,
+          ),
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _wifiService.markUserDeclinedPermanently();
+            },
+            child: const Text(
+              'ليس الآن',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'IBMPlexSansArabic',
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => _handlePermissionGranted(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF2D1B69),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'منح الصلاحية',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  );
+}
+Future<void> _handlePermissionGranted() async {
+  // إغلاق dialog الصلاحيات
+  Navigator.pop(context);
+  
+  // عرض Loading
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 20),
+            Text(
+              'جاري فحص الشبكة...',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  
+  // ✨ استخدام الدالة الجديدة
+  final result = await _wifiService.requestPermissionsAndCheck();
+  
+  // إغلاق Loading
+  if (mounted && Navigator.canPop(context)) {
+    Navigator.pop(context);
   }
+  
+  if (!mounted) return;
+  
+  // عرض النتيجة
+  switch (result.type) {
+    case WifiCheckResultType.success:
+      if (result.status != null) {
+        if (result.status!.shouldShowWarning) {
+          _showSecurityAlert(result.status!);
+        } else {
+          _showSecureNetworkAlert(result.status!);
+        }
+      }
+      break;
+      
+    case WifiCheckResultType.permissionDenied:
+      _showPermissionDeniedDialog();
+      break;
+      
+    case WifiCheckResultType.notConnected:
+      _showMessage('غير متصل بشبكة WiFi', false);
+      break;
+      
+    case WifiCheckResultType.error:
+      _showMessage('حدث خطأ أثناء الفحص', false);
+      break;
+      
+    default:
+      break;
+  }
+}
 
   /// Dialog عند رفض الصلاحيات
   void _showPermissionDeniedDialog() {
@@ -422,83 +504,144 @@ Future<void> _initializeSocket() async {
       ),
     );
   }
-  // ============================================
   // رسالة: التحذير الأمني
-  // ============================================
   
-  void _showSecurityAlert(WifiSecurityStatus status) {
-    final isAndroid = status.platform == 'Android';
-    
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: isAndroid ? Colors.red.shade400 : Colors.orange.shade400,
-                size: 32,
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  isAndroid ? 'تحذير أمني' : 'تنبيه',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Text(
-              isAndroid
-                  ? ' شبكة "${status.ssid}" غير آمنة!\n\nنوع الحماية: ${status.securityType}\n\n التوصيات:\n• استخدم VPN للحماية الكاملة\n• تجنب إدخال معلومات حساسة\n• لا تدخل كلمات السر أو بيانات بنكية\n• اتصل بشبكة آمنة إن أمكن'
-                  : 'قد تكون شبكة "${status.ssid}" غير آمنة\n\nالتحليل: بناءً على اسم الشبكة\n\n التوصيات:\n• استخدم VPN للأمان\n• تجنب إدخال معلومات حساسة\n• لا تدخل كلمات السر\n• اتصل بشبكة موثوقة إن أمكن',
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'IBMPlexSansArabic',
-                fontSize: 14,
-                height: 1.6,
-              ),
-              textAlign: TextAlign.right,
+ void _showSecurityAlert(WifiSecurityStatus status) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.red.shade400,
+              size: 32,
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.1),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'حسناً، فهمت',
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'تحذير أمني',
                 style: TextStyle(
                   color: Colors.white,
                   fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
+        content: SingleChildScrollView(
+          child: Text(
+            'شبكة "${status.ssid}" غير آمنة!\n\nنوع الحماية: ${status.securityType}\n\nالتوصيات:\n• استخدم VPN للحماية\n• تجنب إدخال معلومات حساسة\n• لا تدخل كلمات السر أو بيانات بنكية\n• اتصل بشبكة آمنة إن أمكن',
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 14,
+              height: 1.6,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.1),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'حسناً، فهمت',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
+// رسالة للشبكة الآمنة (جديدة)
+void _showSecureNetworkAlert(WifiSecurityStatus status) {
+  showDialog(
+    context: context,
+    barrierDismissible: true,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(
+              Icons.verified_user,
+              color: Colors.green.shade400,
+              size: 32,
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'شبكة آمنة',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'أنت متصل بشبكة "${status.ssid}"\n\n الشبكة آمنة ومحمية',
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 14,
+            height: 1.6,
+          ),
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.1),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'حسناً',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;

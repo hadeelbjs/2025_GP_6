@@ -11,7 +11,7 @@ import '../widgets/MessageDialog.dart';
 import 'dart:convert'; 
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../services/socket_service.dart';
-
+import 'package:phone_text_field/phone_text_field.dart';
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -30,6 +30,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _passwordController = TextEditingController();
 
   bool _isLoading = false;
+  bool _obscurePassword = true;
+
 
   @override
   void dispose() {
@@ -40,6 +42,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     super.dispose();
   }
+
+  final menaCountries = [
+  {'name': 'السعودية', 'code': 'SA', 'dial_code': '+966', 'flag': '🇸🇦'},
+  {'name': 'مصر', 'code': 'EG', 'dial_code': '+20', 'flag': '🇪🇬'},
+  {'name': 'الإمارات', 'code': 'AE', 'dial_code': '+971', 'flag': '🇦🇪'},
+  {'name': 'الأردن', 'code': 'JO', 'dial_code': '+962', 'flag': '🇯🇴'},
+  {'name': 'الكويت', 'code': 'KW', 'dial_code': '+965', 'flag': '🇰🇼'},
+  {'name': 'البحرين', 'code': 'BH', 'dial_code': '+973', 'flag': '🇧🇭'},
+  {'name': 'قطر', 'code': 'QA', 'dial_code': '+974', 'flag': '🇶🇦'},
+  {'name': 'عُمان', 'code': 'OM', 'dial_code': '+968', 'flag': '🇴🇲'},
+  {'name': 'العراق', 'code': 'IQ', 'dial_code': '+964', 'flag': '🇮🇶'},
+  {'name': 'سوريا', 'code': 'SY', 'dial_code': '+963', 'flag': '🇸🇾'},
+  {'name': 'لبنان', 'code': 'LB', 'dial_code': '+961', 'flag': '🇱🇧'},
+  {'name': 'فلسطين', 'code': 'PS', 'dial_code': '+970', 'flag': '🇵🇸'},
+  {'name': 'تونس', 'code': 'TN', 'dial_code': '+216', 'flag': '🇹🇳'},
+  {'name': 'الجزائر', 'code': 'DZ', 'dial_code': '+213', 'flag': '🇩🇿'},
+  {'name': 'المغرب', 'code': 'MA', 'dial_code': '+212', 'flag': '🇲🇦'},
+  {'name': 'ليبيا', 'code': 'LY', 'dial_code': '+218', 'flag': '🇱🇾'},
+  {'name': 'السودان', 'code': 'SD', 'dial_code': '+249', 'flag': '🇸🇩'},
+  {'name': 'جيبوتي', 'code': 'DJ', 'dial_code': '+253', 'flag': '🇩🇯'},
+  {'name': 'الصومال', 'code': 'SO', 'dial_code': '+252', 'flag': '🇸🇴'},
+  {'name': 'اليمن', 'code': 'YE', 'dial_code': '+967', 'flag': '🇾🇪'},
+  {'name': 'إيران', 'code': 'IR', 'dial_code': '+98', 'flag': '🇮🇷'},
+  {'name': 'تركيا', 'code': 'TR', 'dial_code': '+90', 'flag': '🇹🇷'},
+];
+
 
   // معالجة التسجيل
   Future<void> _handleRegister() async {
@@ -362,31 +390,56 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      CustomTextField(
-                        controller: _phoneController,
-                        label: 'رقم الهاتف',
-                        hint: '+966551234567',
-                        icon: Icons.phone,
-                        enabled: !_isLoading,
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'الرجاء إدخال رقم الهاتف';
-                          }
-                          final regex = RegExp(r'^\+?[0-9]{8,15}$');
-                          if (!regex.hasMatch(value)) {
-                            return 'الرجاء إدخال رقم هاتف صحيح مع كود الدولة (مثال: +9665xxxxxxxx)';
-                          }
-                          return null;
+                      PhoneTextField(
+                        locale: const Locale('ar'),
+                        decoration: const InputDecoration(
+                          filled: true,
+                          fillColor: Colors.white,
+                          
+                          labelText: 'رقم الهاتف',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                            
+                          ),
+                          prefixIcon: Icon(Icons.phone),
+                        ),
+                        searchFieldInputDecoration: const InputDecoration(
+                          filled: true,
+                          
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(12)),
+                          ),
+                          suffixIcon: Icon(Icons.search),
+                          hintText: 'بحث عن بالاسم او الرمز',
+                        ),
+                        dialogTitle: 'اختر الدولة',
+                        initialCountryCode: 'SA',
+                        onChanged: (phoneNumber) {
+                          debugPrint('رقم الهاتف: ${phoneNumber.completeNumber}');
+                          _phoneController.text = phoneNumber.completeNumber;
                         },
+                        invalidNumberMessage: "الرجاء إدخال رقم هاتف صالح",
                       ),
+
+
+                      
                       const SizedBox(height: 16),
                       CustomTextField(
                         controller: _passwordController,
+                        obscureText: _obscurePassword,
+
                         label: 'كلمة المرور',
                         hint: 'أدخل كلمة المرور',
                         icon: Icons.lock,
                         isPassword: true,
                         enabled: !_isLoading,
+                        suffixIcon: IconButton(
+                        icon: Icon(
+                          !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                          color: Colors.grey.shade600,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'الرجاء إدخال كلمة المرور';

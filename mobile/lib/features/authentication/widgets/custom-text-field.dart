@@ -8,6 +8,8 @@ class CustomTextField extends StatelessWidget {
   final TextEditingController? controller;  // للتحكم بالنص
   final String? Function(String?)? validator; // للتحقق
   final bool enabled;              // ✅ هل الحقل مفعّل؟
+  final bool? obscureText; 
+  final Widget? suffixIcon;
 
   const CustomTextField({
     super.key,
@@ -15,6 +17,8 @@ class CustomTextField extends StatelessWidget {
     required this.hint,
     this.icon,
     this.isPassword = false,
+    this.obscureText,    
+    this.suffixIcon,
     this.controller,
     this.validator,
     this.enabled = true,  // ✅ افتراضياً مفعّل
@@ -53,7 +57,7 @@ class CustomTextField extends StatelessWidget {
         // حقل الإدخال
         TextFormField(
           controller: controller,
-          obscureText: isPassword,
+           obscureText: obscureText ?? isPassword,
           validator: validator,
           enabled: enabled,  // هنا نفعّل أو نعطّل
           textDirection: TextDirection.rtl,  
@@ -69,6 +73,7 @@ class CustomTextField extends StatelessWidget {
                         : Colors.grey[400],    // لون باهت للمعطّل
                   )
                 : null,
+                suffixIcon: suffixIcon,
             
             // الإطار العادي
             border: OutlineInputBorder(

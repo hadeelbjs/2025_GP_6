@@ -85,6 +85,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   //  للكشف عن Screenshot في iOS
   // StreamSubscription? _screenshotSubscription;
+  StreamSubscription? _uploadProgressSubscription;
+  UploadProgress? _currentProgress;
 
   @override
   void initState() {
@@ -148,6 +150,31 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
     _listenToExpiredMessages();
+
+    _listenToUploadProgress();
+  }
+
+  void _listenToUploadProgress() {
+    _uploadProgressSubscription = _messagingService.onUploadProgress.listen((
+      progress,
+    ) {
+      if (mounted) {
+        setState(() {
+          _currentProgress = progress;
+        });
+
+        // ✅ إخفاء المؤشر بعد الانتهاء أو الخطأ
+        if (progress.isComplete || progress.isError) {
+          Future.delayed(Duration(seconds: 2), () {
+            if (mounted) {
+              setState(() {
+                _currentProgress = null;
+              });
+            }
+          });
+        }
+      }
+    });
   }
 
   // =====================================================
@@ -455,6 +482,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _userStatusSubscription?.cancel();
     _connectionSubscription?.cancel();
     _messageExpiredSubscription?.cancel();
+    _uploadProgressSubscription?.cancel();
     _socketService.socket?.off('screenshot:notification');
     _socketService.socket?.off('privacy:screenshots:changed');
     //_screenshotSubscription?.cancel();
@@ -494,7 +522,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         }
       });
     } catch (e) {
-      print('❌Error ensuring socket connection: $e');
+      print('Error ensuring socket connection: $e');
     }
   }
 
@@ -507,7 +535,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     try {
       if (_conversationId == null) return;
 
-      print('🔓 Starting decryption for conversation: $_conversationId');
+      print('Starting decryption for conversation: $_conversationId');
 
       final result = await _messagingService.decryptAllConversationMessages(
         _conversationId!,
@@ -528,13 +556,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         final count = result['count'] ?? 0;
 
         if (count > 0) {
-          print('✅ Decrypted $count messages successfully');
+          print('Decrypted $count messages successfully');
           await _loadMessagesFromDatabase();
 
           _decryptionFailureCount = 0;
           _hasShownDecryptionDialog = false;
         } else {
-          print('ℹ️ No encrypted messages to decrypt');
+          print('ℹNo encrypted messages to decrypt');
         }
       } else {
         // ❌ فشل فك التشفير
@@ -554,31 +582,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           await _autoRecreateSession();
           return; // الخروج بعد إعادة الإنشاء
         }
-
-        // ========================================
-        //  معالجة أخطاء المفاتيح الأخرى (مع العداد)
-        // ========================================
-        if (errorType == 'InvalidKeyException' ||
-            errorType == 'InvalidMessageException' ||
-            errorType == 'UntrustedIdentityException') {
-          _decryptionFailureCount++;
-          print(
-            '⚠️ Key-related error detected. Count: $_decryptionFailureCount',
-          );
-
-          if (_decryptionFailureCount >= 1 && !_hasShownDecryptionDialog) {
-            _hasShownDecryptionDialog = true;
-
-            if (mounted) {
-              await _showDecryptionFailureDialog();
-            }
-          } else if (_decryptionFailureCount < 3) {
-            _showMessage(
-              'فشل فك تشفير بعض الرسائل (محاولة $_decryptionFailureCount/3)',
-              false,
-            );
-          }
-        }
       }
     } catch (e) {
       print('❌ Exception during decryption: $e');
@@ -597,11 +600,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   //review
 
   // ========================================
-  // ✅ جديد: إعادة إنشاء Session تلقائياً (بدون Dialog)
+  //: إعادة إنشاء Session تلقائياً (بدون Dialog)
   // ========================================
   Future<void> _autoRecreateSession() async {
     try {
-      print('🔄 Auto-recreating session for ${widget.userId}');
+      print('Auto-recreating session for ${widget.userId}');
 
       // التحقق من آخر محاولة
       final lastAttemptKey = 'last_session_reset_${widget.userId}';
@@ -632,13 +635,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
       // حذف Session القديم
       await _messagingService.deleteSession(widget.userId);
-      print('🗑️ Old session deleted');
+      print('Old session deleted');
 
       // إنشاء Session جديد
       final success = await _messagingService.createNewSession(widget.userId);
 
       if (success) {
-        print('✅ New session created automatically');
+        print('New session created automatically');
 
         // إعادة تعيين العدادات
         _decryptionFailureCount = 0;
@@ -650,7 +653,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         // عرض رسالة نجاح
         _showMessage('تم إصلاح جلسة التشفير بنجاح', true);
 
-        // ✅ لا نعيد محاولة فك التشفير تلقائياً - ننتظر رسالة جديدة
+        // لا نعيد محاولة فك التشفير تلقائياً - ننتظر رسالة جديدة
         // await Future.delayed(Duration(seconds: 1));
         // await _decryptAllMessages();
       } else {
@@ -672,251 +675,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         _hasShownDecryptionDialog = true;
         await _showDecryptionFailureDialog();
       }*/
-    }
-  }
-
-  // ========================================
-  // تحديث: _recreateSession() للاستخدام اليدوي من Dialog
-  // ========================================
-  Future<void> _recreateSession() async {
-    try {
-      _showMessage('جاري إعادة إنشاء جلسة التشفير...', true);
-
-      await _messagingService.deleteSession(widget.userId);
-      print('🗑️ Old session deleted for ${widget.userId}');
-
-      final success = await _messagingService.createNewSession(widget.userId);
-
-      if (success) {
-        print('✅ New session created successfully');
-
-        _decryptionFailureCount = 0;
-        _hasShownDecryptionDialog = false;
-
-        await _loadMessagesFromDatabase();
-
-        _showMessage('تم إنشاء جلسة جديدة بنجاح', true);
-
-        await Future.delayed(Duration(seconds: 1));
-        await _decryptAllMessages();
-      } else {
-        print('❌ Failed to create new session');
-        _showMessage('فشل إنشاء جلسة جديدة', false);
-        _hasShownDecryptionDialog = false;
-      }
-    } catch (e) {
-      print('❌ Error recreating session: $e');
-      _showMessage('حدث خطأ أثناء إعادة الإنشاء', false);
-      _hasShownDecryptionDialog = false;
-    }
-  }
-
-  //Review
-
-  // ========================================
-  //  الـ Dialog يبقى كما هو (للحالات الأخرى)
-  // ========================================
-  Future<void> _showDecryptionFailureDialog() async {
-    final shouldRecreate = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: WillPopScope(
-          onWillPop: () async => false,
-          child: AlertDialog(
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: Row(
-              children: [
-                Container(
-                  padding: EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.red.withOpacity(0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(Icons.lock_open, color: Colors.red, size: 28),
-                ),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    '⚠️ فشل فك التشفير',
-                    style: AppTextStyles.h3.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'لا يمكن فك تشفير الرسائل من ${widget.name}.',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.orange.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 20,
-                              color: Colors.orange.shade700,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'السبب المحتمل:',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.orange.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          '• المرسل قام بتحديث مفاتيح التشفير من جهاز آخر\n'
-                          '• تم تسجيل الدخول من جهاز جديد\n'
-                          '• تغيير في إعدادات الأمان',
-                          style: AppTextStyles.bodySmall.copyWith(height: 1.5),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: 12),
-
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.blue.withOpacity(0.3)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.build_outlined,
-                              size: 20,
-                              color: Colors.blue.shade700,
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'الحل المقترح:',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                        SizedBox(height: 8),
-                        Text(
-                          'إعادة إنشاء جلسة تشفير جديدة مع ${widget.name}.',
-                          style: AppTextStyles.bodySmall,
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  SizedBox(height: 12),
-
-                  Container(
-                    padding: EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.red.withOpacity(0.2)),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          size: 20,
-                          color: Colors.red,
-                        ),
-                        SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'ملاحظة: قد لا تتمكن من قراءة الرسائل القديمة بعد إعادة الإنشاء.',
-                            style: AppTextStyles.bodySmall.copyWith(
-                              color: Colors.red.shade700,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                style: TextButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                ),
-                child: Text(
-                  'تجاهل',
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 15,
-                  ),
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () => Navigator.pop(context, true),
-                icon: Icon(Icons.refresh, size: 18),
-                label: Text(
-                  'إعادة إنشاء الجلسة',
-                  style: TextStyle(
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    if (shouldRecreate == true) {
-      await _recreateSession();
-    } else {
-      _decryptionFailureCount = 0;
-      _hasShownDecryptionDialog = false;
     }
   }
 
@@ -1910,6 +1668,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
     return Column(
       children: [
+        if (_currentProgress != null && _currentProgress!.isProcessing)
+          _buildProgressIndicator(),
         Expanded(
           child: _isLoading && _messages.isEmpty
               ? const Center(
@@ -1958,6 +1718,80 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
         _buildInputBar(),
       ],
+    );
+  }
+
+  Widget _buildProgressIndicator() {
+    final progress = _currentProgress!;
+
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: progress.isError
+            ? Colors.red.shade50
+            : AppColors.primary.withOpacity(0.1),
+        border: Border(
+          bottom: BorderSide(
+            color: progress.isError
+                ? Colors.red.shade200
+                : AppColors.primary.withOpacity(0.2),
+          ),
+        ),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              if (progress.isError)
+                Icon(Icons.error_outline, color: Colors.red, size: 20)
+              else
+                SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    value: progress.progress,
+                    strokeWidth: 2.5,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AppColors.primary,
+                    ),
+                  ),
+                ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  progress.message,
+                  style: AppTextStyles.bodySmall.copyWith(
+                    color: progress.isError ? Colors.red : AppColors.primary,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Text(
+                '${(progress.progress * 100).toInt()}%',
+                style: AppTextStyles.bodySmall.copyWith(
+                  color: progress.isError ? Colors.red : AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: progress.progress,
+              minHeight: 4,
+              backgroundColor: progress.isError
+                  ? Colors.red.shade100
+                  : AppColors.primary.withOpacity(0.2),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                progress.isError ? Colors.red : AppColors.primary,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2234,8 +2068,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 if (attachmentType == 'image')
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      attachmentData,
+                    child: Image.memory(
+                      base64Decode(attachmentData),
                       width: double.infinity,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
@@ -2422,39 +2256,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   void _openAttachment(String data, String type, String? name) async {
     try {
       if (type == 'image') {
-        if (data.startsWith('http://') || data.startsWith('https://')) {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => _NetworkImageViewer(imageUrl: data),
-            ),
-          );
-        } else {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => _Base64ImageViewer(base64Data: data),
-            ),
-          );
-        }
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => _Base64ImageViewer(base64Data: data),
+          ),
+        );
       } else if (type == 'file') {
         _showMessage('جاري تحميل الملف...', true);
 
         Uint8List bytes;
 
-        if (data.startsWith('http://') || data.startsWith('https://')) {
-          final response = await http.get(Uri.parse(data));
-
-          if (response.statusCode != 200) {
-            throw Exception('فشل تحميل الملف (${response.statusCode})');
-          }
-
-          bytes = response.bodyBytes;
-          print('✅ File downloaded: ${bytes.length} bytes');
-        } else {
-          bytes = base64Decode(data);
-          print('✅ File decoded: ${bytes.length} bytes');
-        }
+        bytes = base64Decode(data);
+        print('✅ File decoded: ${bytes.length} bytes');
 
         final tempDir = await getTemporaryDirectory();
         final fileName =
@@ -2478,131 +2292,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _showMessage('فشل فتح المرفق: $e', false);
     }
   }
-
-  Widget _buildImage(String data) {
-    if (data.startsWith('http://') || data.startsWith('https://')) {
-      // URL
-      return Image.network(
-        data,
-        width: double.infinity,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, loadingProgress) {
-          if (loadingProgress == null) return child;
-          return Container(
-            height: 200,
-            color: Colors.grey.shade300,
-            child: Center(
-              child: CircularProgressIndicator(
-                value: loadingProgress.expectedTotalBytes != null
-                    ? loadingProgress.cumulativeBytesLoaded /
-                          loadingProgress.expectedTotalBytes!
-                    : null,
-              ),
-            ),
-          );
-        },
-        errorBuilder: (context, error, stackTrace) {
-          print('❌ Image load error: $error');
-          return _buildImageError();
-        },
-      );
-    } else {
-      // Base64
-      try {
-        return Image.memory(
-          base64Decode(data),
-          width: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            print('❌ Base64 decode error: $error');
-            return _buildImageError();
-          },
-        );
-      } catch (e) {
-        print('❌ Base64 exception: $e');
-        return _buildImageError();
-      }
-    }
-  }
-
-  Widget _buildImageError() {
-    return Container(
-      height: 200,
-      color: Colors.grey.shade300,
-      child: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.broken_image, size: 48, color: Colors.grey),
-            SizedBox(height: 8),
-            Text('فشل عرض الصورة', style: AppTextStyles.bodySmall),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
-class _NetworkImageViewer extends StatelessWidget {
-  final String imageUrl;
-
-  const _NetworkImageViewer({required this.imageUrl});
-
-  @override
-  Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: Colors.black,
-        appBar: AppBar(
-          backgroundColor: Colors.black,
-          leading: IconButton(
-            icon: Icon(Icons.close, color: Colors.white),
-            onPressed: () => Navigator.pop(context),
-          ),
-          title: Text('صورة', style: TextStyle(color: Colors.white)),
-        ),
-        body: Center(
-          child: InteractiveViewer(
-            child: Image.network(
-              imageUrl,
-              fit: BoxFit.contain,
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return Center(
-                  child: CircularProgressIndicator(
-                    value: loadingProgress.expectedTotalBytes != null
-                        ? loadingProgress.cumulativeBytesLoaded /
-                              loadingProgress.expectedTotalBytes!
-                        : null,
-                    color: Colors.white,
-                  ),
-                );
-              },
-              errorBuilder: (context, error, stackTrace) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.broken_image, size: 64, color: Colors.white),
-                      SizedBox(height: 16),
-                      Text(
-                        'فشل عرض الصورة',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// عرض صورة من Base64
 class _Base64ImageViewer extends StatelessWidget {
   final String base64Data;
 

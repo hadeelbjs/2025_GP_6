@@ -117,7 +117,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           isError: false
         );
         
-        // ✅ إذا كان 2FA (تسجيل دخول)، نولد المفاتيح
+        // إذا كان 2FA (تسجيل دخول)، نجلب المفاتيح
         if (widget.is2FA) {
           await _initializeEncryption();
           await _initializeMessaging();
@@ -132,7 +132,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             (route) => false,
           );
         } else {
-          // ✅ إذا كان تسجيل جديد (verify email)، نرجع للشاشة السابقة
+          // إذا كان تسجيل جديد (verify email)، نرجع للشاشة السابقة
           // المفاتيح ستتولد في verify_phone أو skip_phone
           await Future.delayed(const Duration(milliseconds: 500));
           if (!mounted) return;
@@ -152,47 +152,62 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   }
 
   // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
-  // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
 Future<void> _initializeEncryption() async {
   try {
-    print('🔐 جاري التحقق من مفاتيح التشفير...');
+    print('Checking encryption keys availability');
     
-    // ✅ 1. جلب userId
+    // 1. جلب userId
     final storage = const FlutterSecureStorage();
     final userDataStr = await storage.read(key: 'user_data');
     
     if (userDataStr == null) {
-      print('❌ لا توجد بيانات مستخدم');
+      print('User data is missing');
       return;
     }
     
     final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
     final userId = userData['id'] as String;
-    
-    print('👤 Checking keys for user: $userId');
-    
-    // ✅ 2. تهيئة SignalProtocolManager
+        
+    // 2. تهيئة SignalProtocolManager
     final signalManager = SignalProtocolManager();
-    await signalManager.initialize();
+    await signalManager.initialize(userId: userId);
     
-    // ✅ 3. فحص وجود المفاتيح باستخدام userId
-    final userIdentityKey = await storage.read(key: 'identity_key_$userId');
     
-    if (userIdentityKey == null) {
-      print('🔑 لا توجد مفاتيح للمستخدم $userId - جاري التوليد...');
-      final success = await signalManager.generateAndUploadKeys();
-      
-      if (success) {
-        print('✅ تم توليد ورفع المفاتيح بنجاح');
+    // 3. الفحص باستخدام userId
+    final userIdentityKey = await storage.read(key: '${userId}_identity_key');
+
+    
+    if (userIdentityKey != null) {
+      print('Keys Exist');
+
+      await signalManager.checkAndRefreshPreKeys();
+      await signalManager.ensureSignedPreKeyRotation(userId);
+      KeysStatus keysStatus = await signalManager.checkKeysStatus();
+      if(keysStatus.needsGeneration){
+        print('Keys need regeneration');
+        final success = await signalManager.generateAndUploadKeys();
+        if (success) {
+          print('Keys regenerated and uploaded successfully');
+        } else {
+          print('Error regenerating keys and uploading to server');
+        }
+      } else if (keysStatus.needsSync) {
+        print('Keys need upload');
+        
       } else {
-        print('⚠️ فشل توليد/رفع المفاتيح');
+        print('Keys are up-to-date');
       }
     } else {
-      print('✅ المفاتيح موجودة بالفعل للمستخدم $userId');
-      await signalManager.checkAndRefreshPreKeys();
-    }
+      print('Generating new keys');
+      final success = await signalManager.generateAndUploadKeys();
+      if (success) {
+        print('Keys uploaded successfully');
+      } else {
+        print('Error uploading keys to server');
+      }
+    } 
   } catch (e) {
-    print('❌ خطأ في تهيئة التشفير: $e');
+    print('Keys initalization error: $e');
   }
 }
 

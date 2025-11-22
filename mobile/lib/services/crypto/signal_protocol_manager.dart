@@ -65,7 +65,7 @@ class SignalProtocolManager {
   if (lastReset != null) {
     final timeSince = DateTime.now().difference(lastReset);
     if (timeSince.inMinutes < 2) {
-      print('⚠️ Session reset blocked - too soon (${timeSince.inSeconds}s ago)');
+      print('Session reset blocked - too soon (${timeSince.inSeconds}s ago)');
       return false;
     }
   }
@@ -76,7 +76,7 @@ class SignalProtocolManager {
 
 
   // ===================================
-  // 📊 التحقق من حالة المفاتيح
+  //  التحقق من حالة المفاتيح
   // ===================================
   Future<KeysStatus> checkKeysStatus() async {
     try {
@@ -108,7 +108,7 @@ class SignalProtocolManager {
       );
 
     } catch (e) {
-      print('❌ Error checking keys status: $e');
+      print('Error checking keys status: $e');
       return KeysStatus(
         hasLocalKeys: false,
         needsGeneration: true,
@@ -118,17 +118,17 @@ class SignalProtocolManager {
   }
 
   // ===================================
-  // 🔄 مزامنة المفاتيح مع السيرفر
+  //  مزامنة المفاتيح مع السيرفر
   // ===================================
   Future<bool> syncKeysWithServer() async {
     try {
-      print('🔄 Syncing keys with server...');
+      print('Syncing keys with server...');
       
       await clearLocalKeys();
       final success = await generateAndUploadKeys();
       
       if (success) {
-        print('✅ Keys synced successfully');
+        print('Keys synced successfully');
       }
       
       return success;
@@ -138,11 +138,8 @@ class SignalProtocolManager {
     }
   }
 
-  // ===================================
-  // توليد ورفع المفاتيح 
-  // ===================================
   // ============================================
-// ✅ دالة مساعدة موحدة لتوليد مفاتيح التخزين
+//  دالة مساعدة موحدة لتوليد مفاتيح التخزين
 // ============================================
 String _getStorageKey(String userId, String key) {
   return '${userId}_$key';
@@ -154,9 +151,7 @@ String _getStorageKey(String userId, String key) {
 Future<bool> generateAndUploadKeys() async {
   try {
     
-    
     final userId = await _getCurrentUserId();
-    print('🔑 Generating keys for user: $userId');
 
     // توليد المفاتيح
     final identityKeyPair = generateIdentityKeyPair();
@@ -193,14 +188,14 @@ Future<bool> generateAndUploadKeys() async {
     };
 
     // رفع المفاتيح للسيرفر
-    print('📤 Uploading keys to server...');
+    print('Uploading keys to server...');
     final result = await _apiService.uploadKeyBundle(bundle);
 
     if (!result['success']) {
       throw Exception(result['message']);
     }
     
-    print('✅ Keys uploaded to server successfully');
+    print('Keys uploaded to server successfully');
 
     // حفظ في الـ Stores
     await _identityStore.saveIdentityKeyPairWithUserId(identityKeyPair);
@@ -218,35 +213,36 @@ Future<bool> generateAndUploadKeys() async {
       signedPreKey,
     );
 
-    // المهم: حفظ تاريخ أول rotation
+    //  حفظ تاريخ أول rotation
     await _storage.write(
       key: _getStorageKey(userId, 'signed_prekey_last_rotated'),
       value: DateTime.now().toIso8601String(),
     );
-    print('✅ Initial SignedPreKey rotation date saved');
+    print('Initial SignedPreKey rotation date saved');
 
-    print('✅ Keys generated and uploaded successfully for user: $userId');
+    print('Keys generated and uploaded successfully for user: $userId');
     return true;
     
   } catch (e) {
-    print('❌ Error generating keys: $e');
+    print('Error generating keys: $e');
     return false;
   }
 }
 
   // ===================================
-  // ♻️ التحقق من SignedPreKey وتدويره إذا لزم (محسّن)
+  // التحقق من SignedPreKey وتدويره إذا لزم 
   // ===================================
   Future<void> ensureSignedPreKeyRotation(String userId) async {
     try {
-      print('🔍 Checking SignedPreKey rotation for $userId');
+
+      print('Checking SignedPreKey rotation for $userId');
       
       final shouldRotate = await _shouldRotateSignedPreKey(userId);
       
       if (shouldRotate) {
         await _rotateSignedPreKey(userId);
       } else {
-        print('✅ SignedPreKey still valid for $userId');
+        print('SignedPreKey still valid for $userId');
       }
     } catch (e) {
       print('❌ Error in SignedPreKey rotation check: $e');
@@ -271,7 +267,7 @@ Future<bool> generateAndUploadKeys() async {
 
   Future<void> _rotateSignedPreKey(String userId) async {
     try {
-      print('♻️ Rotating SignedPreKey for $userId');
+      print('Rotating SignedPreKey for $userId');
 
       final identityKeyPair = await _identityStore.getIdentityKeyPair();
       if (identityKeyPair == null) {
@@ -282,7 +278,6 @@ Future<bool> generateAndUploadKeys() async {
       final newId = DateTime.now().millisecondsSinceEpoch % 100000;
       final newSignedPreKey = generateSignedPreKey(identityKeyPair, newId);
 
-      //  استخدام storeSignedPreKey العادية (موجودة في Store)
       await _signedPreKeyStore.storeSignedPreKey(newId, newSignedPreKey);
 
       // رفع SignedPreKey الجديد للسيرفر
@@ -304,14 +299,14 @@ Future<bool> generateAndUploadKeys() async {
         value: DateTime.now().toIso8601String(),
       );
 
-      print('✅ SignedPreKey rotated successfully for $userId');
+      print('SignedPreKey rotated successfully for $userId');
     } catch (e) {
-      print('❌ Error rotating SignedPreKey: $e');
+      print('Error rotating SignedPreKey: $e');
     }
   }
 
   // ===================================
-  // 🔢 التحقق من عدد PreKeys وإضافة المزيد إذا لزم
+  // التحقق من عدد المفاتيح وإضافة المزيد إذا لزم
   // ===================================
   Future<void> checkAndRefreshPreKeys() async {
     try {
@@ -319,17 +314,17 @@ Future<bool> generateAndUploadKeys() async {
       
       if (result['success']) {
         final count = result['count'] ?? 0;
-        print('📊 Available PreKeys: $count');
+        print('Available PreKeys: $count');
         
         if (count < 20) {
-          print('⚠️ Low on PreKeys ($count), generating more...');
+          print('Low on PreKeys ($count), generating more...');
           await uploadAdditionalPreKeysOnly();
         } else {
-          print('✅ PreKeys count is sufficient ($count)');
+          print('PreKeys count is sufficient ($count)');
         }
       }
     } catch (e) {
-      print('❌ Error checking PreKeys: $e');
+      print('Error checking PreKeys: $e');
     }
   }
 
@@ -354,18 +349,13 @@ Future<bool> generateAndUploadKeys() async {
       return userId as String;
       
     } catch (e) {
-      print('❌ Error getting current user ID: $e');
+      print('Error getting current user ID: $e');
       rethrow;
     }
   }
 
   // ===================================
-  // فك تشفير مع معالجة الأخطاء
-  // ===================================
-  
-
-  // ===================================
-  // فك التشفير (الطريقة الأصلية)
+  // فك التشفير 
   // ===================================
   Future<String?> decryptMessage(
     String senderId,
@@ -404,7 +394,7 @@ Future<bool> generateAndUploadKeys() async {
   }
 
   // ===================================
-  // 🔒 تشفير رسالة
+  // تشفير رسالة
   // ===================================
   Future<Map<String, dynamic>?> encryptMessage(
     String recipientId,
@@ -434,7 +424,7 @@ Future<bool> generateAndUploadKeys() async {
         'body': base64Encode(ciphertext.serialize()),
       };
     } catch (e) {
-      print('❌ Encryption error: $e');
+      print('Encryption error: $e');
       return null;
     }
   }
@@ -449,14 +439,13 @@ Future<bool> generateAndUploadKeys() async {
     final hasOwnKeys = await hasKeys();
     if (!hasOwnKeys) {
       print(' No local keys found');
-      print('💡 Generating keys first...');
+      print('Generating keys first...');
       
-      // ✅ توليد وحفظ المفاتيح إذا كانت مفقودة
+      // توليد وحفظ المفاتيح إذا كانت مفقودة
       final generated = await generateAndUploadKeys(); 
       if (!generated) {
-        throw Exception('Failed to generate keys for user $currentUserId'); // فشل توليد حرج
+        throw Exception('Failed to generate keys for user $currentUserId'); 
       }
-      // ملاحظة: بعد generateAndUploadKeys، سيتم ملء _identityKeyPair و _localRegistrationId
     }
     final userData = await _storage.read(key: 'user_data');
     if (userData != null) {
@@ -513,7 +502,7 @@ Future<bool> generateAndUploadKeys() async {
 
     await sessionBuilder.processPreKeyBundle(bundle);
     
-    // ✅ حفظ معلومات الـ session
+    //  حفظ معلومات الـ session
     _sessionVersions[recipientId] = DateTime.now().millisecondsSinceEpoch;
     _lastSessionReset[recipientId] = DateTime.now();
     
@@ -522,8 +511,8 @@ Future<bool> generateAndUploadKeys() async {
       value: _sessionVersions[recipientId].toString(),
     );
     
-    print('✅ Session created successfully with recipient: $recipientId');
-    print('📝 Session version: ${_sessionVersions[recipientId]}');
+    print('Session created successfully with recipient: $recipientId');
+    print('Session version: ${_sessionVersions[recipientId]}');
     
     return true;
     
@@ -534,7 +523,7 @@ Future<bool> generateAndUploadKeys() async {
 }
 
   // ===================================
-  // 🧹 حذف المفاتيح المحلية فقط
+  //  حذف المفاتيح المحلية فقط
   // ===================================
   Future<void> clearLocalKeys() async {
     try {
@@ -543,7 +532,7 @@ Future<bool> generateAndUploadKeys() async {
       await _signedPreKeyStore.clearAll();
       await _sessionStore.clearAll();
       
-      // ✅ حذف المفتاح العام المحفوظ
+      // حذف المفتاح العام المحفوظ
       await _storage.delete(key: 'identity_public_key_$_currentUserId');
       await _storage.delete(key: 'registration_id_$_currentUserId');
       await _storage.delete(key: 'keys_version_$_currentUserId');
@@ -551,15 +540,15 @@ Future<bool> generateAndUploadKeys() async {
       
       _isInitialized = false;
       
-      print('✅ Local keys cleared');
+      print('Local keys cleared');
     } catch (e) {
-      print('❌ Error clearing local keys: $e');
+      print('Error clearing local keys: $e');
       rethrow;
     }
   }
 
   // ===================================
-  // 🗑️ حذف كل شيء (محلي + سيرفر)
+  // حذف كل شيء (محلي + سيرفر)
   // ===================================
   Future<void> clearAllKeys() async {
     try {
@@ -589,27 +578,8 @@ Future<bool> generateAndUploadKeys() async {
     }
   }
 
-  Future<bool> hasKeysForCurrentUser() async {
-    try {
-      final userId = await _getCurrentUserId();
-      // ✅ التحقق من المفتاح العام المحفوظ
-      final identityPublicKey = await _storage.read(key: 'identity_public_key_$userId');
-      
-      if (identityPublicKey != null) {
-        print('✅ Keys exist for user: $userId');
-        return true;
-      } else {
-        print('❌ No keys found for user: $userId');
-        return false;
-      }
-    } catch (e) {
-      print('❌ Error checking keys: $e');
-      return false;
-    }
-  }
-
   // ===================================
-  // ➕ رفع PreKeys إضافية فقط
+  // رفع PreKeys إضافية فقط
   // ===================================
   Future<void> uploadAdditionalPreKeysOnly() async {
     try {
@@ -635,16 +605,16 @@ Future<bool> generateAndUploadKeys() async {
       final result = await _apiService.uploadKeyBundle(bundle);
       
       if (result['success']) {
-        print('✅ Uploaded ${newPreKeys.length} additional PreKeys');
+        print('Uploaded ${newPreKeys.length} additional PreKeys');
       }
     } catch (e) {
-      print('❌ Error uploading additional PreKeys: $e');
+      print('Error uploading additional PreKeys: $e');
       rethrow;
     }
   }
 
   // ===================================
-  // 📝 إدارة نسخة المفاتيح
+  // إدارة نسخة المفاتيح
   // ===================================
   Future<void> _saveLocalKeysVersion(int version, String userId) async {
     try {
@@ -652,9 +622,9 @@ Future<bool> generateAndUploadKeys() async {
         key: 'keys_version_$userId',
         value: version.toString(),
       );
-      print('💾 Saved keys version $version for user: $userId');
+      print('Saved keys version $version for user');
     } catch (e) {
-      print('❌ Error saving keys version: $e');
+      print('Error saving keys version: $e');
     }
   }
 
@@ -748,17 +718,17 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
   String body,
 ) async {
   try {
-    print('🔐 Attempting to decrypt message from $senderId');
+    print('Attempting to decrypt message from $senderId');
     
     final result = await decryptMessageSafe(senderId, type, body);
 
     if (result.success) {
-      print('✅ Decryption successful');
+      print('Decryption successful');
       return result;
     }
 
     if (result.needsSessionReset) {
-      print('♻️ Attempting to recover session with $senderId');
+      print('Attempting to recover session with $senderId');
       final resetResult = await resetSessionWithUser(senderId);
 
       return DecryptionResult(
@@ -772,7 +742,7 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
 
     return result;
   } catch (e) {
-    print('❌ Unexpected error in auto-recovery: $e');
+    print('Unexpected error in auto-recovery: $e');
     return DecryptionResult(
       success: false,
       error: 'خطأ غير متوقع في فك التشفير',
@@ -789,10 +759,10 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
     String errorMessage,
   ) async {
     try {
-      print('⚠️ Handling decryption failure for sender: $senderId');
+      print('Handling decryption failure for sender: $senderId');
       
       await deleteSession(senderId);
-      print('🗑️ Old session deleted');
+      print('Old session deleted');
       
       return DecryptionResult(
         success: false,
@@ -802,7 +772,7 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
       );
       
     } catch (e) {
-      print('❌ Error handling decryption failure: $e');
+      print('Error handling decryption failure: $e');
       return DecryptionResult(
         success: false,
         error: 'فشل معالجة خطأ التشفير',
@@ -812,9 +782,9 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
  /// إنشاء Session جديد مع المستخدم (بعد حذف القديم)
   Future<SessionResetResult> resetSessionWithUser(String userId) async {
   try {
-    print('🔄 Attempting to reset session with user: $userId');
+    print('Attempting to reset session with user: $userId');
     
-    // ✅ التحقق من إمكانية إعادة الإنشاء
+    // التحقق من إمكانية إعادة الإنشاء
     if (!_canResetSession(userId)) {
       return SessionResetResult(
         success: false,
@@ -824,19 +794,19 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
     
     // حذف الـ session القديم
     await deleteSession(userId);
-    print('🗑️ Old session deleted');
+    print('Old session deleted');
     
     // إنشاء session جديد
     final success = await createSession(userId);
     
     if (success) {
-      print('✅ New session created successfully');
+      print('New session created successfully');
       return SessionResetResult(
         success: true,
         message: 'تم إعادة إنشاء المفاتيح بنجاح',
       );
     } else {
-      print('❌ Failed to create new session');
+      print('Failed to create new session');
       return SessionResetResult(
         success: false,
         error: 'فشل إنشاء مفاتيح جديدة',
@@ -844,7 +814,7 @@ Future<DecryptionResult> decryptMessageWithAutoRecovery(
     }
     
   } catch (e) {
-    print('❌ Error resetting session: $e');
+    print('Error resetting session: $e');
     return SessionResetResult(
       success: false,
       error: 'خطأ في إعادة تعيين المفاتيح',

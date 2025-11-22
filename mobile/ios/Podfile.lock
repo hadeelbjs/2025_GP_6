@@ -40,6 +40,11 @@ PODS:
     - DKImagePickerController/PhotoGallery
     - Flutter
   - Flutter (1.0.0)
+  - flutter_image_compress_common (1.0.0):
+    - Flutter
+    - Mantle
+    - SDWebImage
+    - SDWebImageWebPCoder
   - flutter_secure_storage (6.0.0):
     - Flutter
   - flutter_zxing (0.0.1):
@@ -82,8 +87,23 @@ PODS:
   - GTMSessionFetcher/Core (3.5.0)
   - image_picker_ios (0.0.1):
     - Flutter
+  - libwebp (1.5.0):
+    - libwebp/demux (= 1.5.0)
+    - libwebp/mux (= 1.5.0)
+    - libwebp/sharpyuv (= 1.5.0)
+    - libwebp/webp (= 1.5.0)
+  - libwebp/demux (1.5.0):
+    - libwebp/webp
+  - libwebp/mux (1.5.0):
+    - libwebp/demux
+  - libwebp/sharpyuv (1.5.0)
+  - libwebp/webp (1.5.0):
+    - libwebp/sharpyuv
   - local_auth_ios (0.0.1):
     - Flutter
+  - Mantle (2.2.0):
+    - Mantle/extobjc (= 2.2.0)
+  - Mantle/extobjc (2.2.0)
   - MLImage (1.0.0-beta6)
   - MLKitCommon (12.0.0):
     - GoogleDataTransport (~> 10.0)
@@ -127,13 +147,16 @@ PODS:
     - Flutter
   - screen_capture_event (0.0.1):
     - Flutter
-  - screen_protector (1.3.2):
+  - screen_protector (1.4.6):
     - Flutter
-    - ScreenProtectorKit (~> 1.4.1)
-  - ScreenProtectorKit (1.4.1)
+    - ScreenProtectorKit (= 1.4.2)
+  - ScreenProtectorKit (1.4.2)
   - SDWebImage (5.21.3):
     - SDWebImage/Core (= 5.21.3)
   - SDWebImage/Core (5.21.3)
+  - SDWebImageWebPCoder (0.15.0):
+    - libwebp (~> 1.0)
+    - SDWebImage/Core (~> 5.17)
   - shared_preferences_foundation (0.0.1):
     - Flutter
     - FlutterMacOS
@@ -150,6 +173,7 @@ DEPENDENCIES:
   - connectivity_plus (from `.symlinks/plugins/connectivity_plus/ios`)
   - file_picker (from `.symlinks/plugins/file_picker/ios`)
   - Flutter (from `Flutter`)
+  - flutter_image_compress_common (from `.symlinks/plugins/flutter_image_compress_common/ios`)
   - flutter_secure_storage (from `.symlinks/plugins/flutter_secure_storage/ios`)
   - flutter_zxing (from `.symlinks/plugins/flutter_zxing/ios`)
   - gal (from `.symlinks/plugins/gal/darwin`)
@@ -179,6 +203,8 @@ SPEC REPOS:
     - GoogleToolboxForMac
     - GoogleUtilities
     - GTMSessionFetcher
+    - libwebp
+    - Mantle
     - MLImage
     - MLKitCommon
     - MLKitTextRecognition
@@ -188,6 +214,7 @@ SPEC REPOS:
     - PromisesObjC
     - ScreenProtectorKit
     - SDWebImage
+    - SDWebImageWebPCoder
     - SwiftyGif
 
 EXTERNAL SOURCES:
@@ -201,6 +228,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/file_picker/ios"
   Flutter:
     :path: Flutter
+  flutter_image_compress_common:
+    :path: ".symlinks/plugins/flutter_image_compress_common/ios"
   flutter_secure_storage:
     :path: ".symlinks/plugins/flutter_secure_storage/ios"
   flutter_zxing:
@@ -248,6 +277,7 @@ SPEC CHECKSUMS:
   DKPhotoGallery: b3834fecb755ee09a593d7c9e389d8b5d6deed60
   file_picker: a0560bc09d61de87f12d246fc47d2119e6ef37be
   Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  flutter_image_compress_common: 1697a328fd72bfb335507c6bca1a65fa5ad87df1
   flutter_secure_storage: 1ed9476fba7e7a782b22888f956cce43e2c62f13
   flutter_zxing: e741c4f3335db8910e5c396c4291cdfb320859dc
   gal: baecd024ebfd13c441269ca7404792a7152fde89
@@ -259,8 +289,10 @@ SPEC CHECKSUMS:
   GoogleToolboxForMac: d1a2cbf009c453f4d6ded37c105e2f67a32206d8
   GoogleUtilities: 00c88b9a86066ef77f0da2fab05f65d7768ed8e1
   GTMSessionFetcher: 5aea5ba6bd522a239e236100971f10cb71b96ab6
-  image_picker_ios: 7fe1ff8e34c1790d6fff70a32484959f563a928a
+  image_picker_ios: e0ece4aa2a75771a7de3fa735d26d90817041326
+  libwebp: 02b23773aedb6ff1fd38cec7a77b81414c6842a8
   local_auth_ios: f7a1841beef3151d140a967c2e46f30637cdf451
+  Mantle: c5aa8794a29a022dfbbfc9799af95f477a69b62d
   MLImage: 0ad1c5f50edd027672d8b26b0fee78a8b4a0fc56
   MLKitCommon: 07c2c33ae5640e5380beaaa6e4b9c249a205542d
   MLKitTextRecognition: 3b41f3ff084a79afb214408d25d2068d77ab322c
@@ -270,19 +302,20 @@ SPEC CHECKSUMS:
   nanopb: fad817b59e0457d11a5dfbde799381cd727c1275
   open_filex: 432f3cd11432da3e39f47fcc0df2b1603854eff1
   package_info_plus: af8e2ca6888548050f16fa2f1938db7b5a5df499
-  path_provider_foundation: 080d55be775b7414fd5a5ef3ac137b97b097e564
+  path_provider_foundation: bb55f6dbba17d0dccd6737fe6f7f34fbd0376880
   permission_handler_apple: 4ed2196e43d0651e8ff7ca3483a069d469701f2d
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   qr_code_tools: 81a52b19190422a5ce108223f64b5ea81865b342
   screen_capture_event: efc4eb455e1c5cc304cec85a4372e0a633ff2a7c
-  screen_protector: fb01c3478cdfdffab23cd2586350346897935cad
-  ScreenProtectorKit: 21bdf6572671f779864908978d63e2c9ecfe7910
+  screen_protector: dc5f885bc1a59fba80ae486c7b5a1a5d95c506f7
+  ScreenProtectorKit: 9a05e5d137175e6d6e4fa81c2994e7614689efe6
   SDWebImage: 16309af6d214ba3f77a7c6f6fdda888cb313a50a
-  shared_preferences_foundation: 9e1978ff2562383bd5676f64ec4e9aa8fa06a6f7
+  SDWebImageWebPCoder: 0e06e365080397465cc73a7a9b472d8a3bd0f377
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0
   SwiftyGif: 706c60cf65fa2bc5ee0313beece843c8eb8194d4
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
-PODFILE CHECKSUM: 61751a16c302a87d48dbcbea212b6b8cb3dee000
+PODFILE CHECKSUM: 181bc22cf7765763a555210b0c9c658573a3e2a4
 
 COCOAPODS: 1.16.2

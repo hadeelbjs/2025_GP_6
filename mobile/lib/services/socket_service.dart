@@ -371,9 +371,10 @@ class SocketService {
     String? attachmentData,
     String? attachmentType,
     String? attachmentName,
-    String? attachmentMimeType,
+    String? attachmentEncryptionType,
     int? visibilityDuration,
     String? expiresAt,
+    String? createdAt,
   }) {
     if (_socket == null || !isConnected) {
       print('❌ Cannot send: Socket not connected');
@@ -390,10 +391,10 @@ class SocketService {
       'attachmentData': attachmentData,
       'attachmentType': attachmentType,
       'attachmentName': attachmentName,
-      'attachmentMimeType': attachmentMimeType,
+      'attachmentEncryptionType': attachmentEncryptionType,
       'visibilityDuration': visibilityDuration,
       'expiresAt': expiresAt,
-      //'createdAt': DateTime.now().toIso8601String(),
+      'createdAt': createdAt, // ✅ إرسال createdAt الصحيح
     });
   }
 

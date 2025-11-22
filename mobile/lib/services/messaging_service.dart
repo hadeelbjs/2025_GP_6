@@ -39,6 +39,8 @@ class MessagingService {
   Timer? _cleanupTimer;
   Timer? _expiryTimer;
   static int decryptionFailure = 0;
+  
+  final Map<String, Timer> _messageTimers = {};
 
   final _newMessageController =
       StreamController<Map<String, dynamic>>.broadcast();
@@ -48,6 +50,8 @@ class MessagingService {
       StreamController<Map<String, dynamic>>.broadcast();
   final _messageExpiredController = 
       StreamController<Map<String, dynamic>>.broadcast();
+  final _uploadProgressController = StreamController<UploadProgress>.broadcast();
+
 
 
   Stream<Map<String, dynamic>> get onNewMessage => _newMessageController.stream;
@@ -57,6 +61,8 @@ class MessagingService {
       _messageStatusController.stream;
          Stream<Map<String, dynamic>> get onMessageExpired => 
       _messageExpiredController.stream;
+        Stream<UploadProgress> get onUploadProgress => _uploadProgressController.stream;
+
 
 
   bool get isConnected => _socketService.isConnected;
@@ -80,6 +86,8 @@ class MessagingService {
       } else {}
         print('🔍 Checking for expired messages on app start...');
     await deleteExpiredMessages(); 
+    
+      await _loadMessageTimers();
     
       if (!_hasStartedTimer) {
         startLocalExpiryTimer();
@@ -153,55 +161,61 @@ class MessagingService {
     final now = DateTime.now();
     final expiresAt = now.add(Duration(seconds: duration));
 
-      //  تحويل الملفات إلى Base64
-      String? attachmentUrl;
+        String? attachmentData;
       String? attachmentType;
       String? attachmentName;
 
       if (imageFile != null) {
-         debugPrint('📤 Uploading image via HTTPS...');
+        _emitProgress(UploadProgress(
+          stage: UploadStage.compressing,
+          progress: 0.1,
+          message: 'جاري ضغط الصورة...',
+        ));
 
-        final uploadResult = await _mediaService.uploadImage(imageFile);
+        //  ضغط الصورة
+        final mediaResult = await _mediaService.processImage(imageFile);
 
-        if (!uploadResult.success) {
-          throw Exception(uploadResult.errorMessage ?? 'فشل رفع الصورة');
+        if (!mediaResult.success || mediaResult.file == null) {
+          throw Exception(mediaResult.errorMessage ?? 'فشل معالجة الصورة');
         }
 
-        attachmentUrl = uploadResult.url;
+        _emitProgress(UploadProgress(
+          stage: UploadStage.encoding,
+          progress: 0.4,
+          message: 'جاري تحويل الصورة...',
+        ));
+
+        //  تحويل ل Base64
+        attachmentData = await _mediaService.fileToBase64(mediaResult.file!);
         attachmentType = 'image';
-        attachmentName = uploadResult.fileName;
+        attachmentName = mediaResult.fileName;
+
+
       } else if (attachmentFile != null) {
-        final uploadResult = await _mediaService.uploadFile(attachmentFile);
+        _emitProgress(UploadProgress(
+          stage: UploadStage.validating,
+          progress: 0.2,
+          message: 'جاري التحقق من الملف...',
+        ));
 
-        if (!uploadResult.success) {
-          throw Exception(uploadResult.errorMessage ?? 'فشل رفع الملف');
+        //  التحقق من الحجم
+        final fileSize = await attachmentFile.length();
+        if (fileSize > MediaService.maxFileSizeMB * 1024 * 1024) {
+          throw Exception('الملف كبير جداً (الحد الأقصى ${MediaService.maxFileSizeMB}MB)');
         }
 
-        attachmentUrl = uploadResult.url;
+        _emitProgress(UploadProgress(
+          stage: UploadStage.encoding,
+          progress: 0.5,
+          message: 'جاري تحويل الملف...',
+        ));
+
+        //  تحويل ل Base64
+        attachmentData = await _mediaService.fileToBase64(attachmentFile);
         attachmentType = 'file';
-        attachmentName = fileName ?? uploadResult.fileName;
+        attachmentName = fileName ?? attachmentFile.path.split('/').last;
+
       }
-
-     String? encryptedAttachmentUrl = attachmentUrl;
-      String? localAttachmentUrl = attachmentUrl;
-      
-      const int attachmentEncryptionType = 3; 
-
-      if (attachmentUrl != null) {
-        final encryptedUrl = await _signalProtocol.encryptMessage(
-          recipientId,
-          attachmentUrl,
-        );
-
-        if (encryptedUrl == null) {
-          throw Exception('Failed to encrypt attachment URL');
-        }
-        
-      encryptedAttachmentUrl = encryptedUrl['body'];  
-      print('✅ Attachment URL encrypted. Type: ${encryptedUrl['type']}, Body: ${encryptedAttachmentUrl!.substring(0, 10)}...');    
-
-
-  }
 
       final hasSession = await _signalProtocol.sessionExists(recipientId);
       if (!hasSession) {
@@ -221,6 +235,21 @@ class MessagingService {
       if (encrypted == null) {
         throw Exception('Encryption failed');
       }
+      //تشفير الملف 
+      String? encryptedAttachmentData;
+       String? attachmentEncryptionType;
+
+      if (attachmentData != null) {
+        final encryptedAttachment = await _signalProtocol.encryptMessage(recipientId, attachmentData);
+
+        if (encryptedAttachment == null) {
+          throw Exception('Failed to encrypt attachment');
+        }
+        encryptedAttachmentData = encryptedAttachment['body'];
+        attachmentEncryptionType = encryptedAttachment['type']?.toString();
+        print('✅ Attachment encrypted');
+      }
+
 
       //  حفظ في SQLite
       await _db.saveMessage({
@@ -236,13 +265,17 @@ class MessagingService {
         'isMine': 1,
         'requiresBiometric': 0,
         'isDecrypted': 1,
-        'attachmentData': localAttachmentUrl,
+        'attachmentData': attachmentData,
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
         'visibilityDuration': duration,
         'expiresAt': expiresAt?.millisecondsSinceEpoch,
         'isExpired': 0,
       });
+      
+      if (expiresAt != null) {
+        _scheduleMessageExpiry(messageId, expiresAt.millisecondsSinceEpoch);
+      }
 
       // حفظ المحادثة
       await _db.saveConversation({
@@ -258,6 +291,11 @@ class MessagingService {
         'unreadCount': 0,
         'updatedAt': timestamp,
       });
+       _emitProgress(UploadProgress(
+        stage: UploadStage.sending,
+        progress: 0.9,
+        message: 'جاري الإرسال...',
+      ));
 
       //  إرسال عبر Socket مع المرفقات
       _socketService.sendMessageWithAttachment(
@@ -265,124 +303,148 @@ class MessagingService {
         recipientId: recipientId,
         encryptedType: encrypted['type'],
         encryptedBody: encrypted['body'],
-        attachmentData: encryptedAttachmentUrl,
+        attachmentData: encryptedAttachmentData,
         attachmentType: attachmentType,
         attachmentName: attachmentName,
+        attachmentEncryptionType: attachmentEncryptionType,
         visibilityDuration: duration,                 
         expiresAt: expiresAt.toUtc().toIso8601String(),
-        
-
+        createdAt: DateTime.fromMillisecondsSinceEpoch(timestamp).toUtc().toIso8601String(),
       );
+     _emitProgress(UploadProgress(
+        stage: UploadStage.complete,
+        progress: 1.0,
+        message: 'تم الإرسال بنجاح',
+      ));
+      print('✅ Message sent with encrypted Base64 attachment');
+      Future.delayed(Duration(seconds: 1), () {
+      });
 
       return {'success': true, 'messageId': messageId};
     } catch (e) {
-      return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
+      _emitProgress(UploadProgress(
+        stage: UploadStage.error,
+        progress: 0.0,
+        message: 'فشل الإرسال: $e',
+      ));      return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
+    }
+  }
+
+   void _emitProgress(UploadProgress progress) {
+    if (!_uploadProgressController.isClosed) {
+      _uploadProgressController.add(progress);
     }
   }
 
   // استقبال رسالة مع Base64
   Future<void> _handleIncomingMessage(Map data) async {
-    try {
-      final messageId = data['messageId'] as String;
+  try {
+    final messageId = data['messageId'] as String;
 
-      if (_processedMessageIds.contains(messageId)) {
-        return;
-      }
-
-      final existing = await _db.getMessage(messageId);
-      if (existing != null) {
-        _processedMessageIds.add(messageId);
-        return;
-      }
-
-      _processedMessageIds.add(messageId);
-
-      final senderId = data['senderId'] as String;
-      final encryptedType = data['encryptedType'] as int;
-      final encryptedBody = data['encryptedBody'] as String;
-      final attachmentData = data['attachmentData'] as String?;
-      final attachmentType = data['attachmentType'] as String?;
-      final attachmentName = data['attachmentName'] as String?;
-      final visibilityDuration = data['visibilityDuration'] as int?;
-      final expiresAtStr = data['expiresAt'] as String?;
-
-      String? decryptedAttachmentUrl = attachmentData;
-
-      int? expiresAt;
-      if (expiresAtStr != null) {
-        try {
-          expiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
-        } catch (e) {
-        }
-      }
-      if (attachmentData != null) {
-        try {
-        
-          decryptedAttachmentUrl = await _signalProtocol.decryptMessage(
-            senderId,
-            3,
-            attachmentData,
-          );
-          if (decryptedAttachmentUrl == null) {
-            print('❌ Failed to decrypt attachment URL, storing encrypted value');
-            decryptedAttachmentUrl = attachmentData; 
-          } else {
-            print('✅ Attachment URL decrypted successfully: ${decryptedAttachmentUrl.substring(0, 10)}...');
-          }
-        } catch (e) {
-          print('❌ Error decrypting attachment URL: $e');
-          decryptedAttachmentUrl = attachmentData; 
-        }
-      }
-
-      final timestamp = data['createdAt'] != null
-          ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
-          : DateTime.now().millisecondsSinceEpoch;
-
-      final conversationId = _generateConversationId(senderId);
-
-      final bool isCurrentChat = _currentOpenChatUserId == senderId;
-
-      // حفظ الرسالة المشفرة مع المرفقات
-      await _db.saveMessage({
-        'id': messageId,
-        'conversationId': conversationId,
-        'senderId': senderId,
-        'receiverId': await _getCurrentUserId(),
-        'ciphertext': encryptedBody,
-        'encryptionType': encryptedType,
-        'plaintext': null,
-        'status': 'delivered',
-        'createdAt': timestamp,
-        'deliveredAt': DateTime.now().millisecondsSinceEpoch,
-        'isMine': 0,
-        'requiresBiometric': 1,
-        // ✅ نضع isDecrypted = 0 بغض النظر
-        'isDecrypted': 0,
-        'attachmentData': decryptedAttachmentUrl,
-        'attachmentType': attachmentType,
-        'attachmentName': attachmentName,
-        'visibilityDuration': visibilityDuration,
-        'expiresAt': expiresAt,
-        'isExpired': 0,
-      });
-
-      if (!isCurrentChat) {
-        await _db.incrementUnreadCount(conversationId);
-      } else {
-        await _db.markConversationAsRead(conversationId);
-      }
-
-      _newMessageController.add({
-        'messageId': messageId,
-        'conversationId': conversationId,
-        'senderId': senderId,
-        'isLocked': true,
-      });
-    } catch (e) {
-    print('❌ Error in _handleIncomingMessage: $e');
-
+    if (_processedMessageIds.contains(messageId)) {
+      return;
     }
+
+    final existing = await _db.getMessage(messageId);
+    if (existing != null) {
+      _processedMessageIds.add(messageId);
+      return;
+    }
+
+    _processedMessageIds.add(messageId);
+
+    final senderId = data['senderId'] as String;
+    final encryptedType = data['encryptedType'] as int;
+    final encryptedBody = data['encryptedBody'] as String;
+    final encryptedAttachmentData = data['attachmentData'] as String?;
+    final attachmentType = data['attachmentType'] as String?;
+    final attachmentName = data['attachmentName'] as String?;
+    final attachmentEncryptionType = data['attachmentEncryptionType'] as String?;
+    final visibilityDuration = data['visibilityDuration'] as int?;
+    final expiresAtStr = data['expiresAt'] as String?;
+
+    // ⚠️ لا تحاول فك التشفير هنا - احفظ المشفر فقط
+    // سيتم فك التشفير لاحقاً في decryptAllConversationMessages
+    
+    final timestamp = data['createdAt'] != null
+        ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
+        : DateTime.now().millisecondsSinceEpoch;
+    
+    final nowUtc = DateTime.now().toUtc();
+    final now = nowUtc.millisecondsSinceEpoch;
+  
+    int? expiresAt;
+    if (expiresAtStr != null && visibilityDuration != null) {
+      try {
+        final originalExpiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
+        final createdAt = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
+        
+        // حساب الوقت المتبقي من وقت الإنشاء الأصلي
+        final timeSinceCreation = nowUtc.difference(createdAt);
+        final originalLifetime = Duration(seconds: visibilityDuration);
+        
+        // هذا يضمن أن المستقبل يرى الرسالة للمدة المحددة (10 ثواني مثلاً)
+        // بغض النظر عن وقت الوصول (حتى لو وصلت متأخرة)
+        expiresAt = now + (visibilityDuration * 1000);
+      } catch (e) {
+        print('⚠️ Failed to parse expiresAt: $e');
+        // في حالة الخطأ، استخدم المدة المحددة من وقت الاستقبال
+        if (visibilityDuration != null) {
+          expiresAt = now + (visibilityDuration * 1000);
+        }
+      }
+    } else if (visibilityDuration != null) {
+      // إذا لم يكن هناك expiresAt، احسبه من وقت الاستقبال
+      expiresAt = now + (visibilityDuration * 1000);
+      print('📥 Message received: no expiresAt, using duration from receive time: ${DateTime.fromMillisecondsSinceEpoch(expiresAt, isUtc: true).toIso8601String()}');
+    }
+
+    final conversationId = _generateConversationId(senderId);
+    final bool isCurrentChat = _currentOpenChatUserId == senderId;
+
+    // حفظ الرسالة مع المرفق المشفر كما هو
+    await _db.saveMessage({
+      'id': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'receiverId': await _getCurrentUserId(),
+      'ciphertext': encryptedBody,
+      'encryptionType': encryptedType,
+      'plaintext': null,
+      'status': 'delivered',
+      'createdAt': timestamp,
+      'deliveredAt': DateTime.now().millisecondsSinceEpoch,
+      'isMine': 0,
+      'requiresBiometric': 1,
+      'isDecrypted': 0, // ✅ ضع 0 - ستُفك لاحقاً
+      'attachmentData': encryptedAttachmentData, // ✅ احفظ المشفر
+      'attachmentType': attachmentType,
+      'attachmentName': attachmentName,
+      'visibilityDuration': visibilityDuration,
+      'expiresAt': expiresAt,
+      'isExpired': 0,
+    });
+    
+    // ✅ جدولة حذف الرسالة المستقبلة في الوقت المحدد بالضبط
+    if (expiresAt != null) {
+      _scheduleMessageExpiry(messageId, expiresAt);
+    }
+
+    if (!isCurrentChat) {
+      await _db.incrementUnreadCount(conversationId);
+    } else {
+      await _db.markConversationAsRead(conversationId);
+    }
+
+    _newMessageController.add({
+      'messageId': messageId,
+      'conversationId': conversationId,
+      'senderId': senderId,
+      'isLocked': true,
+    });
+  } catch (e) {
+    print('❌ Error in _handleIncomingMessage: $e');
+  }
 
     Future<void> updateConversationPrivacyPolicy({
       required String peerUserId,
@@ -415,9 +477,8 @@ class MessagingService {
 
       final messageId = data['messageId'];
       final newStatus = data['status'];
-
-          final visibilityDuration = data['visibilityDuration'] as int?;
-    final expiresAtStr = data['expiresAt'] as String?;
+      final visibilityDuration = data['visibilityDuration'] as int?;
+      final expiresAtStr = data['expiresAt'] as String?;
 
    
     int? expiresAt;
@@ -463,6 +524,25 @@ class MessagingService {
     for (final msg in pending) {
       try {
         print('🔁 Re-sending pending message ${msg['id']}');
+        
+        // إعادة حساب expiresAt إذا كانت موجودة
+        String? expiresAtStr;
+        String? createdAtStr;
+        
+        if (msg['createdAt'] != null) {
+          final createdAt = DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int);
+          createdAtStr = createdAt.toUtc().toIso8601String();
+          
+          if (msg['expiresAt'] != null) {
+            final expiresAt = DateTime.fromMillisecondsSinceEpoch(msg['expiresAt'] as int);
+            expiresAtStr = expiresAt.toUtc().toIso8601String();
+          } else if (msg['visibilityDuration'] != null) {
+            // إعادة حساب expiresAt بناءً على createdAt الأصلي
+            final expiresAt = createdAt.add(Duration(seconds: msg['visibilityDuration'] as int));
+            expiresAtStr = expiresAt.toUtc().toIso8601String();
+          }
+        }
+        
         _socketService.sendMessageWithAttachment(
           messageId: msg['id'],
           recipientId: msg['receiverId'],
@@ -471,6 +551,9 @@ class MessagingService {
           attachmentData: msg['attachmentData'],
           attachmentType: msg['attachmentType'],
           attachmentName: msg['attachmentName'],
+          visibilityDuration: msg['visibilityDuration'],
+          expiresAt: expiresAtStr,
+          createdAt: createdAtStr,
         );
         await db.updateMessageStatus(msg['id'], 'sent');
       } catch (e) {
@@ -511,166 +594,185 @@ class MessagingService {
     }
   }
 
-  Future<Map<String, dynamic>> decryptAllConversationMessages(
-    String conversationId,
-  ) async {
-    try {
-      print('🔓 Starting decryption for conversation: $conversationId');
+  // في MessagingService - تحديث decryptAllConversationMessages
 
-      // نجلب الرسائل المشفرة غير المفكوكة للمحادثة
-      final encryptedMessages = await _db.getEncryptedMessages(conversationId);
+Future<Map<String, dynamic>> decryptAllConversationMessages(
+  String conversationId,
+) async {
+  try {
+    print('Starting decryption for conversation: $conversationId');
 
-      if (encryptedMessages.isEmpty) {
-        print('ℹ️ No encrypted messages to decrypt');
-        return {
-          'success': true,
-          'message': 'لا توجد رسائل تحتاج فك تشفير',
-          'count': 0,
-        };
-      }
+    // جلب الرسائل المشفرة غير المفكوكة
+    final encryptedMessages = await _db.getEncryptedMessages(conversationId);
 
-      print('📊 Found ${encryptedMessages.length} encrypted messages');
-
-      // نفك التشفير لكل رسالة ونحدثها بقاعدة البيانات
-      int successCount = 0;
-      String? lastError;
-      String? lastErrorType;
-
-      for (final message in encryptedMessages) {
-        try {
-          final messageId = message['id'];
-          final senderId = message['senderId'];
-
-          print('🔐 Decrypting message $messageId from $senderId');
-
-          final decrypted = await _signalProtocol.decryptMessage(
-            senderId,
-            message['encryptionType'],
-            message['ciphertext'],
-          );
-
-          if (decrypted != null) {
-            await _db.updateMessage(messageId, {
-              'plaintext': decrypted,
-              'isDecrypted': 1,
-              'requiresBiometric': 1,
-              'status': 'read',
-              'readAt': DateTime.now().millisecondsSinceEpoch,
-            });
-
-            // إرسال حالة القراءة للمرسل
-            _socketService.updateMessageStatus(
-              messageId: messageId,
-              status: 'verified',
-              recipientId: senderId,
-            );
-
-            successCount++;
-            print('✅ Message $messageId decrypted successfully');
-          } else {
-            lastError = 'Decryption returned null';
-            decryptionFailure++;
-            if (decryptionFailure >= 1) {
-              await _signalProtocol.deleteSession(senderId);
-              await deleteConversation(conversationId);
-              return {
-                'success': false,
-                'error': 'SessionReset',
-                'message': 'Session reset due to decryption errors',
-              };
-              print ('session reset due to decryption failuer');
-            }
-            lastErrorType = 'DecryptionFailure';
-            print('❌ Decryption returned null for message $messageId');
-          }
-        } catch (e) {
-          lastError = e.toString();
-
-          decryptionFailure++;
-
-          // ✅ استخراج نوع الخطأ بشكل أفضل
-          if (e.toString().contains('InvalidKeyException')) {
-            lastErrorType = 'InvalidKeyException';
-          } else if (e.toString().contains('InvalidMessageException')) {
-            lastErrorType = 'InvalidMessageException';
-          } else if (e.toString().contains('InvalidSessionException') ||
-              e.toString().contains('NoSessionException')) {
-            lastErrorType = 'InvalidSessionException';
-          } else if (e.toString().contains('UntrustedIdentityException')) {
-            lastErrorType = 'UntrustedIdentityException';
-          } else if (e.toString().contains('session') ||
-              e.toString().contains('Session')) {
-            lastErrorType = 'InvalidSessionException';
-          } else {
-            lastErrorType = 'UnknownError';
-          }
-
-          print('❌ Failed to decrypt message: $lastErrorType - $e');
-        }
-      }
-
-      // ✅ إذا نجحت جميع الرسائل
-      if (successCount == encryptedMessages.length) {
-        print(
-          '✅ All messages decrypted successfully ($successCount/${encryptedMessages.length})',
-        );
-        return {
-          'success': true,
-          'message': 'تم فك تشفير $successCount رسائل',
-          'count': successCount,
-        };
-      }
-
-      // ✅ إذا فشلت جميع الرسائل
-      if (successCount == 0) {
-        print('❌ All messages failed to decrypt. Error: $lastErrorType');
-        return {
-          'success': false,
-          'message': 'فشل فك تشفير جميع الرسائل',
-          'count': 0,
-          'error': lastErrorType,
-          'errorMessage': lastError,
-        };
-      }
-
-      // ✅ إذا نجح البعض وفشل البعض
-      print(
-        '⚠️ Partial success: $successCount/${encryptedMessages.length} decrypted',
-      );
+    if (encryptedMessages.isEmpty) {
+      print('No encrypted messages to decrypt');
       return {
-        'success': true, // نعتبره نجاح جزئي
-        'message':
-            'تم فك تشفير $successCount من ${encryptedMessages.length} رسائل',
-        'count': successCount,
-        'error': lastErrorType, // نرجع آخر خطأ حدث
-        'errorMessage': lastError,
-      };
-    } catch (e) {
-      print('❌ Critical error in decryptAllConversationMessages: $e');
-
-      // ✅ تحديد نوع الخطأ
-      String errorType = 'UnknownError';
-
-      if (e.toString().contains('InvalidKeyException')) {
-        errorType = 'InvalidKeyException';
-      } else if (e.toString().contains('InvalidSessionException') ||
-          e.toString().contains('NoSessionException')) {
-        errorType = 'InvalidSessionException';
-      } else if (e.toString().contains('session') ||
-          e.toString().contains('Session')) {
-        errorType = 'InvalidSessionException';
-      }
-
-      return {
-        'success': false,
-        'message': 'فشل فك تشفير الرسائل',
+        'success': true,
+        'message': 'لا توجد رسائل تحتاج فك تشفير',
         'count': 0,
-        'error': errorType,
-        'errorMessage': e.toString(),
       };
     }
-  }
 
+    print('Found ${encryptedMessages.length} encrypted messages');
+
+    int successCount = 0;
+    String? lastError;
+    String? lastErrorType;
+
+    for (final message in encryptedMessages) {
+      try {
+        final messageId = message['id'];
+        final senderId = message['senderId'];
+        final encryptionType = message['encryptionType'];
+        
+        print('Decrypting message $messageId from $senderId');
+
+        // فك تشفير النص
+        final decrypted = await _signalProtocol.decryptMessage(
+          senderId,
+          encryptionType,
+          message['ciphertext'],
+        );
+
+        if (decrypted != null) {
+          // ✅ فك تشفير المرفق أيضاً إذا كان موجود
+          String? decryptedAttachmentData;
+          if (message['attachmentData'] != null && 
+              message['attachmentType'] != null) {
+            try {
+              print('🔓 Attempting to decrypt attachment for message $messageId');
+              
+              decryptedAttachmentData = await _signalProtocol.decryptMessage(
+                senderId,
+                encryptionType, // استخدم نفس encryptionType
+                message['attachmentData'],
+              );
+              
+              if (decryptedAttachmentData != null) {
+                print('✅ Attachment decrypted successfully');
+              } else {
+                print('⚠️ Attachment decryption returned null - keeping encrypted data');
+                decryptedAttachmentData = message['attachmentData'];
+              }
+            } catch (e) {
+              print('❌ Error decrypting attachment: $e');
+              decryptedAttachmentData = message['attachmentData'];
+            }
+          }
+
+          // تحديث الرسالة مع النص والمرفق المفكوكين
+          await _db.updateMessage(messageId, {
+            'plaintext': decrypted,
+            'attachmentData': decryptedAttachmentData, // ✅ حفظ المرفق المفكوك
+            'isDecrypted': 1,
+            'requiresBiometric': 1,
+            'status': 'read',
+            'readAt': DateTime.now().millisecondsSinceEpoch,
+          });
+
+          // إرسال حالة القراءة للمرسل
+          _socketService.updateMessageStatus(
+            messageId: messageId,
+            status: 'verified',
+            recipientId: senderId,
+          );
+
+          successCount++;
+          print('Message $messageId decrypted successfully ✅');
+        } else {
+          lastError = 'Decryption returned null';
+          decryptionFailure++;
+          
+          if (decryptionFailure >= 1) {
+            await _signalProtocol.deleteSession(senderId);
+            await deleteConversation(conversationId);
+            return {
+              'success': false,
+              'error': 'SessionReset',
+              'message': 'Session reset due to decryption errors',
+            };
+          }
+          
+          lastErrorType = 'DecryptionFailure';
+          print('Decryption returned null for message $messageId');
+        }
+      } catch (e) {
+        lastError = e.toString();
+        decryptionFailure++;
+
+        if (e.toString().contains('InvalidKeyException')) {
+          lastErrorType = 'InvalidKeyException';
+        } else if (e.toString().contains('InvalidMessageException')) {
+          lastErrorType = 'InvalidMessageException';
+        } else if (e.toString().contains('InvalidSessionException') ||
+            e.toString().contains('NoSessionException')) {
+          lastErrorType = 'InvalidSessionException';
+        } else if (e.toString().contains('UntrustedIdentityException')) {
+          lastErrorType = 'UntrustedIdentityException';
+        } else if (e.toString().contains('session') ||
+            e.toString().contains('Session')) {
+          lastErrorType = 'InvalidSessionException';
+        } else {
+          lastErrorType = 'UnknownError';
+        }
+
+        print('Failed to decrypt message: $lastErrorType - $e');
+      }
+    }
+
+    if (successCount == encryptedMessages.length) {
+      print('All messages decrypted successfully ($successCount/${encryptedMessages.length})');
+      return {
+        'success': true,
+        'message': 'تم فك تشفير $successCount رسائل',
+        'count': successCount,
+      };
+    }
+
+    if (successCount == 0) {
+      print('All messages failed to decrypt. Error: $lastErrorType');
+      return {
+        'success': false,
+        'message': 'فشل فك تشفير جميع الرسائل',
+        'count': 0,
+        'error': lastErrorType,
+        'errorMessage': lastError,
+      };
+    }
+
+    print('Partial success: $successCount/${encryptedMessages.length} decrypted');
+    return {
+      'success': true,
+      'message': 'تم فك تشفير $successCount من ${encryptedMessages.length} رسائل',
+      'count': successCount,
+      'error': lastErrorType,
+      'errorMessage': lastError,
+    };
+  } catch (e) {
+    print('Critical error in decryptAllConversationMessages: $e');
+
+    String errorType = 'UnknownError';
+
+    if (e.toString().contains('InvalidKeyException')) {
+      errorType = 'InvalidKeyException';
+    } else if (e.toString().contains('InvalidSessionException') ||
+        e.toString().contains('NoSessionException')) {
+      errorType = 'InvalidSessionException';
+    } else if (e.toString().contains('session') ||
+        e.toString().contains('Session')) {
+      errorType = 'InvalidSessionException';
+    }
+
+    return {
+      'success': false,
+      'message': 'فشل فك تشفير الرسائل',
+      'count': 0,
+      'error': errorType,
+      'errorMessage': e.toString(),
+    };
+  }
+}
   //فك تشفير رسالة واحدة (يطلب التحقق كل مرة) - نبقي هذه الدالة كاحتياط
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {
@@ -773,6 +875,10 @@ class MessagingService {
     print('   deleteForEveryone: $deleteForEveryone');
 
 
+      // إلغاء Timer الخاص بالرسالة
+      _messageTimers[messageId]?.cancel();
+      _messageTimers.remove(messageId);
+      
       if (deleteForEveryone) {
         await _db.deleteMessage(messageId);
         _socketService.socket?.emit('message:delete_local', {
@@ -785,7 +891,10 @@ class MessagingService {
 
         return {'success': true, 'message': 'تم الحذف للجميع'};
       } else {
-     
+        // إلغاء Timer الخاص بالرسالة
+        _messageTimers[messageId]?.cancel();
+        _messageTimers.remove(messageId);
+        
         await _db.updateMessage(messageId, {'deletedForRecipient': 1});
                 print('✅ Updated deletedForRecipient = 1 for message: $messageId');
 
@@ -875,7 +984,15 @@ class MessagingService {
     _newMessageController.close();
     _messageDeletedController.close();
     _messageStatusController.close();
-     _messageExpiredController.close();
+    
+    // إلغاء جميع Timers الخاصة بالرسائل
+    for (final timer in _messageTimers.values) {
+      timer.cancel();
+    }
+    _messageTimers.clear();
+    
+    _messageExpiredController.close();
+    _uploadProgressController.close();
     _expiryTimer?.cancel();
     _cleanupTimer?.cancel();
   }
@@ -946,14 +1063,125 @@ Future<void> deleteExpiredMessages() async {
  
 }
 
+  //  إنشاء Timer ديناميكي لحذف رسالة في الوقت المحدد بالضبط
+  void _scheduleMessageExpiry(String messageId, int expiresAtMillis) {
+    // إلغاء Timer القديم إذا كان موجوداً
+    _messageTimers[messageId]?.cancel();
+    _messageTimers.remove(messageId);
+    
+    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+    final expiresAt = DateTime.fromMillisecondsSinceEpoch(expiresAtMillis, isUtc: true);
+    final nowUtc = DateTime.now().toUtc();
+    
+    // حساب الفترة الزمنية حتى انتهاء الصلاحية
+    final delay = expiresAt.difference(nowUtc);
+    
+    // إذا انتهت الصلاحية بالفعل، احذف مباشرة
+    if (delay.isNegative || delay.inMilliseconds <= 0) {
+      _deleteSingleMessage(messageId);
+      return;
+    }
+    
+    // إنشاء Timer لحذف الرسالة في الوقت المحدد بالضبط
+    _messageTimers[messageId] = Timer(delay, () {
+      _deleteSingleMessage(messageId);
+      _messageTimers.remove(messageId);
+    });
+    
+  }
+  
+  // حذف رسالة واحدة
+  Future<void> _deleteSingleMessage(String messageId) async {
+    try {
+      final message = await _db.getMessage(messageId);
+      if (message == null) return;
+      
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final nowReadable = DateTime.now().toIso8601String();
+      final expiresAt = message['expiresAt'] as int?;
+      final createdAt = message['createdAt'] as int;
+      final deliveredAt = message['deliveredAt'] as int?;
+      final isMine = (message['isMine'] as int?) == 1;
+      final duration = message['visibilityDuration'] as int?;
+      
+      if (expiresAt != null) {
+        final expiresAtReadable = DateTime.fromMillisecondsSinceEpoch(expiresAt, isUtc: true).toIso8601String();
+        final createdAtReadable = DateTime.fromMillisecondsSinceEpoch(createdAt, isUtc: true).toIso8601String();
+        final delay = now - expiresAt;
+        
+        // حساب Actual Lifetime بناءً على نوع الرسالة
+        // للمرسل: من createdAt (وقت الإرسال)
+        // للمستقبل: من deliveredAt (وقت الاستقبال) إذا كان موجوداً، وإلا من createdAt
+        final viewStartTime = (isMine || deliveredAt == null) ? createdAt : deliveredAt;
+        final actualLifetime = now - viewStartTime;
+        
+        String lifetimeInfo;
+        if (isMine) {
+          lifetimeInfo = 'From creation';
+        } else if (deliveredAt != null) {
+          final deliveredAtReadable = DateTime.fromMillisecondsSinceEpoch(deliveredAt, isUtc: true).toIso8601String();
+          lifetimeInfo = 'From delivery ($deliveredAtReadable)';
+        } else {
+          lifetimeInfo = 'From creation (no delivery time)';
+        }
+        
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        print('⏱️  MESSAGE EXPIRED (Precise Timer):');
+        print('   📝 Message ID: $messageId');
+        print('   ⏱️ Duration Set: ${duration}s');
+        print('   📅 Created: $createdAtReadable');
+        print('   ⏰ Should expire: $expiresAtReadable');
+        print('   🕐 Actually deleted: $nowReadable');
+        print('   ⏳ Deletion Delay: ${delay}ms (${(delay / 1000).toStringAsFixed(3)}s)');
+        print('   ⌛ Actual Lifetime: ${(actualLifetime / 1000).toStringAsFixed(3)}s (Expected: ${duration}s) - $lifetimeInfo');
+        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      }
+      
+      await _db.deleteMessage(messageId);
+      _messageExpiredController.add({'messageId': messageId});
+      _messageTimers.remove(messageId);
+      
+      print('✅ [DB] Deleted expired message: $messageId');
+    } catch (e) {
+      print('❌ Error deleting message $messageId: $e');
+    }
+  }
+
+  // تحميل جميع الرسائل وإنشاء Timers لها عند بدء التطبيق
+  Future<void> _loadMessageTimers() async {
+    try {
+      final db = DatabaseHelper.instance;
+      final messages = await db.database;
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      
+      // جلب جميع الرسائل التي لديها expiresAt ولم تنته صلاحيتها بعد
+      final messagesWithExpiry = await messages.query(
+        'messages',
+        where: 'expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) > ?',
+        whereArgs: [now],
+        columns: ['id', 'expiresAt'],
+      );
+      
+      for (final msg in messagesWithExpiry) {
+        final messageId = msg['id'] as String;
+        final expiresAt = msg['expiresAt'] as int;
+        _scheduleMessageExpiry(messageId, expiresAt);
+      }
+      
+      print('✅ Loaded ${messagesWithExpiry.length} message timers');
+    } catch (e) {
+      print('⚠️ Error loading message timers: $e');
+    }
+  }
+
  void startLocalExpiryTimer() {
-    
-    // _expiryTimer?.cancel();
-    
+    //  لا نحتاج Timer عام بعد الآن - نستخدم Timer ديناميكي لكل رسالة
+    // لكن نبقي Timer عام كنسخة احتياطية لحذف أي رسائل فاتتها
     if (_expiryTimer != null && _expiryTimer!.isActive) {
       return;
     }
     
+    // Timer كل 5 ثوانٍ لحذف أي رسائل فاتتها
     _expiryTimer = Timer.periodic(
       const Duration(seconds: 5), 
       (timer) async {
@@ -962,4 +1190,40 @@ Future<void> deleteExpiredMessages() async {
     );
   }
 
+}
+enum UploadStage {
+  idle,
+  validating,
+  compressing,
+  encoding,
+  encrypting,
+  saving,
+  sending,
+  complete,
+  error,
+}
+
+class UploadProgress {
+  final UploadStage stage;
+  final double progress; //حسبناها على اساس من صفر لواحد 
+  final String message;
+
+  UploadProgress({
+    required this.stage,
+    required this.progress,
+    required this.message,
+  });
+
+  factory UploadProgress.idle() {
+    return UploadProgress(
+      stage: UploadStage.idle,
+      progress: 0.0,
+      message: '',
+    );
+  }
+
+  bool get isIdle => stage == UploadStage.idle;
+  bool get isComplete => stage == UploadStage.complete;
+  bool get isError => stage == UploadStage.error;
+  bool get isProcessing => !isIdle && !isComplete && !isError;
 }

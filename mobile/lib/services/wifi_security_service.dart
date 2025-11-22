@@ -14,6 +14,8 @@ class WifiSecurityService {
 
   static const platform = MethodChannel('com.waseed.app/wifi_security');
   final Connectivity _connectivity = Connectivity();
+  final _networkStatusController = StreamController<WifiSecurityStatus>.broadcast();
+
   
   // مفاتيح التخزين
   static const String _permissionsAskedKey = 'wifi_permissions_asked';
@@ -24,12 +26,14 @@ class WifiSecurityService {
   static const String _lastWarningSSIDKey = 'last_warning_ssid';
   
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Stream<WifiSecurityStatus> get onNetworkChanged => _networkStatusController.stream;
+
   bool _isInitialized = false;
   bool _isCheckingNetwork = false;
 
   bool get isInitialized => _isInitialized;
 
-  /// تهيئة الخدمة - تُستدعى مرة واحدة عند تشغيل التطبيق
+  ///   - تُستدعى مرة واحدة عند تشغيل التطبيق
   Future<bool> initialize() async {
     if (_isInitialized) {
       print('✅ WiFi Security Service already initialized');
@@ -127,6 +131,82 @@ Future<void> markUserDeclinedPermanently() async {
       return false;
     }
   }
+
+// ذي عشان التاخير اللي يصير في الios 
+Future<WifiCheckResult> requestPermissionsAndCheck() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_permissionsAskedKey, true);
+    
+    bool locationGranted = false;
+    try {
+      await _requestLocationPermission();
+      locationGranted = true;
+      print('✅ Flutter location permission granted');
+    } catch (e) {
+      print('⚠️ Location permission error: $e');
+    }
+    
+    // طلب صلاحيات من Native code
+    bool nativeGranted = false;
+    try {
+      final result = await platform.invokeMethod<bool>('requestPermissions');
+      nativeGranted = result ?? false;
+      print('✅ Native permission result: $nativeGranted');
+    } catch (e) {
+      print('⚠️ Native permission error: $e');
+    }
+    
+    final granted = locationGranted || nativeGranted;
+    await prefs.setBool(_permissionsGrantedKey, granted);
+    
+    if (!granted) {
+      print('❌ No permissions granted');
+      return WifiCheckResult.permissionDenied();
+    }
+    
+    print('⏳ Waiting for iOS to apply permissions...');
+    await Future.delayed(const Duration(milliseconds: 1000));
+    
+    await resetCheckState();
+    
+    // محاولات متعددة للفحص (iOS يحتاج وقت أحياناً)
+    WifiSecurityStatus? status;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      print('🔄 WiFi check attempt $attempt/3...');
+      
+      try {
+        status = await _performNetworkCheck();
+        if (status != null) {
+          print('✅ Success on attempt $attempt!');
+          break;
+        }
+      } catch (e) {
+        print('⚠️ Attempt $attempt failed: $e');
+      }
+      
+      if (attempt < 3) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
+    
+    if (status == null) {
+      print('❌ Could not get WiFi info after 3 attempts');
+      return WifiCheckResult.notConnected();
+    }
+    
+    await _markNetworkAsChecked(status.ssid, status.bssid, status.isSecure);
+    
+    print('✅ WiFi check complete: ${status.ssid} - Secure: ${status.isSecure}');
+    return WifiCheckResult.success(status);
+    
+  } catch (e) {
+    print('❌ Error in requestPermissionsAndCheck: $e');
+    return WifiCheckResult.error(e.toString());
+  }
+}
+
+
 
   /// فحص الشبكة الحالية - يُستدعى عند فتح Dashboard
   Future<WifiCheckResult> checkNetworkOnAppLaunch() async {
@@ -272,44 +352,32 @@ Future<void> markUserDeclinedPermanently() async {
     _isCheckingNetwork = true;
 
     try {
-      // 1. التحقق من الاتصال بـ WiFi
-      final List<ConnectivityResult> connectivityResult = 
-          await _connectivity.checkConnectivity();
-      
-      if (!connectivityResult.contains(ConnectivityResult.wifi)) {
-        print('📵 Not connected to WiFi');
-        _isCheckingNetwork = false;
-        return null;
-      }
-
-      // 2. الحصول على معلومات الشبكة من Native Code
-      final Map<dynamic, dynamic> rawData = 
-          await platform.invokeMethod('getWifiSecurityStatus');
-      
-      if (rawData.isEmpty) {
-        print('⚠️ No network data received');
-        _isCheckingNetwork = false;
-        return null;
-      }
-
-      // 3. تحويل البيانات
-      final status = WifiSecurityStatus.fromMap(Map<String, dynamic>.from(rawData));
-      
-      _isCheckingNetwork = false;
-      
-      return status;
-      
-    } on PlatformException catch (e) {
-      print('❌ Platform Error: ${e.code} - ${e.message}');
-      _isCheckingNetwork = false;
-      return null;
-      
-    } catch (e) {
-      print('❌ Unexpected Error: $e');
+     
+final Map<dynamic, dynamic> rawData = 
+        await platform.invokeMethod('getWifiSecurityStatus');
+    
+    if (rawData.isEmpty) {
+      print('⚠️ No network data received');
       _isCheckingNetwork = false;
       return null;
     }
+
+    final status = WifiSecurityStatus.fromMap(Map<String, dynamic>.from(rawData));
+    
+    _isCheckingNetwork = false;
+    return status;
+    
+  } on PlatformException catch (e) {
+    print('❌ Platform Error: ${e.code} - ${e.message}');
+    _isCheckingNetwork = false;
+    return null;
+    
+  } catch (e) {
+    print('❌ Unexpected Error: $e');
+    _isCheckingNetwork = false;
+    return null;
   }
+}
 
   /// مراقبة تغييرات الشبكة
   void _startNetworkMonitoring() {
@@ -324,13 +392,17 @@ Future<void> markUserDeclinedPermanently() async {
           if (changed) {
             print('🆕 New network detected - resetting and will check on next dashboard open');
             await resetCheckState();
-            // لا نفحص هنا - سيتم الفحص عند فتح Dashboard
+            final status = await _performNetworkCheck();
+            if (status != null) {
+              _networkStatusController.add(status); 
+            }
+            //  سيتم الفحص عند فتح Dashboard
           } else {
             print('ℹ️ Same network - no action needed');
           }
         } else {
           print('📵 Disconnected from WiFi');
-          await resetCheckState(); // مسح البيانات عند الانقطاع
+        //await resetCheckState();
         }
       },
     );
@@ -383,15 +455,13 @@ Future<void> markUserDeclinedPermanently() async {
 
   void dispose() {
     _connectivitySubscription?.cancel();
-    _isInitialized = false;
+    _networkStatusController.close();
+   _isInitialized = false;
     print('🛑 WiFi Security Service disposed');
   }
 }
 
-// ============================================
 // Enums & Data Models
-// ============================================
-
 enum PermissionState {
   neverAsked,  // لم يُسأل من قبل
   granted,     // تم منح الصلاحيات

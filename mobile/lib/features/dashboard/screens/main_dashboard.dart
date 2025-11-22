@@ -277,89 +277,152 @@ Future<void> _initializeSocket() async {
   
 // Dialog لطلب الصلاحيات لأول مرة
   void _showPermissionRequestDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              const Icon(Icons.shield_outlined, color: Colors.white, size: 32),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'فحص أمان الشبكات',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: const Text(
-            'للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.\n\nهذا الفحص يتم مرة واحدة فقط عند الاتصال بشبكة جديدة.',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // تسجيل أن المستخدم اختار "ليس الآن" - لا نزعجه مرة أخرى
-                _wifiService.markUserDeclinedPermanently();
-              },
-              child: const Text(
-                'ليس الآن',
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: const [
+            Icon(Icons.shield_outlined, color: Colors.white, size: 32),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'فحص أمان الشبكات',
                 style: TextStyle(
-                  color: Colors.white70,
+                  color: Colors.white,
                   fontFamily: 'IBMPlexSansArabic',
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                final granted = await _wifiService.requestPermissions();
-                if (granted && mounted) {
-                  // أعد الفحص بعد منح الصلاحيات
-                  _hasCheckedWifiThisSession = false;
-                  _checkWifiOnDashboardOpen();
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF2D1B69),
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'منح الصلاحية',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 20,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
           ],
         ),
+        content: const Text(
+          'للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.\n\nهذا الفحص يتم مرة واحدة فقط عند الاتصال بشبكة جديدة.',
+          style: TextStyle(
+            color: Colors.white,
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 14,
+            height: 1.6,
+          ),
+          textAlign: TextAlign.right,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _wifiService.markUserDeclinedPermanently();
+            },
+            child: const Text(
+              'ليس الآن',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'IBMPlexSansArabic',
+              ),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () => _handlePermissionGranted(),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF2D1B69),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'منح الصلاحية',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  );
+}
+Future<void> _handlePermissionGranted() async {
+  // إغلاق dialog الصلاحيات
+  Navigator.pop(context);
+  
+  // عرض Loading
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: const [
+            CircularProgressIndicator(color: Colors.white),
+            SizedBox(height: 20),
+            Text(
+              'جاري فحص الشبكة...',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+  
+  // ✨ استخدام الدالة الجديدة
+  final result = await _wifiService.requestPermissionsAndCheck();
+  
+  // إغلاق Loading
+  if (mounted && Navigator.canPop(context)) {
+    Navigator.pop(context);
   }
+  
+  if (!mounted) return;
+  
+  // عرض النتيجة
+  switch (result.type) {
+    case WifiCheckResultType.success:
+      if (result.status != null) {
+        if (result.status!.shouldShowWarning) {
+          _showSecurityAlert(result.status!);
+        } else {
+          _showSecureNetworkAlert(result.status!);
+        }
+      }
+      break;
+      
+    case WifiCheckResultType.permissionDenied:
+      _showPermissionDeniedDialog();
+      break;
+      
+    case WifiCheckResultType.notConnected:
+      _showMessage('غير متصل بشبكة WiFi', false);
+      break;
+      
+    case WifiCheckResultType.error:
+      _showMessage('حدث خطأ أثناء الفحص', false);
+      break;
+      
+    default:
+      break;
+  }
+}
 
   /// Dialog عند رفض الصلاحيات
   void _showPermissionDeniedDialog() {

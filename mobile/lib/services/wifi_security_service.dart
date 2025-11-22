@@ -132,6 +132,82 @@ Future<void> markUserDeclinedPermanently() async {
     }
   }
 
+// ذي عشان التاخير اللي يصير في الios 
+Future<WifiCheckResult> requestPermissionsAndCheck() async {
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_permissionsAskedKey, true);
+    
+    bool locationGranted = false;
+    try {
+      await _requestLocationPermission();
+      locationGranted = true;
+      print('✅ Flutter location permission granted');
+    } catch (e) {
+      print('⚠️ Location permission error: $e');
+    }
+    
+    // طلب صلاحيات من Native code
+    bool nativeGranted = false;
+    try {
+      final result = await platform.invokeMethod<bool>('requestPermissions');
+      nativeGranted = result ?? false;
+      print('✅ Native permission result: $nativeGranted');
+    } catch (e) {
+      print('⚠️ Native permission error: $e');
+    }
+    
+    final granted = locationGranted || nativeGranted;
+    await prefs.setBool(_permissionsGrantedKey, granted);
+    
+    if (!granted) {
+      print('❌ No permissions granted');
+      return WifiCheckResult.permissionDenied();
+    }
+    
+    print('⏳ Waiting for iOS to apply permissions...');
+    await Future.delayed(const Duration(milliseconds: 1000));
+    
+    await resetCheckState();
+    
+    // محاولات متعددة للفحص (iOS يحتاج وقت أحياناً)
+    WifiSecurityStatus? status;
+    for (int attempt = 1; attempt <= 3; attempt++) {
+      print('🔄 WiFi check attempt $attempt/3...');
+      
+      try {
+        status = await _performNetworkCheck();
+        if (status != null) {
+          print('✅ Success on attempt $attempt!');
+          break;
+        }
+      } catch (e) {
+        print('⚠️ Attempt $attempt failed: $e');
+      }
+      
+      if (attempt < 3) {
+        await Future.delayed(const Duration(milliseconds: 500));
+      }
+    }
+    
+    if (status == null) {
+      print('❌ Could not get WiFi info after 3 attempts');
+      return WifiCheckResult.notConnected();
+    }
+    
+    await _markNetworkAsChecked(status.ssid, status.bssid, status.isSecure);
+    
+    print('✅ WiFi check complete: ${status.ssid} - Secure: ${status.isSecure}');
+    return WifiCheckResult.success(status);
+    
+  } catch (e) {
+    print('❌ Error in requestPermissionsAndCheck: $e');
+    return WifiCheckResult.error(e.toString());
+  }
+}
+
+
+
   /// فحص الشبكة الحالية - يُستدعى عند فتح Dashboard
   Future<WifiCheckResult> checkNetworkOnAppLaunch() async {
     try {

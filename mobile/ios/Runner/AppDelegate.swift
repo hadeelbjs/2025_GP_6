@@ -69,39 +69,50 @@ import CoreLocation
             return
         }
         
-        guard var response = getWifiInfo() else {
-            result(FlutterError(
-                code: "NO_WIFI",
-                message: "Not connected to WiFi",
-                details: nil
-            ))
-            return
+        getWifiInfo { [weak self] response in
+            guard let self = self else {
+                result(FlutterError(
+                    code: "UNAVAILABLE",
+                    message: "AppDelegate not available",
+                    details: nil
+                ))
+                return
+            }
+            
+            guard var wifiData = response else {
+                result(FlutterError(
+                    code: "NO_WIFI",
+                    message: "Not connected to WiFi",
+                    details: nil
+                ))
+                return
+            }
+            
+            let ssid = wifiData["ssid"] as? String ?? "Unknown"
+            
+            // التحقق من موثوقية البيانات
+            if wifiData["confidence"] as? Int ?? 0 >= 90 {
+                print("📊 iOS Result (High Confidence): \(wifiData)")
+                result(wifiData)
+                return
+            }
+            
+            // التحليل المستند إلى القاعدة (Fallback)
+            print("ℹ️ Falling back to Rule-Based analysis...")
+            let analysis = self.analyzeNetworkByName(ssid: ssid)
+            
+            wifiData["ssid"] = ssid
+            wifiData["bssid"] = wifiData["bssid"] as? String ?? "unknown"
+            wifiData["platform"] = "iOS"
+            wifiData["securityType"] = analysis["type"] ?? "UNKNOWN"
+            wifiData["isSecure"] = analysis["isSecure"] ?? false
+            wifiData["source"] = "Rule-Based Analysis (Fallback)"
+            wifiData["confidence"] = analysis["confidence"] ?? 40
+            wifiData["warning"] = "التحليل بناءً على اسم الشبكة فقط"
+            
+            print("📊 iOS Result (Low Confidence Fallback): \(wifiData)")
+            result(wifiData)
         }
-        
-        let ssid = response["ssid"] as? String ?? "Unknown"
-        
-        // التحقق من موثوقية البيانات
-        if response["confidence"] as? Int ?? 0 >= 90 {
-            print("📊 iOS Result (High Confidence): \(response)")
-            result(response)
-            return
-        }
-        
-        // التحليل المستند إلى القاعدة (Fallback)
-        print("ℹ️ Falling back to Rule-Based analysis...")
-        let analysis = analyzeNetworkByName(ssid: ssid)
-        
-        response["ssid"] = ssid
-        response["bssid"] = response["bssid"] as? String ?? "unknown"
-        response["platform"] = "iOS"
-        response["securityType"] = analysis["type"] ?? "UNKNOWN"
-        response["isSecure"] = analysis["isSecure"] ?? false
-        response["source"] = "Rule-Based Analysis (Fallback)"
-        response["confidence"] = analysis["confidence"] ?? 40
-        response["warning"] = "التحليل بناءً على اسم الشبكة فقط"
-        
-        print("📊 iOS Result (Low Confidence Fallback): \(response)")
-        result(response)
     }
     
     // ============================================
@@ -171,33 +182,30 @@ import CoreLocation
     }
     
     // ============================================
-    // MARK: - WiFi Info Retrieval
+    // MARK: - WiFi Info Retrieval 
     // ============================================
     
-    private func getWifiInfo() -> [String: Any]? {
+    private func getWifiInfo(completion: @escaping ([String: Any]?) -> Void) {
         if #available(iOS 15.0, *) {
-            return getWifiInfoModern()
+            getWifiInfoModern(completion: completion)
+        } else {
+            completion(getWifiInfoLegacy())
         }
-        return getWifiInfoLegacy()
     }
     
     @available(iOS 15.0, *)
-    private func getWifiInfoModern() -> [String: Any]? {
-        var wifiInfo: [String: Any]?
-        let semaphore = DispatchSemaphore(value: 0)
-        
+    private func getWifiInfoModern(completion: @escaping ([String: Any]?) -> Void) {
         NEHotspotNetwork.fetchCurrent { network in
-            defer { semaphore.signal() }
-            
             guard let network = network else {
                 print("⚠️ No WiFi network detected or Location permission denied.")
+                completion(nil)
                 return
             }
             
             let securityType = self.mapSecurityType(network.securityType)
             let isSecure = securityType != "OPEN" && securityType != "WEP"
             
-            wifiInfo = [
+            let wifiInfo: [String: Any] = [
                 "ssid": network.ssid,
                 "bssid": network.bssid,
                 "securityType": securityType,
@@ -208,11 +216,9 @@ import CoreLocation
                 "warning": securityType == "WPA/WPA2/WPA3" ? "لا يمكن التحديد بدقة بين WPA2 و WPA3" : nil
             ]
             
-            print("✅ NEHotspotNetwork Info: \(wifiInfo ?? [:])")
+            print("✅ NEHotspotNetwork Info: \(wifiInfo)")
+            completion(wifiInfo)
         }
-        
-        _ = semaphore.wait(timeout: .now() + 2.0)
-        return wifiInfo
     }
     
     private func getWifiInfoLegacy() -> [String: Any]? {

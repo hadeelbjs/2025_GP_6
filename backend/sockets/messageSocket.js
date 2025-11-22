@@ -441,9 +441,9 @@ if (finalExpiresAt && visibilityDuration) {
       }
     });
 
-    //  Privacy screenshots update handler 
+  //  Privacy screenshots update handler 
     
-    socket.on('privacy:screenshots:update', (data) => {
+  socket.on('privacy:screenshots:update', async (data) => {
   try {
     const { targetUserId, allowScreenshots } = data;
     const currentUserId = socket.userId;
@@ -456,20 +456,21 @@ if (finalExpiresAt && visibilityDuration) {
     // إرسال الإشعار للطرف الآخر
     const sent = io.sendToUser(targetUserId, 'privacy:screenshots:changed', {
       peerUserId: currentUserId,
-      allowScreenshots: allowScreenshots
+      allowScreenshots: allowScreenshots,
+      timestamp: Date.now(),
     });
 
     if (sent) {
-      console.log('✅ Privacy notification sent');
+      console.log(' Privacy notification sent to', targetUserId);
     } else {
-      console.log('⚠️ Target user offline - will receive on next login');
+      console.log(' Target user offline:', targetUserId);
     }
 
     // تأكيد للمرسل
     socket.emit('privacy:screenshots:updated', {
       success: true,
       targetUserId,
-      allowScreenshots
+      allowScreenshots,
     });
 
   } catch (err) {
@@ -481,32 +482,35 @@ if (finalExpiresAt && visibilityDuration) {
 
   //  معالج الكشف عن Screenshot في iOS
   socket.on('screenshot:taken', async (data) => {
-    try {
-      const { targetUserId } = data;
-      const takenBy = socket.userId; // المستخدم الذي أخذ Screenshot
+  try {
+    const { targetUserId } = data;
+    const takenByUserId = socket.userId;
 
-      console.log(`📸 Screenshot detected by ${takenBy} in chat with ${targetUserId}`);
+    console.log(`📸 Screenshot taken by ${takenByUserId} in chat with ${targetUserId}`);
 
-      //  إرسال إشعار للطرف الآخر
-      io.sendToUser(targetUserId, 'screenshot:notification', {
-        takenBy,
-        timestamp: new Date().toISOString(),
-        message: ' قام الطرف الآخر بالتقاط  الشاشة'
-      });
+    // جلب اسم المستخدم الذي التقط
+    const User = require('../models/User');
+    const user = await User.findById(takenByUserId).select('fullName');
+    const takenByName = user?.fullName || 'الطرف الآخر';
 
+    // إرسال إشعار للطرف الآخر
+    const sent = io.sendToUser(targetUserId, 'screenshot:notification', {
+      takenByUserId: takenByUserId,
+      takenByName: takenByName,
+      timestamp: new Date().toISOString(),
+    });
+
+    if (sent) {
       console.log(` Screenshot notification sent to ${targetUserId}`);
-
-    } catch (err) {
-      console.error('❌ Screenshot handler error:', err);
+    } else {
+      console.log(`⚠️ User ${targetUserId} is offline`);
     }
-  });
-    /*socket.on('privacy:screenshots:update', (data) => {
-      const { peerUserId, allowScreenshots } = data;
-      io.sendToUser(peerUserId, 'privacy:screenshots:changed', {
-        peerUserId: socket.userId,
-        allowScreenshots
-      });
-    });*/
+
+  } catch (err) {
+    console.error('❌ Screenshot notification error:', err);
+  }
+});
+    
 
     socket.on('disconnect', () => {
       console.log(`❌ User disconnected: ${userId}`);

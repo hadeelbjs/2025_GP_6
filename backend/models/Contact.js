@@ -34,7 +34,12 @@ const ContactSchema = new mongoose.Schema({
   },
 
   // سياسة السماح بلقطات الشاشة
-  allowScreenshots: {
+ requesterAllowsScreenshots: {
+    type: Boolean,
+    default: false
+  },
+  
+  recipientAllowsScreenshots: {
     type: Boolean,
     default: false
   },

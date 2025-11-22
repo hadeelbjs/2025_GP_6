@@ -109,21 +109,30 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           setState(() {
             _peerAllowsMyScreenshots = newPeerPolicy;
           });
+          bool wasDialogOpen = false;
+          Navigator.of(context, rootNavigator: true).popUntil((route) {
+            if (route is DialogRoute) {
+              wasDialogOpen = true;
+              return false;
+            }
+            return true;
+          });
+
+          if (wasDialogOpen) {
+            Future.delayed(const Duration(milliseconds: 100), () {
+              if (mounted) {
+                _showOptionsDialog();
+              }
+            });
+          }
+          // عرض إشعار للمستخدم
           if (!_hasShownScreenshotChangeMessage) {
             _hasShownScreenshotChangeMessage = true;
-            _showMessage(
-              newPeerPolicy
-                  ? '${widget.name} سماح بلقطات الشاشة'
-                  : '${widget.name} منع لقطات الشاشة',
-              true,
-            );
+            _showPolicyChangeNotification(newPeerPolicy);
             Future.delayed(Duration(seconds: 2), () {
               _hasShownScreenshotChangeMessage = false;
             });
           }
-
-          // عرض إشعار للمستخدم
-          _showPolicyChangeNotification(newPeerPolicy);
         }
       }
     });
@@ -145,12 +154,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     });
 
     _setupScreenshotDetection();
-
     _initializeChat();
     _listenToUserStatus();
     _messagingService.setCurrentOpenChat(widget.userId);
     _listenToExpiredMessages();
-
     _listenToUploadProgress();
   }
 
@@ -1496,55 +1503,76 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     showDialog(
       context: context,
       barrierColor: Colors.black26,
-      builder: (context) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: Dialog(
-            insetPadding: const EdgeInsets.only(top: 72, right: 12, left: 12),
-            backgroundColor: Colors.transparent,
-            child: Align(
-              alignment: Alignment.topLeft,
-              child: Container(
-                width: 320,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 20,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'إعدادات الخصوصية',
-                        style: AppTextStyles.h4.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
+      builder: (dialogContext) {
+        //  استخدام StatefulBuilder لتحديث الـ Dialog
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            //  الاستماع لتغيير السياسة داخل الـ Dialog
+            // نحفظ listener لنزيله عند إغلاق الـ Dialog
+            void onPolicyChanged(dynamic data) {
+              if (data['peerUserId'] == widget.userId) {
+                final newPeerPolicy = data['allowScreenshots'] == true;
+                setDialogState(() {
+                  _peerAllowsMyScreenshots = newPeerPolicy;
+                });
+                // تحديث الـ State الرئيسي أيضاً
+                if (mounted) {
+                  setState(() {
+                    _peerAllowsMyScreenshots = newPeerPolicy;
+                  });
+                }
+              }
+            }
 
-                      //  خيار السماح للطرف الآخر
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.06),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: AppColors.primary.withOpacity(0.15),
-                          ),
+            return Directionality(
+              textDirection: TextDirection.rtl,
+              child: Dialog(
+                insetPadding: const EdgeInsets.only(
+                  top: 72,
+                  right: 12,
+                  left: 12,
+                ),
+                backgroundColor: Colors.transparent,
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Container(
+                    width: 320,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: const Offset(0, 8),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
+                      ],
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'إعدادات الخصوصية',
+                            style: AppTextStyles.h4.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+
+                          //  خيار السماح للطرف الآخر
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withOpacity(0.06),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: AppColors.primary.withOpacity(0.15),
+                              ),
+                            ),
+                            child: Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
                                 Expanded(
@@ -1573,15 +1601,22 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                   value: _myPolicyAllowsScreenshots,
                                   activeColor: Colors.white,
                                   activeTrackColor: AppColors.primary,
-                                  onChanged: (value) async {
-                                    setState(() {
-                                      _myPolicyAllowsScreenshots = value;
+                                  onChanged: (v) async {
+                                    // تحديث الـ Dialog
+                                    setDialogState(() {
+                                      _myPolicyAllowsScreenshots = v;
                                     });
-                                    await _saveScreenshotPolicyToServer(value);
-                                    Navigator.pop(context);
+                                    // تحديث الـ State الرئيسي
+                                    setState(() {
+                                      _myPolicyAllowsScreenshots = v;
+                                    });
+
+                                    await _saveScreenshotPolicyToServer(v);
+
+                                    Navigator.of(dialogContext).pop();
 
                                     _showMessage(
-                                      value
+                                      v
                                           ? 'سمحت لـ ${widget.name} بلقطات الشاشة'
                                           : 'منعت ${widget.name} من لقطات الشاشة',
                                       true,
@@ -1590,59 +1625,61 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
 
-                      const SizedBox(height: 12),
+                          const SizedBox(height: 12),
 
-                      //  عرض حالة الطرف الآخر
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: _peerAllowsMyScreenshots
-                              ? Colors.green.withOpacity(0.08)
-                              : const Color.fromARGB(
-                                  255,
-                                  255,
-                                  68,
-                                  0,
-                                ).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              _peerAllowsMyScreenshots
-                                  ? Icons.check_circle_outline
-                                  : Icons.block_outlined,
+                          //  عرض حالة الطرف الآخر
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
                               color: _peerAllowsMyScreenshots
-                                  ? Colors.green
-                                  : const Color.fromARGB(255, 255, 0, 0),
-                              size: 20,
-                            ),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                _peerAllowsMyScreenshots
-                                    ? '${widget.name} يسمح لك بالتقاط الشاشة'
-                                    : '${widget.name} لا يسمح لك بالتقاط الشاشة',
-                                style: AppTextStyles.bodySmall.copyWith(
-                                  color: _peerAllowsMyScreenshots
-                                      ? Colors.green.shade700
-                                      : const Color.fromARGB(255, 245, 0, 0),
-                                ),
+                                  ? Colors.green.withOpacity(0.1)
+                                  : Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _peerAllowsMyScreenshots
+                                    ? Colors.green.withOpacity(0.3)
+                                    : Colors.red.withOpacity(0.3),
                               ),
                             ),
-                          ],
-                        ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  _peerAllowsMyScreenshots
+                                      ? Icons.check_circle_outline
+                                      : Icons.block_outlined,
+                                  color: _peerAllowsMyScreenshots
+                                      ? Colors.green
+                                      : Colors.red,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    _peerAllowsMyScreenshots
+                                        ? '${widget.name} يسمح لك بالتقاط الشاشة'
+                                        : '${widget.name} لا يسمح لك بالتقاط الشاشة',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: _peerAllowsMyScreenshots
+                                          ? Colors.green.shade700
+                                          : Colors.red.shade700,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         );
       },
     );

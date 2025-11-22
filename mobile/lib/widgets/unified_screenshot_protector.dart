@@ -1,6 +1,368 @@
 import 'dart:io';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:screen_protector/screen_protector.dart';
+import 'package:screen_capture_event/screen_capture_event.dart';
+
+/// حماية شاملة للشاشة
+/// Android: FLAG_SECURE (منع تام)
+/// iOS: إخفاء المحتوى + كشف Screenshot + إشعار الطرف الآخر
+
+class UnifiedScreenshotProtector extends StatefulWidget {
+  final Widget child;
+  final bool enabled; // هل الحماية مفعلة (الطرف الآخر منع)
+  final VoidCallback? onScreenshotAttempt; // callback عند محاولة الالتقاط
+  final String? peerName; // اسم الطرف الآخر للإشعارات
+
+  const UnifiedScreenshotProtector({
+    super.key,
+    required this.child,
+    required this.enabled,
+    this.onScreenshotAttempt,
+    this.peerName,
+  });
+
+  @override
+  State<UnifiedScreenshotProtector> createState() =>
+      _UnifiedScreenshotProtectorState();
+}
+
+class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
+    with WidgetsBindingObserver {
+  final ScreenCaptureEvent _capture = ScreenCaptureEvent();
+  bool _coverContent = false;
+  bool _isRecording = false;
+  bool _wasInBackground = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _applyProtection();
+  }
+
+  @override
+  void didUpdateWidget(UnifiedScreenshotProtector oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.enabled != widget.enabled) {
+      _applyProtection();
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _capture.dispose();
+    _disableProtection();
+    super.dispose();
+  }
+
+  ///  حماية عند تغيير حالة التطبيق
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!widget.enabled) return;
+
+    switch (state) {
+      case AppLifecycleState.inactive:
+        //  المستخدم سحب من الأعلى أو ضغط home أو فتح app switcher
+        setState(() => _coverContent = true);
+        _wasInBackground = true;
+        debugPrint('🛡️ App inactive - Content hidden');
+        break;
+
+      case AppLifecycleState.paused:
+        //  التطبيق في الخلفية
+        setState(() => _coverContent = true);
+        _wasInBackground = true;
+        debugPrint('🛡️ App paused - Content hidden');
+        break;
+
+      case AppLifecycleState.resumed:
+        //  العودة للتطبيق
+        if (_wasInBackground) {
+          // تأخير بسيط قبل إظهار المحتوى (لمنع الالتقاط السريع)
+          Future.delayed(const Duration(milliseconds: 300), () {
+            if (mounted) {
+              setState(() => _coverContent = false);
+            }
+          });
+          _wasInBackground = false;
+        } else {
+          setState(() => _coverContent = false);
+        }
+        debugPrint('🛡️ App resumed - Content visible');
+        break;
+
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        setState(() => _coverContent = true);
+        break;
+    }
+  }
+
+  ///  تفعيل الحماية
+  Future<void> _applyProtection() async {
+    if (!widget.enabled) {
+      await _disableProtection();
+      return;
+    }
+
+    try {
+      if (Platform.isAndroid) {
+        //  Android: FLAG_SECURE - منع تام للالتقاط
+        await ScreenProtector.preventScreenshotOn();
+        debugPrint('🛡️ Android: FLAG_SECURE enabled');
+      } else if (Platform.isIOS) {
+        //  iOS: نستخدم lifecycle + كشف
+        debugPrint('🛡️ iOS: Lifecycle protection enabled');
+      }
+
+      //  الاستماع للقطات والتسجيل (iOS بشكل رئيسي)
+      _capture.addScreenShotListener(_onScreenshotDetected);
+      _capture.addScreenRecordListener(_onRecordingDetected);
+      _capture.watch();
+    } catch (e) {
+      debugPrint('❌ Protection setup failed: $e');
+    }
+  }
+
+  ///  إيقاف الحماية
+  Future<void> _disableProtection() async {
+    try {
+      if (Platform.isAndroid) {
+        await ScreenProtector.preventScreenshotOff();
+      }
+      setState(() {
+        _coverContent = false;
+        _isRecording = false;
+      });
+      debugPrint('🔓 Protection disabled');
+    } catch (e) {
+      debugPrint('❌ Failed to disable protection: $e');
+    }
+  }
+
+  ///  عند اكتشاف لقطة شاشة (iOS)
+  void _onScreenshotDetected(String path) {
+    if (!widget.enabled || !mounted) return;
+
+    debugPrint('📸 Screenshot detected!');
+
+    // 1. إشعار الطرف الآخر عبر callback
+    widget.onScreenshotAttempt?.call();
+
+    // 2. عرض تنبيه على الشاشة
+    _showScreenshotNotification();
+  }
+
+  ///  عند اكتشاف تسجيل شاشة
+  void _onRecordingDetected(bool isRecording) {
+    if (!widget.enabled || !mounted) return;
+
+    debugPrint('🎥 Screen recording: $isRecording');
+
+    setState(() {
+      _isRecording = isRecording;
+      if (isRecording) {
+        _coverContent = true;
+      }
+    });
+
+    if (isRecording) {
+      _showRecordingWarning();
+    }
+  }
+
+  ///  إشعار خفيف عند الالتقاط (على الخلفية)
+  void _showScreenshotNotification() {
+    final overlay = Overlay.of(context);
+
+    late OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 10,
+        left: 20,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 300),
+            builder: (context, value, child) => Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, -20 * (1 - value)),
+                child: child,
+              ),
+            ),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.orange.shade700,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.2),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.camera_alt_outlined,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      'تم التقاط الشاشة - سيتم إشعار ${widget.peerName ?? "الطرف الآخر"}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w500,
+                      ),
+                      textDirection: TextDirection.rtl,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    // إزالة بعد 3 ثواني
+    Future.delayed(const Duration(seconds: 3), () {
+      entry.remove();
+    });
+  }
+
+  ///  تحذير تسجيل الشاشة
+  void _showRecordingWarning() {
+    ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+      SnackBar(
+        backgroundColor: Colors.red.shade700,
+        content: const Row(
+          children: [
+            Icon(Icons.videocam_off, color: Colors.white),
+            SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'تسجيل الشاشة غير مسموح في هذه المحادثة',
+                textAlign: TextAlign.right,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 4),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        // المحتوى الأصلي
+        widget.child,
+
+        //  شاشة الحماية
+        if (_coverContent && widget.enabled)
+          Positioned.fill(
+            child: Container(
+              color: Colors.black,
+              child: SafeArea(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // أيقونة
+                      Container(
+                        padding: const EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isRecording
+                              ? Icons.videocam_off_rounded
+                              : Icons.lock_outline_rounded,
+                          color: Colors.white,
+                          size: 56,
+                        ),
+                      ),
+
+                      const SizedBox(height: 24),
+
+                      // النص الرئيسي
+                      Text(
+                        _isRecording ? 'تسجيل الشاشة ممنوع' : 'محتوى محمي',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+
+                      const SizedBox(height: 12),
+
+                      // الوصف
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 40),
+                        child: Text(
+                          _isRecording
+                              ? 'أوقف التسجيل لعرض المحادثة'
+                              : 'عد للتطبيق لعرض المحادثة',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.7),
+                            fontSize: 15,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+
+                      // مؤشر دوران عند التسجيل
+                      if (_isRecording) ...[
+                        const SizedBox(height: 24),
+                        const SizedBox(
+                          width: 28,
+                          height: 28,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/*import 'dart:io';
+import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
 
@@ -283,4 +645,4 @@ class _UnifiedScreenshotProtectorState extends State<UnifiedScreenshotProtector>
       ],
     );
   }
-}
+}*/

@@ -102,7 +102,7 @@ static void openBiometricSettings() {
   /// التحقق من البصمة
   static Future<bool> authenticateWithBiometrics({
     String? reason,
-    bool biometricOnly = false, // القيمة الافتراضية: false (يسمح ببدائل)
+    bool biometricOnly = false, 
   }) async {
     try {
       final isSupported = await isDeviceSupported();

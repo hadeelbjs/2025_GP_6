@@ -7,6 +7,7 @@ import '../../dashboard/screens/main_dashboard.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../services/messaging_service.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
   final String? fullName;
@@ -122,6 +123,9 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           await _initializeEncryption();
           await _initializeMessaging();
 
+          // حفظ وقت تسجيل الدخول
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('last_login_time', DateTime.now().toIso8601String());
           
           await Future.delayed(const Duration(milliseconds: 500));
           if (!mounted) return;

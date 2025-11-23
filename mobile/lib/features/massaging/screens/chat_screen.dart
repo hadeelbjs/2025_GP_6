@@ -98,6 +98,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     super.initState();
     WidgetsBinding.instance.addObserver(this);
 
+    // Initialize pulse animation controller and animation
+    _pulseAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _pulseAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
     _initScreenshotProtection();
 
     _socketService.socket?.on('privacy:screenshots:changed', (data) {
@@ -1980,7 +1992,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
                           scale: _pulseAnimation.value,
                           child: Icon(
                             Icons.timer_outlined,
-                            color: Colors.grey.shade400,
+                            color: Colors.orange.shade400,
                             size: 22,
                           ),
                         );

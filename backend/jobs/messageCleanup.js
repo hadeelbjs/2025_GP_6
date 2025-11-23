@@ -63,28 +63,8 @@ function startMessageExpiryJob(io) {
 
 
 
-function startDeliveredMessagesCleanup() {
-  cron.schedule('0 3 * * 0', async () => {
-    try {
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-      
-      const result = await Message.deleteMany({
-        status: { $in: ['delivered', 'verified'] },
-        deliveredAt: { $lt: oneWeekAgo },
-      });
-      
-      console.log(`🧹 Weekly cleanup: Deleted ${result.deletedCount} old delivered messages`);
-      
-    } catch (err) {
-      console.error('❌ Delivered messages cleanup error:', err);
-    }
-  });
-  
-  console.log('🧹 Delivered messages cleanup started (runs weekly)');
-}
 
 module.exports = { 
   startMessageExpiryJob,
-  startDeliveredMessagesCleanup, 
+
 };

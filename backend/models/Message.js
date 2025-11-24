@@ -56,20 +56,14 @@ const MessageSchema = new mongoose.Schema({
     enum: ['sent', 'delivered', 'verified', 'deleted'],
     default: 'sent',
   },
-  
-  // ✅ حذف من عند مستخدمين محددين
-  deletedFor: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  
-  // ✅ حذف من عند المستقبل فقط
+
+  // حذف من عند المستقبل فقط
   deletedForRecipient: {
     type: Boolean,
     default: false,
   },
   
-  // ✅ حذف للجميع
+  // حذف للجميع
   deletedForEveryone: {
     type: Boolean,
     default: false,
@@ -83,25 +77,23 @@ const MessageSchema = new mongoose.Schema({
     index: true,
   },
 
-  
-  deliveredAt: Date,
 
-failedVerificationAtRecipient: {
-  type: Boolean,
-  default: false,
-},
+    failedVerificationAtRecipient: {
+      type: Boolean,
+      default: false,
+    },
 
-failedVerification: {
-  type: Boolean,
-  default: false,
-},
+    failedVerification: {
+      type: Boolean,
+      default: false,
+    },
 
-visibilityDuration: {
-  type: Number,
-  required: false,
-  min: 1,           
- 
-},
+    visibilityDuration: {
+      type: Number,
+      required: false,
+      min: 1,           
+    
+    },
   
   expiresAt: {
     type: Date,

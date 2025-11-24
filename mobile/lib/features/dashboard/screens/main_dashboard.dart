@@ -755,7 +755,7 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
           SizedBox(width: width * 0.035),
           Expanded(
             child: Text(
-              'تم اكتشاف تسجيل دخول مريب',
+              'تأكد من تحديث تطبيقك بانتظام للحصول على أحدث ميزات الأمان والتحسينات.',
               textAlign: TextAlign.right,
               style: AppTextStyles.bodyLarge.copyWith(
                 fontSize: width * 0.042,

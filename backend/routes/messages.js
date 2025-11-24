@@ -215,7 +215,7 @@ router.get('/conversation/:userId', auth, async (req, res) => {
     .sort({ createdAt: 1 })
     .limit(100);
 
-    // ✅ فلترة الرسائل المحذوفة
+    // فلترة الرسائل المحذوفة
     messages = messages.filter(msg => !msg.isDeletedFor(currentUserId));
 
     const formattedMessages = messages.map(msg => ({

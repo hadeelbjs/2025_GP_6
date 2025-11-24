@@ -266,7 +266,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         });
 
         // عرض رسالة تحذيرية عندي في الجهاز
-        _showMessage('⚠️ تم أخذ لقطة شاشة', false);
+        _showMessage('لا يُسمح بأخذ لقطات شاشة لهذا المحتوى', false);
       });
 
       _screenListener.watch();

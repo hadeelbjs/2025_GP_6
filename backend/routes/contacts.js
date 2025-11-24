@@ -307,7 +307,6 @@ router.post('/accept-request/:requestId',
 
       // قبول الطلب
       contact.status = 'accepted';
-      contact.respondedAt = new Date();
       await contact.save();
 
       res.json({

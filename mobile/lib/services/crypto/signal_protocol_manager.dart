@@ -146,14 +146,14 @@ String _getStorageKey(String userId, String key) {
 }
 
 // ============================================
-//  توليد ورفع المفاتيح 
+//  Generate and upload keys 
 // ============================================
 Future<bool> generateAndUploadKeys() async {
   try {
     
     final userId = await _getCurrentUserId();
 
-    // توليد المفاتيح
+    // Generate keys
     final identityKeyPair = generateIdentityKeyPair();
     final registrationId = generateRegistrationId(false);
     final preKeys = generatePreKeys(1, 100);
@@ -161,11 +161,11 @@ Future<bool> generateAndUploadKeys() async {
 
     await initialize(userId: userId);
 
-    // حفظ النسخة المحلية
+    // Save local keys version
     final version = DateTime.now().millisecondsSinceEpoch;
     await _saveLocalKeysVersion(version, userId);
 
-    // تجهيز البيانات للرفع
+    // Prepare bundle for upload
     final bundle = {
       'registrationId': registrationId,
       'identityKey': base64Encode(
@@ -187,7 +187,7 @@ Future<bool> generateAndUploadKeys() async {
       'version': version,
     };
 
-    // رفع المفاتيح للسيرفر
+    // Upload public keys to server
     print('Uploading keys to server...');
     final result = await _apiService.uploadKeyBundle(bundle);
 
@@ -197,23 +197,23 @@ Future<bool> generateAndUploadKeys() async {
     
     print('Keys uploaded to server successfully');
 
-    // حفظ في الـ Stores
+    // Save in the Stores
     await _identityStore.saveIdentityKeyPairWithUserId(identityKeyPair);
     await _identityStore.saveRegistrationIdWithUserId(registrationId);
     
-    // حفظ PreKeys
+    // Save PreKeys
 
     for (var preKey in preKeys) {
       await _preKeyStore.storePreKey(preKey.id, preKey);
     }
 
-    // حفظ SignedPreKey
+    // Save SignedPreKey
     await _signedPreKeyStore.storeSignedPreKey(
       signedPreKey.id,
       signedPreKey,
     );
 
-    //  حفظ تاريخ أول rotation
+    // Save first rotation date
     await _storage.write(
       key: _getStorageKey(userId, 'signed_prekey_last_rotated'),
       value: DateTime.now().toIso8601String(),

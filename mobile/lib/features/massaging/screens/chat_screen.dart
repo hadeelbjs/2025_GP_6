@@ -41,7 +41,7 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
+class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   // مكان كتابة الرسائل
   final _messageController = TextEditingController();
   final _messagingService = MessagingService();
@@ -89,10 +89,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   StreamSubscription? _uploadProgressSubscription;
   UploadProgress? _currentProgress;
 
+  // Pulse Animation لأيقونة الساعة
+  late AnimationController _pulseAnimationController;
+  late Animation<double> _pulseAnimation;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    // Initialize pulse animation controller and animation
+    _pulseAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _pulseAnimation = Tween<double>(begin: 1.0, end: 1.2).animate(
+      CurvedAnimation(
+        parent: _pulseAnimationController,
+        curve: Curves.easeInOut,
+      ),
+    );
 
     _initScreenshotProtection();
 
@@ -308,6 +324,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
         setState(() {
           currentDuration = duration;
         });
+        
+        // إدارة Pulse Animation بناءً على وجود المدة
+        if (duration != null) {
+          // إيقاف Animation إذا كانت المدة موجودة
+          if (_pulseAnimationController.isAnimating) {
+            _pulseAnimationController.stop();
+          }
+        } else {
+          // بدء Animation إذا لم تكن المدة موجودة
+          if (!_pulseAnimationController.isAnimating) {
+            _pulseAnimationController.repeat(reverse: true);
+          }
+        }
+        
         print('⏱️ Duration loaded: ${duration}s');
       }
     } catch (e) {
@@ -479,6 +509,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
             currentDuration = selected;
           });
 
+          // إيقاف Pulse Animation عند اختيار المدة
+          if (_pulseAnimationController.isAnimating) {
+            _pulseAnimationController.stop();
+          }
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('تم تحديد المدة: ${_formatDuration(selected)}'),
@@ -506,6 +541,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     _messageController.dispose();
     _scrollController.dispose();
     _screenListener.dispose();
+    _pulseAnimationController.dispose();
     _newMessageSubscription?.cancel();
     _deleteSubscription?.cancel();
     _statusSubscription?.cancel();
@@ -1003,9 +1039,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   Future<void> _sendMessage() async {
     if (currentDuration == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('اختر المدة أولاً من خلال الضغط على الساعة'),
-          backgroundColor: Color.fromARGB(255, 68, 66, 66),
+        SnackBar(
+          content: Text('الرجاء اختيار مدة اختفاء الرسائل أولاً'),
+          backgroundColor: Colors.grey.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          margin: const EdgeInsets.all(16),
+          duration: const Duration(seconds: 2),
         ),
       );
       return;
@@ -1942,13 +1984,26 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.timer_outlined,
-                    color: currentDuration == null
-                        ? Colors.grey.shade400
-                        : AppColors.primary,
-                    size: 22,
-                  ),
+                  if (currentDuration == null)
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _pulseAnimation.value,
+                          child: Icon(
+                            Icons.timer_outlined,
+                            color: Colors.orange.shade400,
+                            size: 22,
+                          ),
+                        );
+                      },
+                    )
+                  else
+                    Icon(
+                      Icons.timer_outlined,
+                      color: AppColors.primary,
+                      size: 22,
+                    ),
                   if (currentDuration != null) ...[
                     const SizedBox(width: 4),
                     Text(
@@ -1990,9 +2045,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                 decoration: InputDecoration(
                   hintText: isEnabled
                       ? 'اكتب رسالتك...'
-                      : 'اختر المدة أولاً من خلال الضغط على الساعة',
+                      : 'اختر مدة الرسائل من رمز الساعة',
                   hintStyle: AppTextStyles.bodyMedium.copyWith(
-                    color: isEnabled ? AppColors.textHint : Colors.red.shade400,
+                    color: AppColors.textHint,
                     fontSize: 14,
                   ),
                   border: InputBorder.none,

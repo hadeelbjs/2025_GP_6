@@ -23,18 +23,18 @@ router.post('/upload', auth, async (req, res) => {
     let bundle = await PreKeyBundle.findOne({ userId: req.user.id });
 
     if (bundle) {
-      // تحديد نوع التحديث
+      // ✅ تحديد نوع التحديث
       const isFullBundleUpdate = registrationId && identityKey && signedPreKey;
       
       if (isFullBundleUpdate) {
-        // تحديث كامل - استبدال كل شيء
+        // ⚠️ تحديث كامل - استبدال كل شيء
         console.log(`🔄 FULL BUNDLE UPDATE for user ${req.user.id}`);
         console.log(`  Old version: ${bundle.version}`);
         console.log(`  New version: ${version || Date.now()}`);
         console.log(`  Old registrationId: ${bundle.registrationId}`);
         console.log(`  New registrationId: ${registrationId}`);
         
-        // تحذير إذا كان registrationId مختلف
+        // ✅ تحذير إذا كان registrationId مختلف
         if (bundle.registrationId !== registrationId) {
           console.warn('⚠️ WARNING: RegistrationId changed! Complete key rotation.');
         }
@@ -48,10 +48,9 @@ router.post('/upload', auth, async (req, res) => {
           publicKey: pk.publicKey,
           used: false,
           usedAt: null,
-          createdAt: new Date()
         }));
         
-        // تحديث النسخة
+        // ✅ تحديث النسخة
         bundle.version = version || Date.now();
         bundle.lastKeyRotation = Date.now();
         bundle.updatedAt = Date.now();
@@ -69,7 +68,7 @@ router.post('/upload', auth, async (req, res) => {
           availableKeys: bundle.getAvailablePreKeysCount()
         });
       } else {
-        // إضافة PreKeys فقط (بدون تغيير IdentityKey أو SignedPreKey)
+        // ✅ إضافة PreKeys فقط (بدون تغيير IdentityKey أو SignedPreKey)
         console.log(`➕ ADDING PreKeys ONLY for user ${req.user.id}`);
         console.log(`  Current version: ${bundle.version}`);
         console.log(`  Current PreKeys count: ${bundle.preKeys.length}`);
@@ -80,7 +79,6 @@ router.post('/upload', auth, async (req, res) => {
           publicKey: pk.publicKey,
           used: false,
           usedAt: null,
-          createdAt: new Date()
         }));
 
         // إضافة المفاتيح الجديدة (بدون تغيير النسخة)
@@ -124,13 +122,13 @@ router.post('/upload', auth, async (req, res) => {
         publicKey: pk.publicKey,
         used: false,
         usedAt: null,
-        createdAt: new Date()
+        
       }))
     });
 
     await bundle.save();
 
-    console.log(`✅ Bundle created with ${bundle.preKeys.length} PreKeys`);
+    console.log(`Bundle created with ${bundle.preKeys.length} PreKeys`);
     console.log(`  Version: ${bundle.version}`);
 
     res.json({

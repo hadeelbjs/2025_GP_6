@@ -40,17 +40,12 @@ const UserSchema = new mongoose.Schema({
     signature: String
   },
 
-newEmailVerificationCode: String,
-newEmailVerificationExpires: Date,
-pendingEmail: String,
+  newEmailVerificationCode: String,
+  newEmailVerificationExpires: Date,
+  pendingEmail: String,
+    
   
-  preKeys: [{
-    keyId: Number,
-    publicKey: String
-  }],
   
-  createdAt: { type: Date, default: Date.now },
-  updatedAt: { type: Date, default: Date.now }
 });
 
 // دالة للتحقق من قوة الباسورد

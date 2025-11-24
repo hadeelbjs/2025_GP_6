@@ -102,6 +102,7 @@ static void openBiometricSettings() {
   /// التحقق من البصمة
   static Future<bool> authenticateWithBiometrics({
     String? reason,
+    bool biometricOnly = false, 
   }) async {
     try {
       final isSupported = await isDeviceSupported();
@@ -114,8 +115,8 @@ static void openBiometricSettings() {
 
       return await _localAuth.authenticate(
         localizedReason: finalReason,
-        options: const AuthenticationOptions(
-          biometricOnly: false,
+        options: AuthenticationOptions(
+          biometricOnly: biometricOnly,
           stickyAuth: true,
         ),
       );

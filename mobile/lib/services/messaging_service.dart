@@ -636,7 +636,7 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
         );
 
         if (decrypted != null) {
-          // ✅ فك تشفير المرفق أيضاً إذا كان موجود
+          //  فك تشفير المرفق أيضاً إذا كان موجود
           String? decryptedAttachmentData;
           if (message['attachmentData'] != null && 
               message['attachmentType'] != null) {
@@ -664,7 +664,7 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
           // تحديث الرسالة مع النص والمرفق المفكوكين
           await _db.updateMessage(messageId, {
             'plaintext': decrypted,
-            'attachmentData': decryptedAttachmentData, // ✅ حفظ المرفق المفكوك
+            'attachmentData': decryptedAttachmentData, 
             'isDecrypted': 1,
             'requiresBiometric': 1,
             'status': 'read',
@@ -699,6 +699,8 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
         }
       } catch (e) {
         lastError = e.toString();
+
+        
         decryptionFailure++;
 
         if (e.toString().contains('InvalidKeyException')) {

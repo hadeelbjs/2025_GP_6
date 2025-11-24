@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../services/biometric_service.dart';
 import '../../../services/api_services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BiometricLoginScreen extends StatefulWidget {
   final String userEmail;
@@ -43,6 +44,10 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
     setState(() => _isLoading = false);
 
     if (result['success']) {
+      // حفظ وقت تسجيل الدخول
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('last_login_time', DateTime.now().toIso8601String());
+      
       Navigator.of(context).pushReplacementNamed('/dashboard');
     } else {
       _showMessage(result['message'] ?? 'فشل تسجيل الدخول', false);

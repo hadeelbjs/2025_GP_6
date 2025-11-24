@@ -265,8 +265,6 @@ router.post('/verify-email-and-create', async (req, res) => {
       password: pendingData.password,
       passwordChangedAt: new Date(),
       passwordHistory: [{ hash: pendingData.password}],
-      isEmailVerified: true,
-      isPhoneVerified: false
     });
 
     await user.save();

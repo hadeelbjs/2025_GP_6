@@ -31,6 +31,7 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
   int _notificationCount = 0;
   bool _hasCheckedWifiThisSession = false;
   bool _userCanceledPermissionDenialAlert = false;
+  String? _lastLoginTime;
 
 
   @override
@@ -39,6 +40,7 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
     WidgetsBinding.instance.addObserver(this); 
     // للواي فاي تاخير بسيط
     _loadNotificationCount();
+    _loadLastLoginTime();
 
     
    Future.delayed(const Duration(milliseconds: 500), () {
@@ -187,6 +189,62 @@ Future<void> _initializeSocket() async {
       }
     } catch (e) {
       // Silent fail
+    }
+  }
+
+  Future<void> _loadLastLoginTime() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final loginTimeStr = prefs.getString('last_login_time');
+      
+      DateTime loginTime;
+      if (loginTimeStr != null) {
+        loginTime = DateTime.parse(loginTimeStr);
+      } else {
+        // إذا لم يكن هناك وقت محفوظ، نستخدم الوقت الحالي
+        loginTime = DateTime.now();
+      }
+      
+      final now = DateTime.now();
+      
+      // التحقق إذا كان تسجيل الدخول اليوم
+      if (loginTime.year == now.year && 
+          loginTime.month == now.month && 
+          loginTime.day == now.day) {
+        // تنسيق الوقت
+        final hour = loginTime.hour;
+        final minute = loginTime.minute.toString().padLeft(2, '0');
+        final period = hour < 12 ? 'ص' : 'م';
+        final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+        
+        setState(() {
+          _lastLoginTime = 'تم تسجيل دخول ناجح من جهازك اليوم الساعة $displayHour:$minute $period';
+        });
+      } else {
+        // إذا لم يكن اليوم، نعرض التاريخ
+        final day = loginTime.day;
+        final month = loginTime.month;
+        final hour = loginTime.hour;
+        final minute = loginTime.minute.toString().padLeft(2, '0');
+        final period = hour < 12 ? 'ص' : 'م';
+        final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+        
+        setState(() {
+          _lastLoginTime = 'تم تسجيل دخول ناجح من جهازك في $day/$month الساعة $displayHour:$minute $period';
+        });
+      }
+    } catch (e) {
+      print('Error loading last login time: $e');
+      // في حالة الخطأ، نعرض رسالة افتراضية بالوقت الحالي
+      final now = DateTime.now();
+      final hour = now.hour;
+      final minute = now.minute.toString().padLeft(2, '0');
+      final period = hour < 12 ? 'ص' : 'م';
+      final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
+      
+      setState(() {
+        _lastLoginTime = 'تم تسجيل دخول ناجح من جهازك اليوم الساعة $displayHour:$minute $period';
+      });
     }
   }
 
@@ -755,7 +813,7 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
           SizedBox(width: width * 0.035),
           Expanded(
             child: Text(
-              'تم اكتشاف تسجيل دخول مريب',
+              _lastLoginTime ?? '',
               textAlign: TextAlign.right,
               style: AppTextStyles.bodyLarge.copyWith(
                 fontSize: width * 0.042,

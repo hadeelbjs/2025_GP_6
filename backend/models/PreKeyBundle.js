@@ -56,10 +56,7 @@ const PreKeyBundleSchema = new mongoose.Schema({
       type: Date,
       default: null
     },
-    createdAt: {
-      type: Date,
-      default: Date.now
-    }
+   
   }],
   
   // ✅ إضافة رقم النسخة لتتبع التحديثات
@@ -73,11 +70,7 @@ const PreKeyBundleSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
-  
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
+
   
   updatedAt: {
     type: Date,

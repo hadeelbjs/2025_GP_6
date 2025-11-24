@@ -4,7 +4,7 @@
 
 <img width="2686" height="778" alt="image" src="https://github.com/user-attachments/assets/da5ffabc-8dd7-4e4b-b466-133fc7c0f9a1" />
 
-Waseed is a comprehensive, user-friendly cybersecurity platform specifically designed for Arabic-speaking users with limited cybersecurity experience. The goal of this project is to bridge the critical gap between advanced cybersecurity capabilities and practical usability for Arabic-speaking users by consolidating multiple security services into a single, integrated mobile application, addressing the fragmented security ecosystem that currently exists in the MENA region.
+Waseed is a comprehensive, user-friendly cybersecurity platform specifically designed for Arabic-speaking users with limited cybersecurity experience. The goal of this project is to bridge the critical gap between advanced cybersecurity capabilities and practical usability for Arabic-speaking users by consolidating multiple security services into a single, integrated mobile application, addressing the fragmented security ecosystem that currently exists.
 
 ## Technology Stack
 

@@ -610,9 +610,9 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       return;
     }
 
-    //  3. طلب التحقق البيومتري
     final verified = await BiometricService.authenticateWithBiometrics(
       reason: 'تحقق من هويتك لفتح المحادثة',
+      biometricOnly: true, 
     );
     
     if (!verified) {

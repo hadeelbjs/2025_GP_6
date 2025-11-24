@@ -326,31 +326,6 @@ class _DurationPickerSheetState extends State<DurationPickerSheet> {
 
             SizedBox(height: 16),
 
-            if (_customController.text.isNotEmpty)
-              Container(
-                padding: EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: secondaryColor.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: secondaryColor.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.info_outline, color: primaryColor, size: 20),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'المدة الإجمالية: ${_getCustomSeconds() ?? 0} ثانية',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: primaryColor,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
 
             SizedBox(height: 16),
 

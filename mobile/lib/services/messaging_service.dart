@@ -1065,9 +1065,9 @@ Future<void> deleteExpiredMessages() async {
  
 }
 
-  //  إنشاء Timer ديناميكي لحذف رسالة في الوقت المحدد بالضبط
+  //  Create a dynamic timer to delete messages on the specified time
   void _scheduleMessageExpiry(String messageId, int expiresAtMillis) {
-    // إلغاء Timer القديم إذا كان موجوداً
+    // Cancel old timer if it exists
     _messageTimers[messageId]?.cancel();
     _messageTimers.remove(messageId);
     
@@ -1075,16 +1075,16 @@ Future<void> deleteExpiredMessages() async {
     final expiresAt = DateTime.fromMillisecondsSinceEpoch(expiresAtMillis, isUtc: true);
     final nowUtc = DateTime.now().toUtc();
     
-    // حساب الفترة الزمنية حتى انتهاء الصلاحية
+    // Calculate the duration until expairation is reached
     final delay = expiresAt.difference(nowUtc);
     
-    // إذا انتهت الصلاحية بالفعل، احذف مباشرة
+    // If the expiration time is reached delete the message immeditely
     if (delay.isNegative || delay.inMilliseconds <= 0) {
       _deleteSingleMessage(messageId);
       return;
     }
     
-    // إنشاء Timer لحذف الرسالة في الوقت المحدد بالضبط
+    // Create a timer to delete the message immeditely
     _messageTimers[messageId] = Timer(delay, () {
       _deleteSingleMessage(messageId);
       _messageTimers.remove(messageId);

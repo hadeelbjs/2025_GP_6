@@ -59,7 +59,9 @@ class ContactCard extends StatelessWidget {
 
               // زر الحذف
               IconButton(
-                onPressed: () => _showDeleteDialog(context),
+                onPressed:() {
+                  onDelete();
+                },
                 icon: const Icon(Icons.delete_outline),
                 color: AppColors.primary,
               ),

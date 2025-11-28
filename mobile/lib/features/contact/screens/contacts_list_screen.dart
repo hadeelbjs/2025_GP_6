@@ -235,61 +235,62 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
   }
 
   Future<void> _deleteContact(String contactId, String name) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          title: const Text(
-            'حذف صديق',
-            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          ),
-          content: Text(
-            'هل أنت متأكد من حذف $name من جهات الاتصال؟',
-            style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text(
-                'إلغاء',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: const Text(
-                'حذف',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-              ),
-            ),
-          ],
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        title: const Text(
+          'حذف صديق',
+          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
         ),
+        content: Text(
+          'هل أنت متأكد من حذف $name من جهات الاتصال؟',
+          style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'إلغاء',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text(
+              'حذف',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+            ),
+          ),
+        ],
       ),
-    );
+    ),
+  );
 
-    if (confirm != true) return;
+  if (confirm != true) return;
 
-    try {
-      final result = await _apiService.deleteContact(contactId);
+  try {
+    final result = await _apiService.deleteContact(contactId);
 
-      if (!mounted) return;
+    if (!mounted) return;
 
-      if (result['success']) {
-        setState(() {
-          _contacts.removeWhere((c) => c['id'] == contactId);
-          _results.removeWhere((c) => c['id'] == contactId);
-        });
-        _showMessage('تم حذف $name من جهات الاتصال', true);
-      } else {
-        _showMessage(result['message'] ?? 'فشل الحذف', false);
-      }
-    } catch (e) {
-      if (!mounted) return;
-      _showMessage('خطأ في الحذف', false);
+    if (result['success']) {
+      setState(() {
+        //  حذف من القائمتين معاً في setState واحد
+        _contacts.removeWhere((c) => c['id'] == contactId);
+        _results.removeWhere((c) => c['id'] == contactId);
+      });
+      _showMessage('تم حذف $name من جهات الاتصال', true);
+    } else {
+      _showMessage(result['message'] ?? 'فشل الحذف', false);
     }
+  } catch (e) {
+    if (!mounted) return;
+    _showMessage('خطأ في الحذف', false);
   }
+}
 
   String _normalize(String s) {
     var t = s.trim().toLowerCase();

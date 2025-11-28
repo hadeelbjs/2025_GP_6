@@ -81,7 +81,8 @@ class _LinksScreenState extends State<LinksScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('جاري فحص الرابط...'),
+        content: Text('جاري فحص الرابط...', style: TextStyle(fontSize: 20),),
+        
         backgroundColor: Colors.green,
       ),
     );

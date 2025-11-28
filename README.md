@@ -36,7 +36,7 @@ Waseed is a comprehensive, user-friendly cybersecurity platform specifically des
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/hadeelbjs/2025_GP_6.git
    ```
 
 2. **Navigate to the backend folder**

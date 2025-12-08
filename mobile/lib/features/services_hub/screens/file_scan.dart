@@ -302,10 +302,10 @@ Widget _buildStatRow(String label, int count, Color color) {
             ),
             SizedBox(height: 25),
             Text(
-              'جاري فحص الملف...',
+              'جاري فحص الملف',
               style: TextStyle(
                 fontFamily: 'IBMPlexSansArabic',
-                fontSize: 18,
+                fontSize: 14,
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),

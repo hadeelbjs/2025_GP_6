@@ -416,10 +416,10 @@ class _QRScreenState extends State<QRScreen> {
             ),
             SizedBox(height: 25),
             Text(
-              'جاري فحص الرمز...',
+              'جاري فحص الرمز',
               style: TextStyle(
                 fontFamily: 'IBMPlexSansArabic',
-                fontSize: 18,
+                fontSize: 14,
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
               ),

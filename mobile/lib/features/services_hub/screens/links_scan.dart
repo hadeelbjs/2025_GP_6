@@ -79,10 +79,10 @@ class _LinksScreenState extends State<LinksScreen> {
               ),
               SizedBox(height: 25),
               Text(
-                'جاري فحص الرابط...',
+                'جاري فحص الرابط',
                 style: TextStyle(
                   fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 18,
+                  fontSize: 14,
                   color: Colors.white,
                   fontWeight: FontWeight.w600,
                 ),

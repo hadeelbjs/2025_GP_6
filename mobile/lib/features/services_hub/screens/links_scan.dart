@@ -59,6 +59,40 @@ class _LinksScreenState extends State<LinksScreen> {
       ),
     );
   }
+  void _showScanningDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        backgroundColor: AppColors.primary,
+        child: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 3,
+              ),
+              SizedBox(height: 25),
+              Text(
+                'جاري فحص الرابط...',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 18,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   // منطق الفحص
   Future<void> _handleScan() async {
@@ -79,13 +113,7 @@ class _LinksScreenState extends State<LinksScreen> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('جاري فحص الرابط...', style: TextStyle(fontSize: 20),),
-        
-        backgroundColor: Colors.green,
-      ),
-    );
+       _showScanningDialog();
 
     // إذا كان هناك صورة واختيرت
     if (_selectedFile != null) {
@@ -108,17 +136,21 @@ class _LinksScreenState extends State<LinksScreen> {
             _urlScanResult = scanResult;
             _isScanning = false;
           });
+           Navigator.pop(context);
           _showResultDialog(code, isUrl: true);
         } catch (e) {
           setState(() {
             _isScanning = false;
           });
+          Navigator.pop(context); 
           _showErrorDialog('فشل فحص الرابط: ${e.toString()}');
         }
       } else {
+        Navigator.pop(context);
         _showErrorDialog('الرابط المدخل غير صحيح. الرجاء إدخال رابط صحيح');
       }
     } else {
+      Navigator.pop(context);
       _showErrorDialog('لم يتم العثور على رابط صالح');
     }
     
@@ -366,7 +398,7 @@ class _LinksScreenState extends State<LinksScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white.withOpacity(0.2),
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: 30, vertical: 12),
+                        padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
                           side: BorderSide(color: Colors.white.withOpacity(0.3)),
@@ -384,7 +416,7 @@ class _LinksScreenState extends State<LinksScreen> {
                     
                     // Open Link Button (only for safe URLs)
                     if (isUrl && _urlScanResult?.isSafe == true) ...[
-                      SizedBox(width: 15),
+                      SizedBox(width: 8),
                       ElevatedButton.icon(
                         onPressed: () {
                           Navigator.pop(context);
@@ -395,14 +427,14 @@ class _LinksScreenState extends State<LinksScreen> {
                           'فتح الرابط',
                           style: TextStyle(
                             fontFamily: 'IBMPlexSansArabic',
-                            fontSize: 16,
+                            fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Color(0xFF4CAF50),
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
                           ),
@@ -684,6 +716,7 @@ class _LinksScreenState extends State<LinksScreen> {
         print("URL FOUND IN IMAGE: $foundUrl");
       } else {
         _showErrorDialog("لم يتم العثور على أي رابط داخل الصورة.");
+        Navigator.pop(context);
       }
 
       await textRecognizer.close();

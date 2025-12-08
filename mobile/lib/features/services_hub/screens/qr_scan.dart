@@ -79,24 +79,23 @@ class _QRScreenState extends State<QRScreen> {
         _scannedResult = code;
         _urlScanResult = null;
       });
-        ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('جاري فحص الرمز...'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      
+       
+      _showScanningDialog();
+
       try {
         final scanResult = await _apiService.scanURL(code);
         setState(() {
           _urlScanResult = scanResult;
           _isScanning = false;
         });
+        Navigator.pop(context);
         _showResultDialog(code, isUrl: true);
+      
       } catch (e) {
         setState(() {
           _isScanning = false;
         });
+        Navigator.pop(context);
         _showErrorDialog('فشل فحص الرابط: ${e.toString()}');
       }
     } else {
@@ -304,7 +303,7 @@ class _QRScreenState extends State<QRScreen> {
                   
                   // Open Link Button (only for safe URLs)
                   if (isUrl && _urlScanResult?.isSafe == true) ...[
-                    SizedBox(width: 15),
+                    SizedBox(width: 8),
                     ElevatedButton.icon(
                       onPressed: () {
                         Navigator.pop(context);
@@ -315,14 +314,14 @@ class _QRScreenState extends State<QRScreen> {
                         'فتح الرابط',
                         style: TextStyle(
                           fontFamily: 'IBMPlexSansArabic',
-                          fontSize: 16,
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Color(0xFF4CAF50),
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: 25, vertical: 12),
+                        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
                         ),
@@ -397,8 +396,41 @@ class _QRScreenState extends State<QRScreen> {
       ),
     );
   }
-
-  Future<void> pickImageSource() async {
+  void _showScanningDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      backgroundColor: AppColors.primary,
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              strokeWidth: 3,
+            ),
+            SizedBox(height: 25),
+            Text(
+              'جاري فحص الرمز...',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 18,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+ Future<void> pickImageSource() async {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(

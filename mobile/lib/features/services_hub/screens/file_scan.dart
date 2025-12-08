@@ -33,12 +33,8 @@ class _FileScreenState extends State<FilesScreen> {
       setState(() {
         _isScanning = true;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('جاري فحص الملف...'),
-          backgroundColor: Colors.green,
-        ),
-      );
+      _showScanningDialog();
+
       try {
       String hash = await createFileHash(_selectedFile);
 
@@ -47,13 +43,14 @@ class _FileScreenState extends State<FilesScreen> {
       setState(() {
         _isScanning = false;
       });
-      
+      Navigator.pop(context);
       _showFileResultDialog(scanResult);
 
       } catch (e) {
       setState(() {
         _isScanning = false;
       });
+      Navigator.pop(context);
       print('فشل فحص الملف: ${e.toString()}');
     }
 
@@ -283,6 +280,42 @@ Widget _buildStatRow(String label, int count, Color color) {
       ),
     );
   }
+
+
+  void _showScanningDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      backgroundColor: AppColors.primary,
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              strokeWidth: 3,
+            ),
+            SizedBox(height: 25),
+            Text(
+              'جاري فحص الملف...',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 18,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
   
   @override
   Widget build(BuildContext context) {

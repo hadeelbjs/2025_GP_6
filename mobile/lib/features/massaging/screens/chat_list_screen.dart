@@ -564,7 +564,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
               )
             else
               Icon(
-                Icons.chevron_left,
+                Icons.chevron_right,
                 color: AppColors.textHint.withOpacity(0.5),
                 size: 24,
               ),

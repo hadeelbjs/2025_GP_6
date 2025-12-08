@@ -59,7 +59,7 @@ class AddMethodToggle extends StatelessWidget {
     return Row(
       children: [
         pill(
-          label: 'باستخدام رقم الجوال',
+          label: 'برقم الهاتف',
           selected: phoneSelected,
           onTap: onSelectPhone,
         ),

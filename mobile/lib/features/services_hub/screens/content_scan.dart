@@ -15,12 +15,16 @@ class ContentScanScreen extends StatelessWidget {
     return 
         DefaultTabController(
       length: 3,
-      child: Scaffold(
+       child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
         backgroundColor: Colors.white,
         appBar: AppBar(
           foregroundColor: AppColors.primary,
           backgroundColor: Colors.white,
           elevation: 0,
+          automaticallyImplyLeading: true,
+
           title: const Text(
             'التحقق من أمان المحتوى',
             style: TextStyle(
@@ -134,6 +138,7 @@ class ContentScanScreen extends StatelessWidget {
                 ),
             ),
           ]
+         )
          )
       )
     );

@@ -150,12 +150,22 @@ class _AddContactScreenState extends State<AddContactScreen> {
         backgroundColor: AppColors.background,
         body: SafeArea(
           child: Column(
-            children: [
-              const HeaderWidget(
-                title: 'إضافة صديق جديد',
-                showBackButton: true,
-                showBackground: false,
+              children: [
+              AppBar(
+              backgroundColor: Colors.white,
+              elevation: 0,
+              centerTitle: true,
+              automaticallyImplyLeading: true,
+              iconTheme: IconThemeData(color: AppColors.primary),
+              title: Text(
+                'إضافة صديق جديد',
+                style: AppTextStyles.h3.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
+            ),
+
 
               Expanded(
                 child: SingleChildScrollView(

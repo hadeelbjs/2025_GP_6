@@ -764,16 +764,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
       //فك تشفير الرسائل بعد التهيئة مباشرة
       if (_conversationId != null) {
-        setState(() {
-          _isDecryptingMessages = true;
-        });
-
-        await _decryptAllMessages();
-
-        setState(() {
-          _isDecryptingMessages = false;
-        });
+      _showDecryptionDialog();
+      
+      await _decryptAllMessages();
+      
+      // إغلاق الـ dialog بعد الانتهاء
+      if (mounted) {
+        Navigator.of(context, rootNavigator: true).pop();
       }
+}
     } catch (e) {
       _showMessage('حدث خطأ في تهيئة المحادثة', false);
     } finally {
@@ -1375,6 +1374,40 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
       ),
     );
   }
+  void _showDecryptionDialog() {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+      ),
+      backgroundColor: AppColors.primary,
+      child: Padding(
+        padding: const EdgeInsets.all(30),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+              strokeWidth: 3,
+            ),
+            SizedBox(height: 25),
+            Text(
+              'جاري فك تشفير المحادثة...',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 14,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -1752,21 +1785,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
   Widget _buildBody(bool hasAttachment) {
     //  حالة فك تشفير الرسائل فقط
-    if (_isDecryptingMessages) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(color: AppColors.primary),
-            const SizedBox(height: 20),
-            Text(
-              'جارِ فك تشفير المحادثة...',
-              style: AppTextStyles.bodyLarge.copyWith(color: AppColors.primary),
-            ),
-          ],
-        ),
-      );
-    }
 
     return Column(
       children: [

@@ -20,6 +20,8 @@ Waseed is a comprehensive, user-friendly cybersecurity platform specifically des
 ### Integrations
 - **Have I Been Pwned API** for breach monitoring
 - **VirusTotal API** for link and file scanning
+- **Resend** for email verification
+- **Twilio** for SMS-based phone number verification
 - **Firebase** for real-time push notifications and threat alerts
 
 ## Installation & Setup
@@ -36,7 +38,7 @@ Waseed is a comprehensive, user-friendly cybersecurity platform specifically des
 
 1. **Clone the repository**
    ```bash
-   git clone <repository-url>
+   git clone https://github.com/hadeelbjs/2025_GP_6.git
    ```
 
 2. **Navigate to the backend folder**

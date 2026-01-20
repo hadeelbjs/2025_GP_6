@@ -117,7 +117,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
     }
   }
 
-  Widget _buildInitialState() {
+Widget _buildInitialState() {
     return Column(
       children: [
         Expanded(
@@ -126,14 +126,8 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                SizedBox(height: 20),
+                const SizedBox(height: 20),
                 
-                // عنوان رئيسي
-               
-                
-                SizedBox(height: 30),
-
-                // منطقة رفع الصورة - بتصميم أجمل
                 Container(
                   width: double.infinity,
                   height: 220,
@@ -149,9 +143,8 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // أيقونة مميزة
                       Container(
-                        padding: EdgeInsets.all(20),
+                        padding: const EdgeInsets.all(20),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withOpacity(0.1),
                           shape: BoxShape.circle,
@@ -162,33 +155,38 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
                           color: AppColors.primary,
                         ),
                       ),
-                      
-                      SizedBox(height: 20),
-                      
+                      const SizedBox(height: 15),
                       Text(
                         'اختر مصدر الصورة',
                         style: TextStyle(
                           fontFamily: 'IBMPlexSansArabic',
                           fontSize: 16,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.bold,
                           color: AppColors.primary,
                         ),
                       ),
-                      
-                      SizedBox(height: 8),
+                      const SizedBox(height: 6),
+                      Text(
+                        'تنسيقات JPG و PNG مدعومة',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                      ),
                     ],
                   ),
                 ),
 
-                SizedBox(height: 25),
+                const SizedBox(height: 35),
 
-                // زر المعرض
+                // زر المعرض (Primary)
                 InkWell(
                   onTap: _pickFromGallery,
                   borderRadius: BorderRadius.circular(15),
                   child: Container(
                     width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: 18),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
                       color: AppColors.primary,
                       borderRadius: BorderRadius.circular(15),
@@ -196,21 +194,21 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
                         BoxShadow(
                           color: AppColors.primary.withOpacity(0.3),
                           blurRadius: 12,
-                          offset: Offset(0, 6),
+                          offset: const Offset(0, 6),
                         ),
                       ],
                     ),
-                    child: Row(
+                    child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.photo_library_rounded, color: Colors.white, size: 24),
                         SizedBox(width: 12),
                         Text(
-                          ' من المعرض',
+                          'من المعرض',
                           style: TextStyle(
                             fontFamily: 'IBMPlexSansArabic',
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                             color: Colors.white,
                           ),
                         ),
@@ -219,14 +217,14 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
                   ),
                 ),
 
-                SizedBox(height: 15),
+                const SizedBox(height: 15),
 
-                // الخط الفاصل مع "أو"
+                // الخط الفاصل
                 Row(
                   children: [
                     Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
                     Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 15),
+                      padding: const EdgeInsets.symmetric(horizontal: 15),
                       child: Text(
                         'أو',
                         style: TextStyle(
@@ -240,30 +238,33 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
                   ],
                 ),
 
-                SizedBox(height: 15),
+                const SizedBox(height: 15),
 
-                // زر الكاميرا
                 InkWell(
                   onTap: _pickFromCamera,
                   borderRadius: BorderRadius.circular(15),
                   child: Container(
                     width: double.infinity,
-                    padding: EdgeInsets.symmetric(vertical: 18),
+                    padding: const EdgeInsets.symmetric(vertical: 18),
                     decoration: BoxDecoration(
-                      color: Colors.grey[200],
+                      color: Colors.white,
                       borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: AppColors.primary.withOpacity(0.5),
+                        width: 1.5,
+                      ),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 24),
-                        SizedBox(width: 12),
+                        const SizedBox(width: 12),
                         Text(
                           'التقط صورة جديدة',
                           style: TextStyle(
                             fontFamily: 'IBMPlexSansArabic',
                             fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                             color: AppColors.primary,
                           ),
                         ),

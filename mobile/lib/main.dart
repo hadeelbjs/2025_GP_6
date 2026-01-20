@@ -22,6 +22,8 @@ import 'features/services_hub/screens/services.dart';
 import 'features/services_hub/screens/content_scan.dart';
 import 'services/wifi_security_service.dart'; 
 import 'package:geolocator/geolocator.dart';
+import 'features/services_hub/screens/image_scanner_screen.dart';
+
 
 void main() async {
   await dotenv.load(fileName: ".env");
@@ -65,6 +67,7 @@ class MyApp extends StatelessWidget {
         '/account': (context) => const ProtectedRoute(
           child: AccountManagementScreen(),
         ),
+        '/image-scanner': (context) => const ImageScannerScreen(),
       },
     );
   }

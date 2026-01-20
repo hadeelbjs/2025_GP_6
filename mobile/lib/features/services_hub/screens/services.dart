@@ -17,25 +17,37 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
   final _messagingService = MessagingService();
   final _apiService = ApiService();
   
-  // قائمة جميع الخدمات
   final List<Map<String, dynamic>> _allServices = [
     {
       'title': ' التحقق من أمان المحتوى',
-      'description': 'هذه الخدمة تسمح لك بالتحقق من أمان الروابط أو رموز الQR  أو الملفات',
+      'description': 'التحقق من أمان الروابط أو رموز الـ QR أو الملفات',
       'icons': [Icons.link, Icons.file_copy_rounded, Icons.qr_code],
-      'color': Color.fromARGB(198, 40, 27, 103),
+      'color': const Color.fromARGB(198, 40, 27, 103),
       'route': '/content-scan'
+    },
+    {
+      'title': 'كشف البيانات الحساسة في الصور',
+      'description': 'افحص صورك قبل المشاركة للتأكد من خصوصيتك',
+      'icons': [Icons.image],
+      'color': const Color.fromARGB(198, 40, 27, 103), 
+      'route': '/image-scanner'
+    },
+    {
+      'title': 'مساعدك الذكي',
+      'description': 'تحدث مع المساعد للحصول على نصائح أمنية وإرشادات',
+      'icons': [Icons.chat_bubble],
+      'color': const Color.fromARGB(198, 40, 27, 103),
+      'route': '/chatbot' 
     }
   ];
   
-  // قائمة الخدمات المفلترة
   List<Map<String, dynamic>> _filteredServices = [];
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _filteredServices = _allServices; // عرض جميع الخدمات في البداية
+    _filteredServices = _allServices;
   }
 
   @override
@@ -64,14 +76,12 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
         final success = await _messagingService.initialize();
         if (success) {
           print('✅ Socket connected after resume');
-          //  طلب الحالة لجميع جهات الاتصال بعد الاتصال
           await _requestAllContactsStatus();
         } else {
           print('❌ Failed to connect socket after resume');
         }
       } else {
         print('✅ Socket already connected');
-        //  حتى لو كان متصل، نطلب الحالة عند العودة للتطبيق
         await _requestAllContactsStatus();
       }
     } catch (e) {
@@ -82,7 +92,6 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
   //  طلب الحالة لجميع جهات الاتصال
   Future<void> _requestAllContactsStatus() async {
     try {
-      // انتظر قليلاً للتأكد من اكتمال الاتصال
       await Future.delayed(const Duration(milliseconds: 500));
       
       if (!_messagingService.isConnected) {
@@ -90,14 +99,12 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
         return;
       }
 
-      // جلب قائمة جهات الاتصال
       final result = await _apiService.getContactsList();
       
       if (result['success'] == true && result['contacts'] != null) {
         final contacts = result['contacts'] as List;
         print(' Requesting status for ${contacts.length} contacts...');
         
-        // طلب الحالة لكل جهة اتصال
         for (var contact in contacts) {
           final contactId = contact['id']?.toString();
           if (contactId != null) {
@@ -115,30 +122,27 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
   void _filter(String query) {
     setState(() {
       if (query.isEmpty) {
-        // عرض جميع الخدمات
         _filteredServices = _allServices;
       } else {
-        // تصفية الخدمات بناءً على النص المدخل
-        _filteredServices = _allServices.where((service) {
+        final searchLower = query.trim().toLowerCase();
+        
+        final matches = _allServices.where((service) {
           final title = service['title'].toString().toLowerCase();
           final description = service['description'].toString().toLowerCase();
-          final searchLower = query.toLowerCase();
-          
           return title.contains(searchLower) || description.contains(searchLower);
         }).toList();
+
+        _filteredServices = matches;
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final navigationBar = BottomNavBar(currentIndex: 2);
-    
     return Scaffold(
       backgroundColor: Colors.white,
       body: SafeArea(
         child: Directionality(
-          
           textDirection: TextDirection.rtl,
           child: Column(
             children: [
@@ -148,66 +152,25 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
                 alignTitleRight: true,
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                 child: custom.SearchBar(
                   controller: _searchController,
                   onChanged: _filter,
                   onSearch: _filter,
                 ),
               ),
-              
-              // عرض عدد النتائج
-              if (_searchController.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 5),
-                  child: Text(
-                    'عدد النتائج: ${_filteredServices.length}',
-                    style: const TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 14,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-
-              const SizedBox(height: 15)
-                ,
-              
-              // قائمة الخدمات المفلترة
               Expanded(
-                child: _filteredServices.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.search_off,
-                              size: 80,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 20),
-                            Text(
-                              'لا توجد خدمات مطابقة للبحث',
-                              style: TextStyle(
-                                fontFamily: 'IBMPlexSansArabic',
-                                fontSize: 18,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: _filteredServices.isEmpty
+                      ? _buildNoResults()
+                      : ListView.builder(
+                          key: ValueKey(_filteredServices.length),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          itemCount: _filteredServices.length,
+                          itemBuilder: (context, index) => _buildServiceCard(_filteredServices[index]),
                         ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        itemCount: _filteredServices.length,
-                        itemBuilder: (context, index) {
-                          final service = _filteredServices[index];
-                          return _buildServiceCard(service);
-                        },
-                      ),
+                ),
               ),
             ],
           ),
@@ -215,103 +178,94 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
       ),
       bottomNavigationBar: Directionality(
         textDirection: TextDirection.rtl,
-        child: navigationBar,
+        child: BottomNavBar(currentIndex: 2),
       ),
     );
   }
 
-  // بطاقة الخدمة
   Widget _buildServiceCard(Map<String, dynamic> service) {
-  return InkWell(
-    onTap: () {
-      // الانتقال للصفحة
-      Navigator.pushNamed(context, service['route']);
-    },
-    borderRadius: BorderRadius.circular(15),
-    child: Ink(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(15),
-        color: service['color'],
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      child: InkWell(
+        onTap: () => Navigator.pushNamed(context, service['route']),
+        borderRadius: BorderRadius.circular(22),
+        child: Ink(
+          height: 155,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            color: service['color'],
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 20),
-        height: 230,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisAlignment: MainAxisAlignment.start,
-          children: [
-            const SizedBox(height: 30),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: (service['icons'] as List<IconData>)
-                  .map((icon) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 10),
-                        child: Icon(
-                          icon,
-                          color: Colors.white,
-                          size: 40,
-                        ),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              service['title'],
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.white,
-                fontFamily: 'IBMPlexSansArabic',
-                fontWeight: FontWeight.w700,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: (service['icons'] as List<IconData>)
+                    .map((icon) => Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          child: Icon(icon, color: Colors.white, size: 26),
+                        ))
+                    .toList(),
               ),
-            ),
-            const SizedBox(height: 20),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 30),
-              child: Text(
-                service['description'],
+              const SizedBox(height: 12),
+              Text(
+                service['title'],
                 style: const TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 14.5,
+                  fontSize: 16,
                   color: Colors.white,
-                  fontWeight: FontWeight.w400,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'IBMPlexSansArabic',
                 ),
-                textAlign: TextAlign.center,
               ),
-            ),
-            const SizedBox(height: 25),
-            // نص "انقر هنا للبدء"
-            
-             Row(
-                mainAxisSize: MainAxisSize.min,
-                children: const [
-                  Text(
-                    'انقر هنا للبدء',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 16,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
+              const SizedBox(height: 6),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 40),
+                child: Text(
+                  service['description'],
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white.withOpacity(0.85),
+                    fontFamily: 'IBMPlexSansArabic',
                   ),
-                  SizedBox(width: 8),
-                  Icon(
-                    Icons.start,
-                    color: Colors.white,
-                    size: 18,
-                  ),
-                ],
-             )]
-             )
-             )
-        
-    ),
-  );
-}
+                ),
+              ),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Text(
+                  'ابدأ الخدمة',
+                  style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'IBMPlexSansArabic'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNoResults() {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(Icons.search_off_rounded, size: 70, color: Colors.grey.shade300),
+        const SizedBox(height: 10),
+        const Text('لم يتم العثور على هذه الخدمة', 
+          style: TextStyle(color: Colors.grey, fontFamily: 'IBMPlexSansArabic')),
+      ],
+    );
+  }
 }

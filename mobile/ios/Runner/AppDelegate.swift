@@ -154,17 +154,17 @@ import CoreLocation
     // Screenshot Detection
     
     private func setupScreenshotDetection() {
-        // كشف Screenshot
+        // Screenshot Detection
         NotificationCenter.default.addObserver(
             forName: UIApplication.userDidTakeScreenshotNotification,
             object: nil,
             queue: .main
         ) { [weak self] _ in
-            print("📸 iOS: Screenshot detected!")
+            print(" iOS: Screenshot detected!")
             self?.screenshotMethodChannel?.invokeMethod("onScreenshotTaken", arguments: nil)
         }
         
-        // كشف تسجيل الشاشة (iOS 11+)
+        //  Screen Recording Detection
         if #available(iOS 11.0, *) {
             NotificationCenter.default.addObserver(
                 forName: UIScreen.capturedDidChangeNotification,
@@ -172,7 +172,7 @@ import CoreLocation
                 queue: .main
             ) { [weak self] _ in
                 let isRecording = UIScreen.main.isCaptured
-                print("🎥 iOS: Screen recording: \(isRecording)")
+                print(" iOS: Screen recording: \(isRecording)")
                 self?.screenshotMethodChannel?.invokeMethod(
                     "onScreenRecordingChanged",
                     arguments: ["isRecording": isRecording]

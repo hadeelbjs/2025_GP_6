@@ -5,10 +5,10 @@ class AppConfig {
   static String get apiBaseUrl {
     return dotenv.env['API_BASE_URL'] ?? 'http://localhost:3000/api';
   }
-  
+
   static bool get isProduction {
     final value = dotenv.env['PRODUCTION']?.toLowerCase();
-    return value == 'true' || value == '1';
+    return value == 'true' || value == '0';
   }
 
   static String get socketUrl {
@@ -22,12 +22,12 @@ class AppConfig {
   static String get hosting {
     return dotenv.env['HOSTING'] ?? 'http://localhost:3000';
   }
-  
+
   // دالة مساعدة للتحقق من التحميل
   static bool get isLoaded {
     return dotenv.isInitialized;
   }
-  
+
   static void printConfig() {
     print('🔧 App Configuration:');
     print('   - API Base URL: $apiBaseUrl');
@@ -36,21 +36,21 @@ class AppConfig {
     print('   - Production: $isProduction');
     print('   - DotEnv Loaded: $isLoaded');
   }
-  
+
   // التحقق من صحة الإعدادات
   static bool validate() {
     if (!isLoaded) {
       print('❌ .env file not loaded!');
       return false;
     }
-    
+
     if (isProduction) {
       if (!apiBaseUrl.startsWith('https://')) {
         print('⚠️ Warning: Production should use HTTPS!');
         return false;
       }
     }
-    
+
     print('✅ Configuration validated successfully');
     return true;
   }

@@ -1075,7 +1075,7 @@ class ApiService {
         return {
           'success': true,
           'message': data['message'],
-          'version': data['version'], 
+          'version': data['version'],
           'totalKeys': data['totalKeys'],
           'availableKeys': data['availableKeys'],
         };
@@ -1181,5 +1181,28 @@ class ApiService {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token',
     };
+  }
+
+  // ===================================
+  // Chatbot API Methods
+  // ===================================
+  Future<String> askChatbot(String message) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/chatbot/ask'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'message': message}),
+      );
+
+      final data = jsonDecode(res.body);
+
+      if (data['success'] == true) return data['reply'];
+      return data['reply'] ?? 'السؤال خارج نطاق الأمن السيبراني';
+    } catch (e) {
+      return ' تعذر الاتصال بالمساعد الذكي';
+    }
   }
 }

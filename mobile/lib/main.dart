@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'services/api_services.dart';
 import 'services/biometric_service.dart';
-import 'services/messaging_service.dart'; 
+import 'services/messaging_service.dart';
 import 'features/authentication/screens/biometric_login_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'services/auth_guard.dart';
@@ -20,14 +20,14 @@ import 'features/authentication/screens/splash_screen.dart';
 import 'features/authentication/screens/biometric_login_screen.dart';
 import 'features/services_hub/screens/services.dart';
 import 'features/services_hub/screens/content_scan.dart';
-import 'services/wifi_security_service.dart'; 
+import 'services/wifi_security_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'features/services_hub/screens/image_scanner_screen.dart';
-
+import 'features/services_hub/screens/chatbot.dart';
 
 void main() async {
   await dotenv.load(fileName: ".env");
-  
+
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
@@ -52,22 +52,16 @@ class MyApp extends StatelessWidget {
         '/onboard': (context) => const OnboardingScreen(),
         '/services': (context) => const ServicesScreen(),
         '/content-scan': (context) => const ContentScanScreen(),
-        '/dashboard': (context) => const ProtectedRoute(
-          child: MainDashboard(),
-        ),
-        '/contacts': (context) => const ProtectedRoute(
-          child: ContactsListScreen(),
-        ),
-        '/add-contact': (context) => const ProtectedRoute(
-          child: AddContactScreen(),
-        ),
-        '/chats': (context) => const ProtectedRoute(
-          child: ChatListScreen(),
-        ),
-        '/account': (context) => const ProtectedRoute(
-          child: AccountManagementScreen(),
-        ),
+        '/dashboard': (context) => const ProtectedRoute(child: MainDashboard()),
+        '/contacts': (context) =>
+            const ProtectedRoute(child: ContactsListScreen()),
+        '/add-contact': (context) =>
+            const ProtectedRoute(child: AddContactScreen()),
+        '/chats': (context) => const ProtectedRoute(child: ChatListScreen()),
+        '/account': (context) =>
+            const ProtectedRoute(child: AccountManagementScreen()),
         '/image-scanner': (context) => const ImageScannerScreen(),
+        '/chatbot': (context) => const ChatbotScreen(),
       },
     );
   }
@@ -80,10 +74,10 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   final AuthGuard _authGuard = AuthGuard();
   final WifiSecurityService _wifiService = WifiSecurityService();
-
 
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -91,19 +85,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   void initState() {
     super.initState();
-    
+
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    
+
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(
-        parent: _animationController,
-        curve: Curves.easeIn,
-      ),
+      CurvedAnimation(parent: _animationController, curve: Curves.easeIn),
     );
-    
+
     _animationController.forward();
     _checkAuthStatus();
   }
@@ -120,12 +111,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     try {
       print('Checking app state...');
-      
+
       // 1. فحص إذا للتو تم logout
       final justLoggedOut = await BiometricService.getJustLoggedOut();
       print('Just logged out? $justLoggedOut');
       final isAuth = await _authGuard.isAuthenticated();
-      if ( !isAuth) {
+      if (!isAuth) {
         await BiometricService.setJustLoggedOut(false);
         Navigator.of(context).pushReplacementNamed('/onboard');
         return;
@@ -133,27 +124,25 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
       // 2. فحص إذا مسجل دخول
       print('Is authenticated? $isAuth');
-      
+
       if (isAuth) {
         BiometricService.setJustLoggedOut(false);
         // تهيئة التشفير
         await _initializeEncryption();
-        
+
         // تهيئة MessagingService (Socket + Listeners)
         await _initializeMessaging();
-          //   WiFi Security Service
+        //   WiFi Security Service
         await _initializeWifiSecurity();
         //  فحص الشبكة مرة واحدة فقط
         await _checkWifiOnce();
 
-        
         Navigator.of(context).pushReplacementNamed('/dashboard');
         return;
       }
 
       // 3. غير مسجل دخول - الذهاب للوقن
       Navigator.of(context).pushReplacementNamed('/login');
-
     } catch (e) {
       print('Error in Splash: $e');
       Navigator.of(context).pushReplacementNamed('/login');
@@ -164,16 +153,15 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   Future<void> _initializeMessaging() async {
     try {
       print('🔌 Initializing MessagingService...');
-      
+
       final success = await MessagingService().initialize();
-      
+
       if (success) {
         print('✅ MessagingService initialized successfully');
       } else {
         print('❌ MessagingService initialization failed');
         // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
       }
-      
     } catch (e) {
       print('❌ Error initializing MessagingService: $e');
       // لا نوقف التطبيق
@@ -181,73 +169,69 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   }
 
   Future<void> clearOldKeys() async {
-  final storage = FlutterSecureStorage();
-  
-  print('🗑️ Clearing all old encryption keys...');
-  
-  // حذف جميع المفاتيح
-  final allKeys = await storage.readAll();
-  
-  for (var key in allKeys.keys) {
-    if (key.contains('identity_key') || 
-        key.contains('registration_id') ||
-        key.contains('prekey_') ||
-        key.contains('signed_prekey_') ||
-        key.contains('session_') ||
-        key.contains('peer_identity')) {
-      await storage.delete(key: key);
-      print('🗑️ Deleted: $key');
+    final storage = FlutterSecureStorage();
+
+    print('🗑️ Clearing all old encryption keys...');
+
+    // حذف جميع المفاتيح
+    final allKeys = await storage.readAll();
+
+    for (var key in allKeys.keys) {
+      if (key.contains('identity_key') ||
+          key.contains('registration_id') ||
+          key.contains('prekey_') ||
+          key.contains('signed_prekey_') ||
+          key.contains('session_') ||
+          key.contains('peer_identity')) {
+        await storage.delete(key: key);
+        print('🗑️ Deleted: $key');
+      }
     }
+
+    print('✅ All old keys cleared!');
   }
-  
-  print('✅ All old keys cleared!');
-}
 
   /// تهيئة التشفير للمستخدم المسجل دخول
-Future<void> _initializeEncryption() async {
-  try {
-    print('🔐 جاري تهيئة التشفير...');
+  Future<void> _initializeEncryption() async {
+    try {
+      print('🔐 جاري تهيئة التشفير...');
 
-    
-    // 1. جلب userId أولاً
-    final storage = const FlutterSecureStorage();
-    final userDataStr = await storage.read(key: 'user_data');
-    
-    if (userDataStr == null) {
-      print('❌ لا توجد بيانات مستخدم');
-      return;
+      // 1. جلب userId أولاً
+      final storage = const FlutterSecureStorage();
+      final userDataStr = await storage.read(key: 'user_data');
+
+      if (userDataStr == null) {
+        print('❌ لا توجد بيانات مستخدم');
+        return;
+      }
+
+      final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
+      final userId = userData['id'] as String;
+
+      print('👤 User ID: $userId');
+
+      // 2. تهيئة SignalProtocolManager
+      final signalManager = SignalProtocolManager();
+      await signalManager.initialize(userId: userId);
+
+      // 3. الفحص باستخدام userId
+      final userIdentityKey = await storage.read(key: '${userId}_identity_key');
+
+      if (userIdentityKey != null) {
+        print('Kesy exist $userId');
+        await signalManager.checkAndRefreshPreKeys();
+        await signalManager.ensureSignedPreKeyRotation(userId);
+        print(await signalManager.checkKeysStatus());
+      } else {
+        await signalManager.generateAndUploadKeys();
+      }
+    } catch (e) {
+      print('❌ خطأ في تهيئة التشفير: $e');
     }
-    
-    final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
-    final userId = userData['id'] as String;
-    
-    print('👤 User ID: $userId');
-    
-    // 2. تهيئة SignalProtocolManager
-    final signalManager = SignalProtocolManager();
-    await signalManager.initialize(userId: userId);
-    
-    
-    // 3. الفحص باستخدام userId
-    final userIdentityKey = await storage.read(key: '${userId}_identity_key');
-
-    
-    if (userIdentityKey != null) {
-      print('Kesy exist $userId');
-      await signalManager.checkAndRefreshPreKeys();
-      await signalManager.ensureSignedPreKeyRotation(userId);
-      print(await signalManager.checkKeysStatus());
-    } else {
-      await signalManager.generateAndUploadKeys();
-    } 
-    
-  } catch (e) {
-    print('❌ خطأ في تهيئة التشفير: $e');
   }
-}
 
-/// تهيئة خدمة أمان WiFi
-   Future<void> _initializeWifiSecurity() async {
+  /// تهيئة خدمة أمان WiFi
+  Future<void> _initializeWifiSecurity() async {
     try {
       print('📡 [3/3] Initializing WiFi Security Service...');
       final success = await _wifiService.initialize();
@@ -263,24 +247,24 @@ Future<void> _initializeEncryption() async {
   Future<void> _checkWifiOnce() async {
     try {
       print('Checking WiFi security once...');
-      
+
       final result = await _wifiService.checkNetworkOnAppLaunch();
-      
+
       switch (result.type) {
         case WifiCheckResultType.needsPermission:
           print('Need to request permissions');
           // سيتم طلبها من Dashboard
           break;
-          
+
         case WifiCheckResultType.permissionDenied:
           print('⚠️ Permissions denied');
           // سيتم عرض dialog من Dashboard
           break;
-          case WifiCheckResultType.userDeclined:
-        print('ℹ️ User declined WiFi check permanently - respecting choice');
-        // المستخدم رفض نهائياً - لا نزعجه
-        break;
-          
+        case WifiCheckResultType.userDeclined:
+          print('ℹ️ User declined WiFi check permanently - respecting choice');
+          // المستخدم رفض نهائياً - لا نزعجه
+          break;
+
         case WifiCheckResultType.success:
           if (result.status != null && !result.status!.isSecure) {
             print('Insecure network detected: ${result.status!.ssid}');
@@ -289,25 +273,24 @@ Future<void> _initializeEncryption() async {
             print('Secure network: ${result.status!.ssid}');
           }
           break;
-        
-          
+
         case WifiCheckResultType.notConnected:
           print('Not connected to WiFi');
           break;
-          
+
         case WifiCheckResultType.alreadyChecked:
           print('Already checked in this session');
           break;
-          
+
         case WifiCheckResultType.error:
           print('Error: ${result.errorMessage}');
           break;
       }
-      
     } catch (e) {
       print('Error checking WiFi: $e');
     }
   }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -328,9 +311,9 @@ Future<void> _initializeEncryption() async {
                   BlendMode.srcIn,
                 ),
               ),
-              
+
               const SizedBox(height: 30),
-              
+
               const Text(
                 'وصيد',
                 style: TextStyle(
@@ -341,9 +324,9 @@ Future<void> _initializeEncryption() async {
                   letterSpacing: 2,
                 ),
               ),
-              
+
               const SizedBox(height: 10),
-              
+
               Text(
                 'أمانك بِلُغَتِك',
                 style: TextStyle(
@@ -352,9 +335,9 @@ Future<void> _initializeEncryption() async {
                   fontFamily: 'IBMPlexSansArabic',
                 ),
               ),
-              
+
               const SizedBox(height: 60),
-              
+
               const SizedBox(
                 width: 30,
                 height: 30,

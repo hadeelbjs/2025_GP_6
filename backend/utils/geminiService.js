@@ -1,11 +1,7 @@
-// utils/geminiService.js
+/*// utils/geminiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-/**
- * Simple "cyber-only" gate:
- * - We do a quick keyword filter + a strict system prompt.
- * - If out of scope, we return ok:false with a refusal message.
- */
+
 
 const CYBER_KEYWORDS = [
   // عربي
@@ -84,10 +80,10 @@ async function askGeminiCyberOnly(userMessage) {
   }
 }
 
-module.exports = { askGeminiCyberOnly };
+module.exports = { askGeminiCyberOnly };*/
 
 
-/*const { GoogleGenAI } = require("@google/genai");
+const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -153,4 +149,4 @@ async function askGeminiCyberOnly(userText) {
 
 module.exports = {
   askGeminiCyberOnly,
-};*/
+};

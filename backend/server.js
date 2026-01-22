@@ -110,6 +110,8 @@ app.use((req, res, next) => {
   next();
 });
 
+const chatbotRoutes = require('./routes/chatbot');
+
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/contacts', require('./routes/contacts'));
@@ -117,6 +119,8 @@ app.use('/api/user', require('./routes/user'));
 app.use('/api/prekeys', require('./routes/prekeys')); 
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/upload', require('./routes/upload'));
+app.use('/api/chatbot', chatbotRoutes);
+
 
 app.get('/', (req, res) => {
   res.json({ 

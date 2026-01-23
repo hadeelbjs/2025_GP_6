@@ -1186,7 +1186,56 @@ class ApiService {
   // ===================================
   // Chatbot API Methods
   // ===================================
-  Future<String> askChatbot(String message) async {
+  // ===================================
+  // Chatbot API Methods
+  // ===================================
+  Future<Map<String, dynamic>> askChatbot(String message) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/chatbot/ask'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({'message': message}),
+      );
+
+      // لو السيرفر رجّع HTML بالغلط (404 مثلا) بيكسر jsonDecode
+      final decoded = jsonDecode(res.body);
+
+      // ✅ نطبع عشان تعرفين وش رجع السيرفر فعلًا (بالكونسول)
+      print('🤖 chatbot status=${res.statusCode} body=$decoded');
+
+      if (decoded is Map<String, dynamic>) {
+        final success = decoded['success'] == true;
+
+        // ✅ خذي reply أو message بأي حال
+        final reply = (decoded['reply'] ?? decoded['message'] ?? '').toString();
+
+        return {
+          'success': success,
+          'reply': reply.isEmpty ? 'ما وصل رد من السيرفر.' : reply,
+          'reason': decoded['reason']?.toString(),
+          'statusCode': res.statusCode,
+        };
+      }
+
+      return {
+        'success': false,
+        'reply': 'رد غير متوقع من السيرفر.',
+        'reason': 'INVALID_RESPONSE',
+        'statusCode': res.statusCode,
+      };
+    } catch (e) {
+      return {
+        'success': false,
+        'reply': '⚠️ تعذر الاتصال بالمساعد الذكي',
+        'reason': 'NETWORK_ERROR',
+      };
+    }
+  }
+
+  /*Future<String> askChatbot(String message) async {
     try {
       final res = await http.post(
         Uri.parse('$baseUrl/chatbot/ask'),
@@ -1204,5 +1253,5 @@ class ApiService {
     } catch (e) {
       return ' تعذر الاتصال بالمساعد الذكي';
     }
-  }
+  }*/
 }

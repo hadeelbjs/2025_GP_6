@@ -83,7 +83,7 @@ async function askGeminiCyberOnly(userMessage) {
 module.exports = { askGeminiCyberOnly };*/
 
 
-const { GoogleGenAI } = require("@google/genai");
+/*const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -149,4 +149,119 @@ async function askGeminiCyberOnly(userText) {
 
 module.exports = {
   askGeminiCyberOnly,
+};*/
+
+const { GoogleGenAI } = require("@google/genai");
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+// كلمات مفتاحية للأمن السيبراني
+const CYBER_KEYWORDS = [
+  "أمن", "سيبراني", "اختراق", "هاكر", "تصيد", "phishing",
+  "malware", "ransomware", "virus", "فيروس",
+  "ثغرة", "vulnerability", "exploit",
+  "تشفير", "encryption",
+  "كلمة مرور", "password", "2fa", "mfa", "otp",
+  "privacy", "privac", "خصوصية",
+  "بيانات", "data breach", "تسريب",
+  "soc", "siem", "edr", "firewall",
+  "dns", "vpn", "tls", "ssl",
+  "oauth", "jwt", "session", "cookie",
+  "sql injection", "xss", "csrf", "ddos",
+  "zero trust", "iam", "least privilege", 
+  "هجوم", "هجمات", "attack", "cyber attack", "حماية", "حساب", "حسابي"
+
+];
+
+// ✅ تنظيف بسيط للنص (يشيل الرموز الزايدة) ويخليه lower
+function normalizeText(text = "") {
+  return text
+    .toString()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ") // يشيل أغلب الرموز
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isCyberSecurityQuestion(text = "") {
+  const t = normalizeText(text);
+  return CYBER_KEYWORDS.some((k) => t.includes(normalizeText(k)));
+}
+
+// رسالة رفض
+function refusalMessage() {
+  return "أقدر أساعدك في مواضيع الأمن السيبراني وحماية البيانات فقط. اكتب سؤالك بصيغة أمنية مثل: التحقق من رابط مشبوه، حماية الحساب، التصيد، كلمات المرور، الخصوصية…";
+}
+
+const SYSTEM_INSTRUCTION = `
+أنت مساعد متخصص فقط في الأمن السيبراني وحماية البيانات والخصوصية الرقمية.
+ممنوع الإجابة عن أي موضوع عام خارج الأمن السيبراني.
+إذا كان السؤال خارج المجال أو غير واضح، ارفض بأدب واطلب صياغته كسؤال أمن سيبراني.
+أجب بالعربية وبشكل عملي ومختصر مع خطوات واضحة، وإذا احتجت توضيح اطلبه بسؤال واحد.
+`;
+
+// ✅ استخراج نص الرد بشكل robust مهما اختلف شكل الاستجابة
+function extractText(resp) {
+  // بعض الإصدارات تعطي resp.text
+  if (typeof resp?.text === "string" && resp.text.trim()) return resp.text.trim();
+
+  // وبعضها تعطي candidates -> content -> parts
+  const parts =
+    resp?.candidates?.[0]?.content?.parts ||
+    resp?.response?.candidates?.[0]?.content?.parts ||
+    [];
+
+  const joined = parts
+    .map((p) => (typeof p?.text === "string" ? p.text : ""))
+    .join("")
+    .trim();
+
+  return joined;
+}
+
+async function askGeminiCyberOnly(userText) {
+  if (!userText || userText.trim().length === 0) {
+    return { ok: false, message: refusalMessage(), reason: "EMPTY" };
+  }
+
+  // فلترة قبلية
+  if (!isCyberSecurityQuestion(userText)) {
+    return { ok: false, message: refusalMessage(), reason: "OUT_OF_SCOPE" };
+  }
+
+  const model = "gemini-2.0-flash";
+
+  try {
+    const resp = await ai.models.generateContent({
+      model,
+      systemInstruction: SYSTEM_INSTRUCTION,
+      contents: [{ role: "user", parts: [{ text: userText }] }],
+    });
+
+    const text = extractText(resp);
+
+    // ✅ إذا ما رجع نص: هذه مشكلة موديل/مفتاح/صيغة.. مو Out of scope
+    if (!text) {
+      console.error("Gemini returned empty response:", JSON.stringify(resp, null, 2));
+      return {
+        ok: false,
+        message: "المساعد ما رجّع إجابة الآن. جرّبي بعد قليل.",
+        reason: "MODEL_EMPTY",
+      };
+    }
+
+    return { ok: true, message: text };
+  } catch (e) {
+    console.error("Gemini error:", e);
+    return {
+      ok: false,
+      message: "صار خطأ في المساعد الذكي. جرّبي لاحقاً.",
+      reason: "MODEL_ERROR",
+    };
+  }
+}
+
+module.exports = {
+  askGeminiCyberOnly,
 };
+

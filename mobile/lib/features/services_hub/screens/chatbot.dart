@@ -177,6 +177,57 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
       _isSending = true;
       _messages.add(_ChatMessage(text: text, isUser: true));
       _controller.clear();
+      _messages.add(_ChatMessage(text: 'جاري الرد...', isUser: false));
+    });
+
+    _scrollToBottom();
+
+    try {
+      final data = await _api.askChatbot(text);
+
+      setState(() {
+        if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
+          _messages.removeLast();
+        }
+
+        final reply = (data['reply'] ?? '').toString().trim();
+        final reason = (data['reason'] ?? '').toString().trim();
+
+        // ✅ لو السيرفر ما عطاك reply واضح، عطينا سبب واضح بدل "خارج نطاق" الافتراضية
+        final finalText = reply.isNotEmpty
+            ? reply
+            : (reason.isNotEmpty
+                  ? 'لم يتم الرد. السبب: $reason'
+                  : 'ما وصلتني إجابة واضحة. جربي مرة ثانية.');
+
+        _messages.add(_ChatMessage(text: finalText, isUser: false));
+      });
+    } catch (e) {
+      setState(() {
+        if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
+          _messages.removeLast();
+        }
+        _messages.add(
+          _ChatMessage(
+            text: 'صار خطأ في الاتصال بالسيرفر. حاولي مرة ثانية.',
+            isUser: false,
+          ),
+        );
+      });
+    } finally {
+      setState(() => _isSending = false);
+      _scrollToBottom();
+    }
+  }
+
+  /*Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _isSending) return;
+
+    setState(() {
+      _isSending = true;
+      _messages.add(_ChatMessage(text: text, isUser: true));
+      _controller.clear();
 
       // placeholder أثناء الإرسال
       _messages.add(_ChatMessage(text: 'جاري الرد...', isUser: false));
@@ -217,7 +268,7 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
       setState(() => _isSending = false);
       _scrollToBottom();
     }
-  }
+  }*/
 
   @override
   Widget build(BuildContext context) {

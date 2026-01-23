@@ -220,6 +220,60 @@ function extractText(resp) {
 }
 
 async function askGeminiCyberOnly(userText) {
+  const msg = (userText || "").toString().trim();
+
+  if (!msg) {
+    return { ok: false, message: refusalMessage(), reason: "EMPTY" };
+  }
+
+  // فلترة قبلية
+  if (!isCyberSecurityQuestion(msg)) {
+    return { ok: false, message: refusalMessage(), reason: "OUT_OF_SCOPE" };
+  }
+
+  const model = "gemini-2.0-flash";
+
+  try {
+    // ✅ Timeout 15 ثانية (عدليها لو تبين)
+    const resp = await Promise.race([
+      ai.models.generateContent({
+        model,
+        systemInstruction: SYSTEM_INSTRUCTION,
+        contents: [{ role: "user", parts: [{ text: msg }] }],
+      }),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("TIMEOUT")), 15000)
+      ),
+    ]);
+
+    const text = extractText(resp);
+
+    if (!text) {
+      console.error("Gemini returned empty:", JSON.stringify(resp, null, 2));
+      return {
+        ok: false,
+        message: "المساعد ما رجّع إجابة الآن. جرّبي بعد قليل.",
+        reason: "MODEL_EMPTY",
+      };
+    }
+
+    return { ok: true, message: text };
+  } catch (e) {
+    const reason = e?.message === "TIMEOUT" ? "TIMEOUT" : "MODEL_ERROR";
+    console.error("Gemini error:", e);
+
+    return {
+      ok: false,
+      message:
+        reason === "TIMEOUT"
+          ? "المساعد تأخر في الرد. جرّبي مرة ثانية."
+          : "صار خطأ في المساعد الذكي. جرّبي لاحقاً.",
+      reason,
+    };
+  }
+}
+
+/*async function askGeminiCyberOnly(userText) {
   if (!userText || userText.trim().length === 0) {
     return { ok: false, message: refusalMessage(), reason: "EMPTY" };
   }
@@ -259,7 +313,7 @@ async function askGeminiCyberOnly(userText) {
       reason: "MODEL_ERROR",
     };
   }
-}
+}*/
 
 module.exports = {
   askGeminiCyberOnly,

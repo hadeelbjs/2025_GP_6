@@ -1186,44 +1186,43 @@ class ApiService {
   // ===================================
   // Chatbot API Methods
   // ===================================
-  // ===================================
-  // Chatbot API Methods
-  // ===================================
   Future<Map<String, dynamic>> askChatbot(String message) async {
     try {
-      final res = await http.post(
-        Uri.parse('$baseUrl/chatbot/ask'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({'message': message}),
-      );
+      final uri = Uri.parse('$baseUrl/chatbot/ask');
 
-      // لو السيرفر رجّع HTML بالغلط (404 مثلا) بيكسر jsonDecode
-      final decoded = jsonDecode(res.body);
+      final res = await http
+          .post(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+            body: jsonEncode({'message': message}),
+          )
+          .timeout(const Duration(seconds: 20));
 
-      // ✅ نطبع عشان تعرفين وش رجع السيرفر فعلًا (بالكونسول)
-      print('🤖 chatbot status=${res.statusCode} body=$decoded');
-
-      if (decoded is Map<String, dynamic>) {
-        final success = decoded['success'] == true;
-
-        // ✅ خذي reply أو message بأي حال
-        final reply = (decoded['reply'] ?? decoded['message'] ?? '').toString();
-
+      // لو السيرفر رجّع HTML/نص مو JSON
+      dynamic data;
+      try {
+        data = jsonDecode(res.body);
+      } catch (_) {
         return {
-          'success': success,
-          'reply': reply.isEmpty ? 'ما وصل رد من السيرفر.' : reply,
-          'reason': decoded['reason']?.toString(),
+          'success': false,
+          'reply': '⚠️ السيرفر رجّع رد غير مفهوم (مو JSON).',
+          'reason': 'BAD_RESPONSE',
           'statusCode': res.statusCode,
+          'raw': res.body.toString().substring(
+            0,
+            res.body.length.clamp(0, 300),
+          ),
         };
       }
 
+      // ضمان مفاتيح ثابتة
       return {
-        'success': false,
-        'reply': 'رد غير متوقع من السيرفر.',
-        'reason': 'INVALID_RESPONSE',
+        'success': data['success'] == true,
+        'reply': (data['reply'] ?? '').toString(),
+        'reason': (data['reason'] ?? 'UNKNOWN').toString(),
         'statusCode': res.statusCode,
       };
     } catch (e) {
@@ -1231,27 +1230,8 @@ class ApiService {
         'success': false,
         'reply': '⚠️ تعذر الاتصال بالمساعد الذكي',
         'reason': 'NETWORK_ERROR',
+        'error': e.toString(),
       };
     }
   }
-
-  /*Future<String> askChatbot(String message) async {
-    try {
-      final res = await http.post(
-        Uri.parse('$baseUrl/chatbot/ask'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: jsonEncode({'message': message}),
-      );
-
-      final data = jsonDecode(res.body);
-
-      if (data['success'] == true) return data['reply'];
-      return data['reply'] ?? 'السؤال خارج نطاق الأمن السيبراني';
-    } catch (e) {
-      return ' تعذر الاتصال بالمساعد الذكي';
-    }
-  }*/
 }

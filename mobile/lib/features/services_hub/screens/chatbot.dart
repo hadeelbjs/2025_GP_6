@@ -186,14 +186,15 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
       final data = await _api.askChatbot(text);
 
       setState(() {
+        // نحذف placeholder
         if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
           _messages.removeLast();
         }
 
         final reply = (data['reply'] ?? '').toString().trim();
         final reason = (data['reason'] ?? '').toString().trim();
+        final success = data['success'] == true;
 
-        // ✅ لو السيرفر ما عطاك reply واضح، عطينا سبب واضح بدل "خارج نطاق" الافتراضية
         final finalText = reply.isNotEmpty
             ? reply
             : (reason.isNotEmpty

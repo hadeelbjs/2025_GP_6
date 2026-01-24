@@ -1,6 +1,190 @@
 // utils/geminiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+// رسالة الرفض (للاستخدام عند الحاجة)
+function refusalMessage() {
+  return "أقدر أساعدك في مواضيع الأمن السيبراني وحماية البيانات فقط. مثل: حماية الحسابات، كلمات المرور، التصيد، الروابط المشبوهة، الخصوصية...";
+}
+
+// System Instruction محدث ومفصل
+const SYSTEM_INSTRUCTION = `
+أنت مساعد متخصص في الأمن السيبراني وحماية البيانات والخصوصية الرقمية فقط.
+
+المواضيع التي يجب أن تجيب عليها:
+- حماية الحسابات والهوية الرقمية
+- كلمات المرور والمصادقة الثنائية
+- التصيد الإلكتروني والاحتيال
+- الروابط والمرفقات المشبوهة
+- البرمجيات الخبيثة والفيروسات
+- الخصوصية على الإنترنت
+- حماية البيانات الشخصية
+- أمن الشبكات والواي فاي
+- التشفير والاتصال الآمن
+- الثغرات الأمنية والحماية منها
+- الهندسة الاجتماعية
+- النسخ الاحتياطي واستعادة البيانات
+- أمن الأجهزة المحمولة
+- التجسس والمراقبة الإلكترونية
+
+المواضيع التي يجب رفضها بأدب:
+- الطبخ، الأكل، الوصفات
+- الدراسة، الواجبات، المذاكرة
+- الرياضة، اللياقة البدنية
+- الطب، الصحة، الأمراض
+- العلاقات، الزواج، الأسرة
+- الأخبار العامة، السياسة
+- الترفيه، الأفلام، الألعاب
+- السفر، السياحة
+- أي موضوع غير متعلق بالأمن السيبراني
+
+إذا كان السؤال غامض أو يحتمل التأويل:
+- حاول ربطه بالأمن السيبراني إذا أمكن
+- مثال: "كيف أحمي نفسي؟" → اعتبره سؤال عن حماية الحسابات والبيانات
+
+إذا كان السؤال خارج المجال تماماً:
+- ارفض بأدب وقل: "أقدر أساعدك في مواضيع الأمن السيبراني فقط"
+- اذكر أمثلة: "مثل: حماية الحساب، كلمات المرور، التصيد، الروابط المشبوهة"
+
+طريقة الإجابة:
+- استخدم اللغة العربية الفصحى البسيطة
+- كن عملي ومباشر
+- استخدم نقاط قصيرة عند الحاجة (لكن ليس دائماً)
+- قدم خطوات واضحة وقابلة للتطبيق
+- لا تكن طويلاً جداً (2-4 فقرات كافية)
+
+ممنوع منعاً باتاً:
+- شرح كيفية الاختراق أو استغلال الثغرات
+- تقديم أدوات أو طرق هجومية
+- مساعدة في أنشطة غير قانونية
+- الإجابة عن مواضيع خارج الأمن السيبراني
+`;
+
+async function askGeminiCyberOnly(userText) {
+  try {
+    const msg = (userText || "").toString().trim();
+
+    // فحص النص الفارغ فقط
+    if (!msg) {
+      return { ok: false, message: "اكتبي سؤالك أولاً", reason: "EMPTY" };
+    }
+
+    // فحص مفتاح API
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("❌ GEMINI_API_KEY is missing in .env file!");
+      return {
+        ok: false,
+        message: "خطأ في الإعدادات. تواصل مع الدعم الفني.",
+        reason: "NO_API_KEY"
+      };
+    }
+
+    // إنشاء عميل Gemini
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction: SYSTEM_INSTRUCTION,
+      generationConfig: {
+        temperature: 0.7,
+        topK: 40,
+        topP: 0.95,
+        maxOutputTokens: 1024,
+      },
+    });
+
+    console.log(`📨 User question: "${msg}"`);
+
+    // إرسال السؤال لـ Gemini مع Timeout
+    const generatePromise = model.generateContent(msg);
+    
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("TIMEOUT")), 20000)
+    );
+
+    const result = await Promise.race([generatePromise, timeoutPromise]);
+
+    // استخراج النص من الرد
+    const text = result?.response?.text?.() || "";
+
+    if (!text.trim()) {
+      console.error("❌ Gemini returned empty response");
+      return {
+        ok: false,
+        message: "المساعد ما رجّع إجابة الآن. جربي بعد قليل.",
+        reason: "MODEL_EMPTY",
+      };
+    }
+
+    const reply = text.trim();
+    console.log(`✅ Gemini reply: "${reply.substring(0, 100)}..."`);
+
+    // فحص بعدي: إذا Gemini رفض السؤال
+    const refusalPhrases = [
+      "أقدر أساعدك في مواضيع الأمن السيبراني فقط",
+      "لا أستطيع",
+      "خارج نطاق",
+      "غير متعلق بالأمن",
+      "مختص فقط",
+    ];
+
+    const isRefusal = refusalPhrases.some(phrase => 
+      reply.includes(phrase)
+    );
+
+    if (isRefusal) {
+      return {
+        ok: false,
+        message: refusalMessage(),
+        reason: "OUT_OF_SCOPE",
+      };
+    }
+
+    return { ok: true, message: reply };
+
+  } catch (error) {
+    console.error("❌ Gemini Service Error:", error);
+
+    if (error.message === "TIMEOUT") {
+      return {
+        ok: false,
+        message: "المساعد تأخر في الرد. جربي مرة ثانية.",
+        reason: "TIMEOUT",
+      };
+    }
+
+    // أخطاء API
+    if (error.message?.includes("API key") || error.message?.includes("API_KEY")) {
+      return {
+        ok: false,
+        message: "مفتاح API غير صحيح. تواصل مع الدعم الفني.",
+        reason: "INVALID_API_KEY",
+      };
+    }
+
+    if (error.message?.includes("quota") || error.message?.includes("QUOTA")) {
+      return {
+        ok: false,
+        message: "تم استهلاك الكوتا المجانية. جربي لاحقاً.",
+        reason: "QUOTA_EXCEEDED",
+      };
+    }
+
+    return {
+      ok: false,
+      message: "صار خطأ في المساعد الذكي. جربي لاحقاً.",
+      reason: "MODEL_ERROR",
+      error: error.message,
+    };
+  }
+}
+
+module.exports = {
+  askGeminiCyberOnly,
+};
+
+/*// utils/geminiService.js
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
 // كلمات مفتاحية للأمن السيبراني
 const CYBER_KEYWORDS = [
   "أمن", "سيبراني", "اختراق", "هاكر", "تصيد", "phishing",
@@ -131,7 +315,7 @@ async function askGeminiCyberOnly(userText) {
 
 module.exports = {
   askGeminiCyberOnly,
-};
+};*/
 
 
 

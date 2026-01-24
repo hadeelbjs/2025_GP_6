@@ -1,3 +1,140 @@
+// utils/geminiService.js
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
+// كلمات مفتاحية للأمن السيبراني
+const CYBER_KEYWORDS = [
+  "أمن", "سيبراني", "اختراق", "هاكر", "تصيد", "phishing",
+  "malware", "ransomware", "virus", "فيروس",
+  "ثغرة", "vulnerability", "exploit",
+  "تشفير", "encryption",
+  "كلمة مرور", "password", "2fa", "mfa", "otp",
+  "privacy", "privac", "خصوصية",
+  "بيانات", "data breach", "تسريب",
+  "soc", "siem", "edr", "firewall",
+  "dns", "vpn", "tls", "ssl",
+  "oauth", "jwt", "session", "cookie",
+  "sql injection", "xss", "csrf", "ddos",
+  "zero trust", "iam", "least privilege",
+  "هجوم", "هجمات", "attack", "cyber attack", "حماية", "حساب", "حسابي"
+];
+
+// تنظيف النص
+function normalizeText(text = "") {
+  return text
+    .toString()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// فحص إذا السؤال متعلق بالأمن السيبراني
+function isCyberSecurityQuestion(text = "") {
+  const t = normalizeText(text);
+  return CYBER_KEYWORDS.some((k) => t.includes(normalizeText(k)));
+}
+
+// رسالة الرفض
+function refusalMessage() {
+  return "أقدر أساعدك في مواضيع الأمن السيبراني وحماية البيانات فقط. اكتب سؤالك بصيغة أمنية مثل: التحقق من رابط مشبوه، حماية الحساب، التصيد، كلمات المرور، الخصوصية…";
+}
+
+const SYSTEM_INSTRUCTION = `
+أنت مساعد متخصص فقط في الأمن السيبراني وحماية البيانات والخصوصية الرقمية.
+ممنوع الإجابة عن أي موضوع عام خارج الأمن السيبراني.
+إذا كان السؤال خارج المجال أو غير واضح، ارفض بأدب واطلب صياغته كسؤال أمن سيبراني.
+أجب بالعربية وبشكل عملي ومختصر مع خطوات واضحة.
+`;
+
+async function askGeminiCyberOnly(userText) {
+  try {
+    const msg = (userText || "").toString().trim();
+
+    // فحص النص الفارغ
+    if (!msg) {
+      return { ok: false, message: refusalMessage(), reason: "EMPTY" };
+    }
+
+    // فلترة قبلية
+    if (!isCyberSecurityQuestion(msg)) {
+      return { ok: false, message: refusalMessage(), reason: "OUT_OF_SCOPE" };
+    }
+
+    // فحص مفتاح API
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      console.error("❌ GEMINI_API_KEY is missing in .env file!");
+      return {
+        ok: false,
+        message: "خطأ في الإعدادات. تواصل مع الدعم الفني.",
+        reason: "NO_API_KEY"
+      };
+    }
+
+    // إنشاء عميل Gemini
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+      systemInstruction: SYSTEM_INSTRUCTION,
+    });
+
+    // إضافة Timeout (15 ثانية)
+    const generatePromise = model.generateContent(msg);
+    
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("TIMEOUT")), 15000)
+    );
+
+    const result = await Promise.race([generatePromise, timeoutPromise]);
+
+    // استخراج النص من الرد
+    const text = result?.response?.text?.() || "";
+
+    if (!text.trim()) {
+      console.error("❌ Gemini returned empty response");
+      return {
+        ok: false,
+        message: "المساعد ما رجّع إجابة الآن. جرّبي بعد قليل.",
+        reason: "MODEL_EMPTY",
+      };
+    }
+
+    return { ok: true, message: text.trim() };
+
+  } catch (error) {
+    console.error("❌ Gemini Service Error:", error);
+
+    if (error.message === "TIMEOUT") {
+      return {
+        ok: false,
+        message: "المساعد تأخر في الرد. جرّبي مرة ثانية.",
+        reason: "TIMEOUT",
+      };
+    }
+
+    // أخطاء API
+    if (error.message?.includes("API key")) {
+      return {
+        ok: false,
+        message: "مفتاح API غير صحيح. تواصل مع الدعم الفني.",
+        reason: "INVALID_API_KEY",
+      };
+    }
+
+    return {
+      ok: false,
+      message: "صار خطأ في المساعد الذكي. جرّبي لاحقاً.",
+      reason: "MODEL_ERROR",
+    };
+  }
+}
+
+module.exports = {
+  askGeminiCyberOnly,
+};
+
+
+
 /*// utils/geminiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
@@ -151,7 +288,7 @@ module.exports = {
   askGeminiCyberOnly,
 };*/
 
-const { GoogleGenAI } = require("@google/genai");
+/*const { GoogleGenAI } = require("@google/genai");
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
@@ -271,7 +408,7 @@ async function askGeminiCyberOnly(userText) {
       reason,
     };
   }
-}
+}*/
 
 /*async function askGeminiCyberOnly(userText) {
   if (!userText || userText.trim().length === 0) {
@@ -313,9 +450,9 @@ async function askGeminiCyberOnly(userText) {
       reason: "MODEL_ERROR",
     };
   }
-}*/
+}
 
 module.exports = {
   askGeminiCyberOnly,
-};
+};*/
 

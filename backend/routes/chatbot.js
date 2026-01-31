@@ -51,7 +51,7 @@ router.post("/ask", async (req, res) => {
 module.exports = router;
 
 
-// routes/chatbot.js
+
 /*const express = require("express");
 const router = express.Router();
 const { askGeminiCyberOnly } = require("../utils/geminiService");

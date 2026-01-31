@@ -221,56 +221,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
     }
   }
 
-  /*Future<void> _send() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    setState(() {
-      _isSending = true;
-      _messages.add(_ChatMessage(text: text, isUser: true));
-      _controller.clear();
-
-      // placeholder أثناء الإرسال
-      _messages.add(_ChatMessage(text: 'جاري الرد...', isUser: false));
-    });
-
-    _scrollToBottom();
-
-    try {
-      final reply = await _api.askChatbot(text);
-
-      setState(() {
-        if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
-          _messages.removeLast();
-        }
-
-        _messages.add(
-          _ChatMessage(
-            text: reply.trim().isEmpty
-                ? 'ما وصلتني إجابة واضحة. جربي مرة ثانية.'
-                : reply,
-            isUser: false,
-          ),
-        );
-      });
-    } catch (e) {
-      setState(() {
-        if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
-          _messages.removeLast();
-        }
-        _messages.add(
-          _ChatMessage(
-            text: 'صار خطأ في الاتصال بالسيرفر. حاولي مرة ثانية.',
-            isUser: false,
-          ),
-        );
-      });
-    } finally {
-      setState(() => _isSending = false);
-      _scrollToBottom();
-    }
-  }*/
-
   @override
   Widget build(BuildContext context) {
     return Directionality(

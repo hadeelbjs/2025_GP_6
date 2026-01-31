@@ -1,5 +1,4 @@
 // utils/geminiService.js
-// utils/geminiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
 // رسالة توجيه لطيفة إذا كان السؤال بعيد جداً عن الأمن الرقمي
@@ -53,6 +52,7 @@ async function askGeminiCyberOnly(userText) {
         reason: "NO_API_KEY",
       };
     }
+     console.log("GEMINI_API_KEY:", (process.env.GEMINI_API_KEY || "").slice(0,6));
 
     const genAI = new GoogleGenerativeAI(apiKey);
     const model = genAI.getGenerativeModel({

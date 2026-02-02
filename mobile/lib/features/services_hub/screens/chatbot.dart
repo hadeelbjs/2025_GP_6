@@ -429,13 +429,13 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
   ];
 
   Widget _quickQuestionsPanel() {
-    // اختياري: اخفيها إذا المستخدم بدأ يكتب
+    //  اخفيها إذا المستخدم بدأ يكتب
     if (_controller.text.trim().isNotEmpty) {
       return const SizedBox.shrink();
     }
 
     return SizedBox(
-      height: 52, // ارتفاع خفيف
+      height: 52,
       child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 14),
         scrollDirection: Axis.horizontal,
@@ -448,7 +448,7 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
             onTap: () {
               _controller.text = q;
               setState(() {});
-              _send(); // إذا تبين تعبئة فقط بدون إرسال احذفي هذا السطر
+              _send();
             },
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

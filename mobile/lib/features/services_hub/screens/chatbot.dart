@@ -256,11 +256,14 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
               ),
             ),
 
-            // Input
-            _assistantTextOnlyBar(),
-
             // Quick Questions
             _quickQuestionsPanel(),
+            // Input
+            _assistantTextOnlyBar(),
+            /*
+            // Quick Questions
+            _quickQuestionsPanel(),
+          */
           ],
         ),
       ),
@@ -427,54 +430,57 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
 
   Widget _quickQuestionsPanel() {
     // اختياري: اخفيها إذا المستخدم بدأ يكتب
-    final hideWhenTyping = _controller.text.trim().isNotEmpty;
-    if (hideWhenTyping) return const SizedBox.shrink();
+    if (_controller.text.trim().isNotEmpty) {
+      return const SizedBox.shrink();
+    }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 8, 14, 8),
-      child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
-        children: _quickQuestions.map((q) {
-          return InkWell(
+    return SizedBox(
+      height: 52, // ارتفاع خفيف
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        scrollDirection: Axis.horizontal,
+        itemCount: _quickQuestions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final q = _quickQuestions[index];
+
+          return GestureDetector(
             onTap: () {
-              // 1) يحط السؤال في الحقل
               _controller.text = q;
               setState(() {});
-              // 2) يرسل مباشرة (إذا تبين فقط يعبّي بدون إرسال، احذفي _send())
-              _send();
+              _send(); // إذا تبين تعبئة فقط بدون إرسال احذفي هذا السطر
             },
-            borderRadius: BorderRadius.circular(14),
             child: Container(
-              constraints: const BoxConstraints(minWidth: 140),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(14),
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: AppColors.primary.withOpacity(0.20),
+                  color: AppColors.primary.withOpacity(0.25),
                   width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.06),
-                    blurRadius: 10,
-                    offset: const Offset(0, 4),
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
                   ),
                 ],
               ),
-              child: Text(
-                q,
-                textDirection: TextDirection.rtl,
-                style: const TextStyle(
-                  fontSize: 14,
-                  height: 1.3,
-                  fontFamily: 'IBMPlexSansArabic',
+              child: Center(
+                child: Text(
+                  q,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.2,
+                    fontFamily: 'IBMPlexSansArabic',
+                  ),
                 ),
               ),
             ),
           );
-        }).toList(),
+        },
       ),
     );
   }

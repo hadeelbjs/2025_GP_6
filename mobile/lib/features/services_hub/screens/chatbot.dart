@@ -257,7 +257,9 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
             ),
 
             // Input
-            Padding(
+            _assistantTextOnlyBar(),
+
+            /* Padding(
               padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
               child: Container(
                 padding: const EdgeInsets.symmetric(
@@ -335,6 +337,155 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ),*/
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _assistantTextOnlyBar() {
+    final canSend = _controller.text.trim().isNotEmpty && !_isSending;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            // صندوق الإدخال (نفس ستايل التشات)
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                    color: AppColors.primary.withOpacity(0.2),
+                    width: 1.5,
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        enabled: !_isSending,
+                        maxLines: null,
+                        textDirection: TextDirection.rtl,
+                        textInputAction: TextInputAction.newline,
+                        style: const TextStyle(
+                          fontSize: 17,
+                          height: 1.4,
+                          fontFamily: 'IBMPlexSansArabic',
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'اكتب سؤالك هنا...',
+                          hintStyle: TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 17,
+                            fontFamily: 'IBMPlexSansArabic',
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          isDense: true,
+                        ),
+                        onSubmitted: canSend ? (_) => _send() : null,
+                        onChanged: (_) => setState(() {}),
+                      ),
+                    ),
+
+                    // (اختياري) زر إخفاء الكيبورد مثل التشات
+                    if (_controller.text.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => FocusScope.of(context).unfocus(),
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            left: 8,
+                            right: 4,
+                            bottom: 10,
+                          ),
+                          child: Icon(
+                            Icons.keyboard_hide,
+                            color: AppColors.textHint,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // زر الإرسال (نفس التشات)
+            GestureDetector(
+              onTap: canSend ? _send : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: canSend
+                      ? LinearGradient(
+                          colors: [
+                            AppColors.primary,
+                            AppColors.primary.withOpacity(0.8),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: !canSend ? Colors.grey.shade300 : null,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: canSend
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: _isSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Icon(
+                          Icons.send_rounded,
+                          color: canSend ? Colors.white : Colors.grey.shade500,
+                          size: 22,
+                        ),
                 ),
               ),
             ),

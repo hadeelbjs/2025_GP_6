@@ -1,4 +1,57 @@
 // routes/chatbot.js
+const express = require("express");
+const router = express.Router();
+const { askGeminiCyberOnly } = require("../utils/geminiService");
+
+// GET /api/chatbot/health (للتجربة السريعة)
+router.get("/health", (req, res) => {
+  res.json({ success: true, message: "chatbot route is OK" });
+});
+
+// POST /api/chatbot/ask
+router.post("/ask", async (req, res) => {
+  try {
+    const message = (req.body?.message || "").toString().trim();
+
+    // ✅ لا نرجّع خطأ للواجهة بسبب صياغة المستخدم
+    if (!message) {
+      return res.json({
+        success: true,
+        reply: "اكتبي سؤالك هنا 😊",
+        reason: "EMPTY",
+      });
+    }
+
+    const result = await askGeminiCyberOnly(message);
+
+    // ✅ أي رد (حتى لو توجيهي) نرجّعه للواجهة كـ success=true
+    if (!result.ok) {
+      return res.json({
+        success: true,
+        reply: result.message || "حصل خطأ بسيط. جرّبي مرة ثانية.",
+        reason: result.reason || "SOFT_GUIDE",
+      });
+    }
+
+    return res.json({
+      success: true,
+      reply: result.message,
+      reason: "OK",
+    });
+  } catch (e) {
+    console.error("chatbot error:", e);
+    return res.status(500).json({
+      success: false,
+      reply: "صار خطأ في المساعد الذكي. جرّبي لاحقاً.",
+      reason: "SERVER_ERROR",
+    });
+  }
+});
+
+module.exports = router;
+
+
+
 /*const express = require("express");
 const router = express.Router();
 const { askGeminiCyberOnly } = require("../utils/geminiService");
@@ -33,7 +86,7 @@ router.post("/ask", async (req, res) => {
 
 module.exports = router;*/
 
-// routes/chatbot.js
+/*// routes/chatbot.js
 const express = require("express");
 const router = express.Router();
 const { askGeminiCyberOnly } = require("../utils/geminiService");
@@ -89,5 +142,5 @@ router.post("/ask", async (req, res) => {
   }
 });
 
-module.exports = router;
+module.exports = router;*/
 

@@ -221,56 +221,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
     }
   }
 
-  /*Future<void> _send() async {
-    final text = _controller.text.trim();
-    if (text.isEmpty || _isSending) return;
-
-    setState(() {
-      _isSending = true;
-      _messages.add(_ChatMessage(text: text, isUser: true));
-      _controller.clear();
-
-      // placeholder أثناء الإرسال
-      _messages.add(_ChatMessage(text: 'جاري الرد...', isUser: false));
-    });
-
-    _scrollToBottom();
-
-    try {
-      final reply = await _api.askChatbot(text);
-
-      setState(() {
-        if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
-          _messages.removeLast();
-        }
-
-        _messages.add(
-          _ChatMessage(
-            text: reply.trim().isEmpty
-                ? 'ما وصلتني إجابة واضحة. جربي مرة ثانية.'
-                : reply,
-            isUser: false,
-          ),
-        );
-      });
-    } catch (e) {
-      setState(() {
-        if (_messages.isNotEmpty && _messages.last.text == 'جاري الرد...') {
-          _messages.removeLast();
-        }
-        _messages.add(
-          _ChatMessage(
-            text: 'صار خطأ في الاتصال بالسيرفر. حاولي مرة ثانية.',
-            isUser: false,
-          ),
-        );
-      });
-    } finally {
-      setState(() => _isSending = false);
-      _scrollToBottom();
-    }
-  }*/
-
   @override
   Widget build(BuildContext context) {
     return Directionality(
@@ -306,90 +256,231 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
               ),
             ),
 
+            // Quick Questions
+            _quickQuestionsPanel(),
             // Input
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 6, 14, 14),
+            _assistantTextOnlyBar(),
+            /*
+            // Quick Questions
+            _quickQuestionsPanel(),
+          */
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _assistantTextOnlyBar() {
+    final canSend = _controller.text.trim().isNotEmpty && !_isSending;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
+          ),
+        ],
+      ),
+      child: SafeArea(
+        top: false,
+        child: Row(
+          children: [
+            // صندوق الإدخال (نفس ستايل التشات)
+            Expanded(
               child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 8,
-                ),
                 decoration: BoxDecoration(
                   color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(
-                    color: AppColors.primary.withOpacity(0.18),
+                    color: AppColors.primary.withOpacity(0.2),
+                    width: 1.5,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.06),
-                      blurRadius: 10,
-                      offset: const Offset(0, 6),
+                      color: AppColors.primary.withOpacity(0.05),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
                       child: TextField(
                         controller: _controller,
+                        enabled: !_isSending,
+                        maxLines: null,
                         textDirection: TextDirection.rtl,
-                        onSubmitted: (_) => _send(),
+                        textInputAction: TextInputAction.newline,
                         style: const TextStyle(
+                          fontSize: 17,
+                          height: 1.4,
                           fontFamily: 'IBMPlexSansArabic',
-                          fontSize: 13,
                         ),
                         decoration: InputDecoration(
-                          isDense: true,
-                          hintText: 'اكتب سؤالك هنا',
+                          hintText: 'اكتب سؤالك هنا...',
                           hintStyle: TextStyle(
+                            color: AppColors.textHint,
+                            fontSize: 17,
                             fontFamily: 'IBMPlexSansArabic',
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
                           ),
                           border: InputBorder.none,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 14,
+                          ),
+                          isDense: true,
                         ),
+                        onSubmitted: canSend ? (_) => _send() : null,
+                        onChanged: (_) => setState(() {}),
                       ),
                     ),
-                    const SizedBox(width: 8),
 
-                    InkWell(
-                      onTap: _isSending ? null : _send,
-                      borderRadius: BorderRadius.circular(30),
-                      child: Container(
-                        height: 38,
-                        width: 52,
-                        decoration: BoxDecoration(
-                          color: _isSending
-                              ? AppColors.primary.withOpacity(0.65)
-                              : AppColors.primary,
-                          borderRadius: BorderRadius.circular(30),
+                    // (اختياري) زر إخفاء الكيبورد مثل التشات
+                    if (_controller.text.isNotEmpty)
+                      GestureDetector(
+                        onTap: () => FocusScope.of(context).unfocus(),
+                        child: Padding(
+                          padding: const EdgeInsets.only(
+                            left: 8,
+                            right: 4,
+                            bottom: 10,
+                          ),
+                          child: Icon(
+                            Icons.keyboard_hide,
+                            color: AppColors.textHint,
+                            size: 20,
+                          ),
                         ),
-                        alignment: Alignment.center,
-                        child: _isSending
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2.2,
-                                  valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.white,
-                                  ),
-                                ),
-                              )
-                            : const Icon(
-                                Icons.send_rounded,
-                                color: Colors.white,
-                                size: 18,
-                              ),
                       ),
-                    ),
                   ],
+                ),
+              ),
+            ),
+
+            const SizedBox(width: 8),
+
+            // زر الإرسال (نفس التشات)
+            GestureDetector(
+              onTap: canSend ? _send : null,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  gradient: canSend
+                      ? LinearGradient(
+                          colors: [
+                            AppColors.primary,
+                            AppColors.primary.withOpacity(0.8),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )
+                      : null,
+                  color: !canSend ? Colors.grey.shade300 : null,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: canSend
+                      ? [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(0.3),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Center(
+                  child: _isSending
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
+                        )
+                      : Icon(
+                          Icons.send_rounded,
+                          color: canSend ? Colors.white : Colors.grey.shade500,
+                          size: 22,
+                        ),
                 ),
               ),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  final List<String> _quickQuestions = const [
+    'كيف أتأكد إن الرابط آمن قبل ما أفتحه؟',
+    'وش علامات الرسائل الاحتيالية (Phishing)؟',
+    'كيف أسوي كلمة مرور قوية وآمنة؟',
+    'كيف أفعل التحقق بخطوتين (2FA)؟',
+    'إذا انسرق حسابي وش أول خطوة أسويها؟',
+    'كيف أعرف إذا جهازي مخترق أو فيه تطبيق تجسس؟',
+  ];
+
+  Widget _quickQuestionsPanel() {
+    //  اخفيها إذا المستخدم بدأ يكتب
+    if (_controller.text.trim().isNotEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return SizedBox(
+      height: 52,
+      child: ListView.separated(
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        scrollDirection: Axis.horizontal,
+        itemCount: _quickQuestions.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, index) {
+          final q = _quickQuestions[index];
+
+          return GestureDetector(
+            onTap: () {
+              _controller.text = q;
+              setState(() {});
+              _send();
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.primary.withOpacity(0.25),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 6,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: Center(
+                child: Text(
+                  q,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    height: 1.2,
+                    fontFamily: 'IBMPlexSansArabic',
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }

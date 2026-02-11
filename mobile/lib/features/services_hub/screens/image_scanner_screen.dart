@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../../core/constants/colors.dart';
+import '../services/api_contentScanning.dart';
 
 class ImageScannerScreen extends StatefulWidget {
   const ImageScannerScreen({Key? key}) : super(key: key);
@@ -17,6 +18,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   _ScanState _currentState = _ScanState.initial;
   final ImagePicker _picker = ImagePicker();
   bool _isSafe = true;
+  ApiContentService _apiService = ApiContentService();
 
   Future<void> _pickFromGallery() async {
     try {
@@ -46,18 +48,43 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
     }
   }
 
-  void _startScan() {
-    setState(() {
-      _currentState = _ScanState.scanning;
-    });
+  Future<void> _startScan() async {
+  setState(() {
+    _currentState = _ScanState.scanning;
+  });
+
+  if (_selectedImage != null) {
+    // إرسال للـ API
+    var result = await _apiService.scanImage(_selectedImage);
     
-    Future.delayed(const Duration(seconds: 3), () {
+    if (result != null) {
+      // نجح التحليل
       setState(() {
+        _isSafe = _apiService.isSafe();
         _currentState = _ScanState.result;
-        _isSafe = true; // غيري لـ false لاختبار الحالة غير الآمنة
       });
-    });
+    } else {
+      // فشل التحليل
+      setState(() {
+        _currentState = _ScanState.preview;
+      });
+      
+      // عرض رسالة خطأ
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'فشل الاتصال بالسيرفر. تأكد من أن Colab يعمل!',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          ),
+          backgroundColor: Colors.red,
+          duration: Duration(seconds: 4),
+        ),
+      );
+    }
   }
+}
+
+
 
   void _changeImage() {
     setState(() {
@@ -90,6 +117,299 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
       ),
     );
   }
+  Widget _buildResultState() {
+  // الحصول على البيانات المكتشفة
+  var detectedItems = _apiService.getDetectedItems();
+  var summary = _apiService.getSummary();
+  
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(30),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "الصورة المفحوصة:",
+          style: TextStyle(
+            fontSize: 16,
+            color: AppColors.primary,
+            fontFamily: "IBMPlexSansArabic",
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        
+        SizedBox(height: 15),
+        
+        Container(
+          width: double.infinity,
+          height: 250,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: AppColors.primary.withOpacity(0.2),
+              width: 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.08),
+                blurRadius: 15,
+                offset: Offset(0, 5),
+              ),
+            ],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.file(
+              _selectedImage!,
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
+        
+        SizedBox(height: 30),
+        
+        // نتيجة الفحص - Alert Style
+        Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: _isSafe ? Colors.green[50] : Colors.red[50],
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(
+              color: _isSafe ? Colors.green[300]! : Colors.red[300]!,
+              width: 1.5,
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: _isSafe ? Colors.green : Colors.red,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _isSafe ? Icons.check : Icons.close,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
+              SizedBox(width: 15),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _isSafe ? 'آمنة للمشاركة' : 'معلومات حساسة!',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: _isSafe ? Colors.green[800] : Colors.red[800],
+                      ),
+                    ),
+                    SizedBox(height: 5),
+                    Text(
+                      _isSafe
+                          ? 'لم يتم اكتشاف معلومات حساسة'
+                          : 'تم اكتشاف ${detectedItems.length} عنصر حساس',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 14,
+                        color: _isSafe ? Colors.green[700] : Colors.red[700],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        
+        SizedBox(height: 25),
+        
+        // الإحصائيات
+        if (!_isSafe) ...[
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(15),
+              border: Border.all(
+                color: Colors.blue[200]!,
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.analytics_outlined, color: Colors.blue[700], size: 22),
+                    SizedBox(width: 10),
+                    Text(
+                      'الإحصائيات:',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.blue[700],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 15),
+                _buildStatItem(' كلمات مستخرجة', '${summary['total_words']}'),
+                _buildStatItem(' كلمات مفتاحية', '${summary['total_keywords']}'),
+                _buildStatItem(' أسماء أشخاص', '${summary['total_names']}'),
+                _buildStatItem('باركود/QR', '${summary['total_barcodes']}'),
+                _buildStatItem('وجوه مكتشفة', '${summary['total_faces']}'),
+
+              ],
+            ),
+          ),
+          SizedBox(height: 25),
+        ],
+        
+        // البيانات المكتشفة
+        if (!_isSafe && detectedItems.isNotEmpty) ...[
+          Container(
+            width: double.infinity,
+            padding: EdgeInsets.all(25),
+            decoration: BoxDecoration(
+              color: Colors.red[50],
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: Colors.red[200]!,
+                width: 1.5,
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.info_outline, color: Colors.red[700], size: 22),
+                    SizedBox(width: 10),
+                    Text(
+                      'المعلومات المكتشفة:',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red[700],
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: 18),
+                ...detectedItems.map((item) => _buildDetectedItemDynamic(
+                  _getIconData(item['icon']),
+                  item['text'],
+                )).toList(),
+              ],
+            ),
+          ),
+          SizedBox(height: 25),
+        ],
+        
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            minimumSize: Size(double.infinity, 55),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            elevation: 3,
+          ),
+          onPressed: _changeImage,
+          icon: Icon(Icons.refresh_rounded, size: 22),
+          label: Text(
+            'فحص صورة أخرى',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: "IBMPlexSansArabic",
+              fontWeight: FontWeight.w700,
+              fontSize: 17,
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildStatItem(String label, String value) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 14,
+            color: Colors.blue[800],
+          ),
+        ),
+        Container(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.blue[100],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            value,
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[900],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Widget _buildDetectedItemDynamic(IconData icon, String text) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Row(
+      children: [
+        Icon(icon, size: 20, color: Colors.red[700]),
+        SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 15,
+              color: Colors.red[800],
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+IconData _getIconData(String iconName) {
+  Map<String, IconData> icons = {
+    'badge': Icons.badge,
+    'card_membership': Icons.card_membership,
+    'flight': Icons.flight,
+    'email': Icons.email,
+    'phone': Icons.phone,
+    'account_balance': Icons.account_balance,
+    'person': Icons.person,
+    'qr_code': Icons.qr_code,
+    'info': Icons.info,
+  };
+  return icons[iconName] ?? Icons.info;
+}
 
   String _getTitle() {
     switch (_currentState) {
@@ -438,177 +758,7 @@ Widget _buildInitialState() {
     );
   }
 
-Widget _buildResultState() {
-  return SingleChildScrollView(
-    padding: const EdgeInsets.all(30),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "الصورة المفحوصة:",
-          style: TextStyle(
-            fontSize: 16,
-            color: AppColors.primary,
-            fontFamily: "IBMPlexSansArabic",
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        
-        SizedBox(height: 15),
-        
-        Container(
-          width: double.infinity,
-          height: 250,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.primary.withOpacity(0.2),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 15,
-                offset: Offset(0, 5),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.file(
-              _selectedImage!,
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        
-        SizedBox(height: 30),
-        
-        // نتيجة الفحص - Alert Style
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: _isSafe ? Colors.green[50] : Colors.red[50],
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: _isSafe ? Colors.green[300]! : Colors.red[300]!,
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _isSafe ? Colors.green : Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _isSafe ? Icons.check : Icons.close,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-              SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isSafe ? 'آمنة للمشاركة' : 'معلومات حساسة!',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: _isSafe ? Colors.green[800] : Colors.red[800],
-                      ),
-                    ),
-                    SizedBox(height: 5),
-                    Text(
-                      _isSafe
-                          ? 'لم يتم اكتشاف معلومات حساسة'
-                          : 'يُنصح بعدم مشاركة هذه الصورة',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 14,
-                        color: _isSafe ? Colors.green[700] : Colors.red[700],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        SizedBox(height: 25),
-        
-        if (!_isSafe) ...[
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(25),
-            decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.red[200]!,
-                width: 1.5,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.red[700], size: 22),
-                    SizedBox(width: 10),
-                    Text(
-                      'المعلومات المكتشفة:',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red[700],
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 18),
-                _buildDetectedItem(Icons.credit_card, 'رقم بطاقة ائتمانية'),
-                _buildDetectedItem(Icons.account_balance, 'رقم حساب بنكي (IBAN)'),
-                _buildDetectedItem(Icons.badge, 'رقم هوية وطنية'),
-              ],
-            ),
-          ),
-          SizedBox(height: 25),
-        ],
-        
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            minimumSize: Size(double.infinity, 55),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            elevation: 3,
-          ),
-          onPressed: _changeImage,
-          icon: Icon(Icons.refresh_rounded, size: 22),
-          label: Text(
-            'فحص صورة أخرى',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: "IBMPlexSansArabic",
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
-}
+
   Widget _buildDetectedItem(IconData icon, String text) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),

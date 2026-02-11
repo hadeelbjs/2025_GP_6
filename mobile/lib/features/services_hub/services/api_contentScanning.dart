@@ -7,7 +7,7 @@ import 'package:http/http.dart' as http;
 class ApiContentService {
   static String virustotalURL = 'https://www.virustotal.com/api/v3/files'; 
   Map<String, dynamic>? lastResult;
-  final String baseUrl = "https://heterogenetic-meetly-maude.ngrok-free.dev";
+  final String baseUrl = AppConfig.virustotalApiKey;
 
   Future<ScanResult> scanURL(String url) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/urls');

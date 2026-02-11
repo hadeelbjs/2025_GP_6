@@ -18,6 +18,9 @@ class AppConfig {
   static String get virustotalApiKey {
     return dotenv.env['VIRUS_TOTAL_API_KEY'] ?? 'http://localhost:3000';
   }
+  static String get imageModelUrl {
+    return dotenv.env['IMAGE_MODEL_URL'] ?? 'http://localhost:3000';
+  }
 
   static String get hosting {
     return dotenv.env['HOSTING'] ?? 'http://localhost:3000';

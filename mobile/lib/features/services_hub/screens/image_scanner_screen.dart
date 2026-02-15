@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import 'dart:typed_data';
 import '../../../core/constants/colors.dart';
 import '../services/api_contentScanning.dart';
 
@@ -19,6 +20,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isSafe = true;
   ApiContentService _apiService = ApiContentService();
+  bool _showAnnotatedImage = false; // للتبديل بين الصورة الأصلية والمعالجة
 
   Future<void> _pickFromGallery() async {
     try {
@@ -49,47 +51,43 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   }
 
   Future<void> _startScan() async {
-  setState(() {
-    _currentState = _ScanState.scanning;
-  });
+    setState(() {
+      _currentState = _ScanState.scanning;
+    });
 
-  if (_selectedImage != null) {
-    // إرسال للـ API
-    var result = await _apiService.scanImage(_selectedImage);
-    
-    if (result != null) {
-      // نجح التحليل
-      setState(() {
-        _isSafe = _apiService.isSafe();
-        _currentState = _ScanState.result;
-      });
-    } else {
-      // فشل التحليل
-      setState(() {
-        _currentState = _ScanState.preview;
-      });
+    if (_selectedImage != null) {
+      var result = await _apiService.scanImage(_selectedImage);
       
-      // عرض رسالة خطأ
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'فشل الاتصال بالسيرفر. تأكد من أن Colab يعمل!',
-            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+      if (result != null) {
+        setState(() {
+          _isSafe = _apiService.isSafe();
+          _currentState = _ScanState.result;
+          _showAnnotatedImage = false; // ابدأ بالصورة الأصلية
+        });
+      } else {
+        setState(() {
+          _currentState = _ScanState.preview;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'فشل الاتصال بالسيرفر. تأكد من أن Colab يعمل!',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+            ),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 4),
           ),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 4),
-        ),
-      );
+        );
+      }
     }
   }
-}
-
-
 
   void _changeImage() {
     setState(() {
       _selectedImage = null;
       _currentState = _ScanState.initial;
+      _showAnnotatedImage = false;
     });
   }
 
@@ -117,299 +115,376 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
       ),
     );
   }
+
   Widget _buildResultState() {
-  // الحصول على البيانات المكتشفة
-  var detectedItems = _apiService.getDetectedItems();
-  var summary = _apiService.getSummary();
-  
-  return SingleChildScrollView(
-    padding: const EdgeInsets.all(30),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "الصورة المفحوصة:",
-          style: TextStyle(
-            fontSize: 16,
-            color: AppColors.primary,
-            fontFamily: "IBMPlexSansArabic",
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-        
-        SizedBox(height: 15),
-        
-        Container(
-          width: double.infinity,
-          height: 250,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: AppColors.primary.withOpacity(0.2),
-              width: 2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 15,
-                offset: Offset(0, 5),
+    var detectedItems = _apiService.getDetectedItems();
+    var summary = _apiService.getSummary();
+    var annotatedImage = _apiService.getAnnotatedImage();
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(30),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Toggle للتبديل بين الصورة الأصلية والمعالجة
+          if (!_isSafe && annotatedImage != null) ...[
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
               ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.file(
-              _selectedImage!,
-              fit: BoxFit.cover,
-            ),
-          ),
-        ),
-        
-        SizedBox(height: 30),
-        
-        // نتيجة الفحص - Alert Style
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: _isSafe ? Colors.green[50] : Colors.red[50],
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(
-              color: _isSafe ? Colors.green[300]! : Colors.red[300]!,
-              width: 1.5,
-            ),
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _isSafe ? Colors.green : Colors.red,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(
-                  _isSafe ? Icons.check : Icons.close,
-                  color: Colors.white,
-                  size: 28,
-                ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    _showAnnotatedImage ?  'الصورة مع تحديد العناصر الحساسة' : 'الصورة مع تحديد العناصر الحساسة',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  Switch(
+                    value: _showAnnotatedImage,
+                    activeColor: AppColors.primary,
+                    onChanged: (value) {
+                      setState(() {
+                        _showAnnotatedImage = value;
+                      });
+                    },
+                  ),
+                ],
               ),
-              SizedBox(width: 15),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _isSafe ? 'آمنة للمشاركة' : 'معلومات حساسة!',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: _isSafe ? Colors.green[800] : Colors.red[800],
+            ),
+            SizedBox(height: 15),
+          ],
+          
+          Text(
+            _showAnnotatedImage ? "الصورة مع تحديد العناصر الحساسة:" : "الصورة المفحوصة:",
+            style: TextStyle(
+              fontSize: 16,
+              color: AppColors.primary,
+              fontFamily: "IBMPlexSansArabic",
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          
+          SizedBox(height: 15),
+          
+          // عرض الصورة (إما الأصلية أو المعالجة)
+          Container(
+            width: double.infinity,
+            height: 300,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: _showAnnotatedImage 
+                    ? Colors.red.withOpacity(0.3)
+                    : AppColors.primary.withOpacity(0.2),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 15,
+                  offset: Offset(0, 5),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: _showAnnotatedImage && annotatedImage != null
+                  ? InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.memory(
+                        annotatedImage,
+                        fit: BoxFit.contain,
+                      ),
+                    )
+                  : InteractiveViewer(
+                      minScale: 0.5,
+                      maxScale: 4.0,
+                      child: Image.file(
+                        _selectedImage!,
+                        fit: BoxFit.contain,
                       ),
                     ),
-                    SizedBox(height: 5),
-                    Text(
-                      _isSafe
-                          ? 'لم يتم اكتشاف معلومات حساسة'
-                          : 'تم اكتشاف ${detectedItems.length} عنصر حساس',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 14,
-                        color: _isSafe ? Colors.green[700] : Colors.red[700],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-        
-        SizedBox(height: 25),
-        
-        // الإحصائيات
-        if (!_isSafe) ...[
+          
+          // مؤشر لتوضيح ألوان البوكسات
+                 
+          SizedBox(height: 30),
+          
+          // نتيجة الفحص
           Container(
             width: double.infinity,
             padding: EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.blue[50],
+              color: _isSafe ? Colors.green[50] : Colors.red[50],
               borderRadius: BorderRadius.circular(15),
               border: Border.all(
-                color: Colors.blue[200]!,
+                color: _isSafe ? Colors.green[300]! : Colors.red[300]!,
                 width: 1.5,
               ),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Icon(Icons.analytics_outlined, color: Colors.blue[700], size: 22),
-                    SizedBox(width: 10),
-                    Text(
-                      'الإحصائيات:',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.blue[700],
-                      ),
-                    ),
-                  ],
+                Container(
+                  padding: EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: _isSafe ? Colors.green : Colors.red,
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    _isSafe ? Icons.check : Icons.close,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 ),
-                SizedBox(height: 15),
-                _buildStatItem(' كلمات مستخرجة', '${summary['total_words']}'),
-                _buildStatItem(' كلمات مفتاحية', '${summary['total_keywords']}'),
-                _buildStatItem(' أسماء أشخاص', '${summary['total_names']}'),
-                _buildStatItem('باركود/QR', '${summary['total_barcodes']}'),
-                _buildStatItem('وجوه مكتشفة', '${summary['total_faces']}'),
+                SizedBox(width: 15),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _isSafe ? 'آمنة للمشاركة' : 'معلومات حساسة!',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: _isSafe ? Colors.green[800] : Colors.red[800],
+                        ),
+                      ),
+                      SizedBox(height: 5),
+                      Text(
+                        _isSafe
+                            ? 'لم يتم اكتشاف معلومات حساسة'
+                            : 'تم اكتشاف ${detectedItems.length} عنصر حساس',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 14,
+                          color: _isSafe ? Colors.green[700] : Colors.red[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          SizedBox(height: 25),
+          
+          // الإحصائيات
+          if (!_isSafe) ...[
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.blue[50],
+                borderRadius: BorderRadius.circular(15),
+                border: Border.all(
+                  color: Colors.blue[200]!,
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.analytics_outlined, color: Colors.blue[700], size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'الإحصائيات:',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 15),
+                  _buildStatItem('كلمات مستخرجة', '${summary['total_words']}'),
+                  _buildStatItem('أسماء أشخاص', '${summary['total_names']}'),
+                  _buildStatItem(' باركود/QR', '${summary['total_barcodes']}'),
+                  _buildStatItem('وجوه مكتشفة', '${summary['total_faces']}'),
+                ],
+              ),
+            ),
+            SizedBox(height: 25),
+          ],
+          
+          // البيانات المكتشفة
+          if (!_isSafe && detectedItems.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.all(25),
+              decoration: BoxDecoration(
+                color: Colors.red[50],
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.red[200]!,
+                  width: 1.5,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.info_outline, color: Colors.red[700], size: 22),
+                      SizedBox(width: 10),
+                      Text(
+                        'المعلومات المكتشفة:',
+                        style: TextStyle(
+                          fontFamily: 'IBMPlexSansArabic',
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.red[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  SizedBox(height: 18),
+                  ...detectedItems.map((item) => _buildDetectedItemDynamic(
+                    _getIconData(item['icon']),
+                    item['text'],
+                  )).toList(),
+                ],
+              ),
+            ),
+            SizedBox(height: 25),
+          ],
+          
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              minimumSize: Size(double.infinity, 55),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+              elevation: 3,
+            ),
+            onPressed: _changeImage,
+            icon: Icon(Icons.refresh_rounded, size: 22),
+            label: Text(
+              'فحص صورة أخرى',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: "IBMPlexSansArabic",
+                fontWeight: FontWeight.w700,
+                fontSize: 17,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-              ],
-            ),
-          ),
-          SizedBox(height: 25),
-        ],
-        
-        // البيانات المكتشفة
-        if (!_isSafe && detectedItems.isNotEmpty) ...[
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.all(25),
-            decoration: BoxDecoration(
-              color: Colors.red[50],
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: Colors.red[200]!,
-                width: 1.5,
-              ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.info_outline, color: Colors.red[700], size: 22),
-                    SizedBox(width: 10),
-                    Text(
-                      'المعلومات المكتشفة:',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.red[700],
-                      ),
-                    ),
-                  ],
-                ),
-                SizedBox(height: 18),
-                ...detectedItems.map((item) => _buildDetectedItemDynamic(
-                  _getIconData(item['icon']),
-                  item['text'],
-                )).toList(),
-              ],
-            ),
-          ),
-          SizedBox(height: 25),
-        ],
-        
-        ElevatedButton.icon(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            minimumSize: Size(double.infinity, 55),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(15),
-            ),
-            elevation: 3,
-          ),
-          onPressed: _changeImage,
-          icon: Icon(Icons.refresh_rounded, size: 22),
-          label: Text(
-            'فحص صورة أخرى',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: "IBMPlexSansArabic",
-              fontWeight: FontWeight.w700,
-              fontSize: 17,
-            ),
+  Widget _buildColorLegend(Color color, String label) {
+    return Row(
+      children: [
+        Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
           ),
         ),
-      ],
-    ),
-  );
-}
-
-Widget _buildStatItem(String label, String value) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 10),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
+        SizedBox(width: 6),
         Text(
           label,
           style: TextStyle(
             fontFamily: 'IBMPlexSansArabic',
-            fontSize: 14,
-            color: Colors.blue[800],
+            fontSize: 12,
+            color: Colors.grey[700],
           ),
         ),
-        Container(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.blue[100],
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            value,
+      ],
+    );
+  }
+
+  Widget _buildStatItem(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
             style: TextStyle(
               fontFamily: 'IBMPlexSansArabic',
               fontSize: 14,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue[900],
+              color: Colors.blue[800],
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
-
-Widget _buildDetectedItemDynamic(IconData icon, String text) {
-  return Padding(
-    padding: const EdgeInsets.only(bottom: 12),
-    child: Row(
-      children: [
-        Icon(icon, size: 20, color: Colors.red[700]),
-        SizedBox(width: 12),
-        Expanded(
-          child: Text(
-            text,
-            style: TextStyle(
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 15,
-              color: Colors.red[800],
+          Container(
+            padding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue[100],
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              value,
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue[900],
+              ),
             ),
           ),
-        ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+  }
 
-IconData _getIconData(String iconName) {
-  Map<String, IconData> icons = {
-    'badge': Icons.badge,
-    'card_membership': Icons.card_membership,
-    'flight': Icons.flight,
-    'email': Icons.email,
-    'phone': Icons.phone,
-    'account_balance': Icons.account_balance,
-    'person': Icons.person,
-    'qr_code': Icons.qr_code,
-    'info': Icons.info,
-  };
-  return icons[iconName] ?? Icons.info;
-}
+  Widget _buildDetectedItemDynamic(IconData icon, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.red[700]),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 15,
+                color: Colors.red[800],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  IconData _getIconData(String iconName) {
+    Map<String, IconData> icons = {
+      'badge': Icons.badge,
+      'card_membership': Icons.card_membership,
+      'flight': Icons.flight,
+      'email': Icons.email,
+      'phone': Icons.phone,
+      'account_balance': Icons.account_balance,
+      'person': Icons.person,
+      'qr_code': Icons.qr_code,
+      'face': Icons.face,
+      'info': Icons.info,
+    };
+    return icons[iconName] ?? Icons.info;
+  }
 
   String _getTitle() {
     switch (_currentState) {
@@ -437,7 +512,7 @@ IconData _getIconData(String iconName) {
     }
   }
 
-Widget _buildInitialState() {
+  Widget _buildInitialState() {
     return Column(
       children: [
         Expanded(
@@ -500,7 +575,6 @@ Widget _buildInitialState() {
 
                 const SizedBox(height: 35),
 
-                // زر المعرض (Primary)
                 InkWell(
                   onTap: _pickFromGallery,
                   borderRadius: BorderRadius.circular(15),
@@ -539,7 +613,6 @@ Widget _buildInitialState() {
 
                 const SizedBox(height: 15),
 
-                // الخط الفاصل
                 Row(
                   children: [
                     Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
@@ -751,27 +824,6 @@ Widget _buildInitialState() {
               fontFamily: 'IBMPlexSansArabic',
               fontSize: 15,
               color: Colors.grey[600],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-
-  Widget _buildDetectedItem(IconData icon, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.red[700]),
-          SizedBox(width: 12),
-          Text(
-            text,
-            style: TextStyle(
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 15,
-              color: Colors.red[800],
             ),
           ),
         ],

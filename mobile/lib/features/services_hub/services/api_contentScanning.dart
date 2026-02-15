@@ -3,11 +3,14 @@ import 'package:http/http.dart';
 import 'package:waseed/config/appConfig.dart';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:http/http.dart' as http;
+
 class ApiContentService {
   static String virustotalURL = 'https://www.virustotal.com/api/v3/files'; 
   Map<String, dynamic>? lastResult;
-  final String baseUrl = AppConfig.virustotalApiKey;
+  Uint8List? annotatedImageBytes; // الصورة مع البوكسات
+  final String baseUrl = AppConfig.imageModelUrl;
 
   Future<ScanResult> scanURL(String url) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/urls');
@@ -18,10 +21,7 @@ class ApiContentService {
     
     final body = 'url=$url';
 
-
-
     try {
-      // خطوة 1: إرسال URL للفحص
       final response = await post(uri, headers: headers, body: body);
       
       if (response.statusCode != 200) {
@@ -31,10 +31,8 @@ class ApiContentService {
       final jsonResponse = json.decode(response.body);
       final analysisId = jsonResponse['data']['id'];
       
-      // خطوة 2: الانتظار قليلاً ثم جلب النتائج
       await Future.delayed(Duration(seconds: 3));
       
-      // خطوة 3: جلب نتيجة التحليل
       final analysisUri = Uri.parse('https://www.virustotal.com/api/v3/analyses/$analysisId');
       final analysisResponse = await get(analysisUri, headers: {
         'x-apikey': AppConfig.virustotalApiKey,
@@ -65,7 +63,6 @@ class ApiContentService {
         final jsonResponse = json.decode(response.body);
         return ScanResult.fromJson(jsonResponse);
       } else if (response.statusCode == 404) {
-        // الملف غير موجود في قاعدة بيانات VirusTotal
         return ScanResult(
           isSafe: true,
           maliciousCount: 0,
@@ -90,13 +87,11 @@ class ApiContentService {
     try {
       print('📤 إرسال الصورة للتحليل...');
       
-      // إنشاء الطلب
       var request = http.MultipartRequest(
         'POST',
         Uri.parse('$baseUrl/analyze'),
       );
 
-      // إضافة الصورة
       request.files.add(
         await http.MultipartFile.fromPath(
           'file',
@@ -104,14 +99,12 @@ class ApiContentService {
         ),
       );
 
-      // إرسال الطلب
       var streamedResponse = await request.send();
       var response = await http.Response.fromStream(streamedResponse);
 
       print('📥 رمز الاستجابة: ${response.statusCode}');
 
       if (response.statusCode == 200) {
-        // فك تشفير النتيجة
         var jsonData = json.decode(response.body);
         
         print('✅ نجح التحليل!');
@@ -119,6 +112,16 @@ class ApiContentService {
         
         // حفظ النتيجة
         lastResult = jsonData;
+        
+        // استخراج الصورة المعالجة من base64
+        if (jsonData['annotated_image_base64'] != null) {
+          try {
+            annotatedImageBytes = base64Decode(jsonData['annotated_image_base64']);
+            print('✅ تم استلام الصورة مع البوكسات');
+          } catch (e) {
+            print('⚠️ فشل فك تشفير الصورة: $e');
+          }
+        }
         
         return jsonData;
       } else {
@@ -132,79 +135,203 @@ class ApiContentService {
     }
   }
   
-  // دالة للتحقق إذا الصورة آمنة
+  // الحصول على الصورة مع البوكسات
+  Uint8List? getAnnotatedImage() {
+    return annotatedImageBytes;
+  }
+  
+  // التحقق إذا الصورة آمنة
+    // التحقق إذا الصورة آمنة
   bool isSafe() {
     if (lastResult == null) return true;
     
     var summary = lastResult!['summary'];
     
-    // إذا فيه أي بيانات حساسة
-    bool hasKeywords = (summary['total_keywords'] ?? 0) > 0;
-    bool hasNames = (summary['total_names'] ?? 0) > 0;
-    bool hasBarcodes = (summary['total_barcodes'] ?? 0) > 0;
-    
-   bool hasFaces = (lastResult!['summary']['total_faces'] ?? 0) > 0;
-
+    // الأشياء الحساسة فعلاً:
+    bool hasKeywords = (summary['total_keywords'] ?? 0) > 0;      // كلمات مفتاحية
+    bool hasNames = (summary['total_names'] ?? 0) > 0;            // أسماء أشخاص
+    bool hasBarcodes = (summary['total_barcodes'] ?? 0) > 0;      // باركود/QR
+    bool hasFaces = (summary['total_faces'] ?? 0) > 0;            // وجوه
+ 
     return !(hasKeywords || hasNames || hasBarcodes || hasFaces);
-
   }
   
+  // الحصول على قائمة البيانات المكتشفة
   // الحصول على قائمة البيانات المكتشفة
   List<Map<String, dynamic>> getDetectedItems() {
     if (lastResult == null) return [];
     
     List<Map<String, dynamic>> items = [];
     
-    // الكلمات المفتاحية
-    if (lastResult!['keywords'] != null) {
+    // تجميع الكلمات المفتاحية حسب النوع
+    if (lastResult!['keywords'] != null && lastResult!['keywords'].length > 0) {
+      Map<String, List<String>> keywordsByType = {};
+      
       for (var kw in lastResult!['keywords']) {
-        items.add({
-          'icon': _getIconForType(kw['type']),
-          'text': '${_getTypeLabel(kw['type'])}: ${kw['text']}',
-          'type': kw['type'],
-        });
+        String type = kw['type'];
+        if (!keywordsByType.containsKey(type)) {
+          keywordsByType[type] = [];
+        }
+        keywordsByType[type]!.add(kw['text']);
       }
+      
+      // عرض كل نوع مع عدده
+      keywordsByType.forEach((type, texts) {
+        items.add({
+          'icon': _getIconForType(type),
+          'text': texts.length == 1
+              ? '${_getTypeLabel(type)}: ${texts[0]}'
+              : '${_getTypeLabel(type)} (${texts.length})',
+          'type': type,
+          'count': texts.length,
+        });
+      });
     }
     
-    // الأسماء
-    if (lastResult!['names'] != null) {
-      for (var name in lastResult!['names']) {
+    // تجميع الأسماء
+    if (lastResult!['names'] != null && lastResult!['names'].length > 0) {
+      int nameCount = lastResult!['names'].length;
+      
+      if (nameCount == 1) {
+        // عرض الاسم إذا كان واحد فقط
         items.add({
           'icon': 'person',
-          'text': 'اسم شخص: ${name['text']}',
+          'text': 'اسم شخص: ${lastResult!['names'][0]['text']}',
           'type': 'NAME',
+          'count': 1,
+        });
+      } else {
+        // عرض العدد إذا كان أكثر من واحد
+        items.add({
+          'icon': 'person',
+          'text': '$nameCount أسماء أشخاص مكتشفة',
+          'type': 'NAME',
+          'count': nameCount,
         });
       }
     }
     
-    // الباركود
+    // تجميع الباركود
     if (lastResult!['barcodes'] != null) {
-      for (var bc in lastResult!['barcodes']) {
-        if (bc['analysis']['sensitive'] == true) {
-          items.add({
-            'icon': 'qr_code',
-            'text': 'باركود: ${bc['analysis']['data_type']}',
-            'type': 'BARCODE',
-          });
-        }
-      }
-    }
-
-    // الوجوه
-    if (lastResult!['yolo_faces'] != null) {
-      for (var face in lastResult!['yolo_faces']) {
+      List<dynamic> sensitiveBarcodes = lastResult!['barcodes']
+          .where((bc) => bc['analysis']['sensitive'] == true)
+          .toList();
+      
+      if (sensitiveBarcodes.isNotEmpty) {
+        int barcodeCount = sensitiveBarcodes.length;
         items.add({
-          'icon': 'face',
-          'text': 'وجه بشري مكتشف',
-          'type': 'FACE',
+          'icon': 'qr_code',
+          'text': barcodeCount == 1
+              ? 'باركود/QR مكتشف'
+              : '$barcodeCount باركود/QR مكتشفة',
+          'type': 'BARCODE',
+          'count': barcodeCount,
         });
       }
     }
 
+    // تجميع الوجوه
+    if (lastResult!['yolo_faces'] != null && lastResult!['yolo_faces'].length > 0) {
+      int faceCount = lastResult!['yolo_faces'].length;
+      items.add({
+        'icon': 'face',
+        'text': faceCount == 1 
+            ? 'وجه بشري مكتشف' 
+            : '$faceCount وجوه بشرية مكتشفة',
+        'type': 'FACE',
+        'count': faceCount,
+      });
+    }
+    
+    // تجميع الوثائق (فقط الحساسة منها)
+    if (lastResult!['yolo_objects'] != null && lastResult!['yolo_objects'].length > 0) {
+      Map<String, int> docsByType = {};
+      
+      // قائمة الوثائق الحساسة (نستبعد text_region العادية)
+      List<String> sensitiveDocTypes = [
+        'id_card', 'national_id', 'passport', 'driver_license',
+        'residence_permit', 'iqama', 'birth_certificate', 
+        'health_card', 'insurance_card', 'credit_card', 'bank_card'
+      ];
+      
+      for (var doc in lastResult!['yolo_objects']) {
+        String docClass = doc['class'] ?? 'document';
+        String normalized = docClass.toLowerCase().replaceAll(' ', '_');
+        
+        // نعرض الوثيقة فقط إذا كانت من الأنواع الحساسة
+        if (sensitiveDocTypes.contains(normalized)) {
+          String arabicName = _translateDocumentClass(docClass);
+          docsByType[arabicName] = (docsByType[arabicName] ?? 0) + 1;
+        }
+      }
+      
+      // عرض الوثائق الحساسة فقط
+      docsByType.forEach((docClass, count) {
+        items.add({
+          'icon': 'badge',
+          'text': count == 1
+              ? docClass
+              : '$docClass ($count)',
+          'type': 'DOCUMENT',
+          'count': count,
+        });
+      });
+    }
     
     return items;
   }
   
+  
+  // الحصول على إحداثيات البوكسات
+  Map<String, List<Map<String, dynamic>>> getBoxes() {
+    if (lastResult == null) {
+      return {
+        'faces': [],
+        'documents': [],
+        'barcodes': [],
+      };
+    }
+
+    return {
+      'faces': List<Map<String, dynamic>>.from(lastResult!['yolo_faces'] ?? []),
+      'documents': List<Map<String, dynamic>>.from(lastResult!['yolo_objects'] ?? []),
+      'barcodes': List<Map<String, dynamic>>.from(lastResult!['barcodes'] ?? []),
+    };
+  }
+  // ترجمة أسماء الوثائق من الإنجليزي للعربي
+  String _translateDocumentClass(String docClass) {
+    Map<String, String> translations = {
+      // YOLO model classes
+      'text_region': 'منطقة نصية',
+      'id_card': 'بطاقة هوية',
+      'national_id': 'هوية وطنية',
+      'passport': 'جواز سفر',
+      'driver_license': 'رخصة قيادة',
+      'residence_permit': 'إقامة',
+      'iqama': 'إقامة',
+      'birth_certificate': 'شهادة ميلاد',
+      'health_card': 'بطاقة صحية',
+      'insurance_card': 'بطاقة تأمين',
+      'credit_card': 'بطاقة ائتمانية',
+      'bank_card': 'بطاقة بنكية',
+      'document': 'وثيقة',
+      'paper': 'ورقة',
+      'form': 'نموذج',
+      'certificate': 'شهادة',
+      'license': 'رخصة',
+      'card': 'بطاقة',
+      
+      // حالات خاصة
+      'face': 'وجه',
+      'person': 'شخص',
+      'barcode': 'باركود',
+      'qr_code': 'رمز QR',
+    };
+    
+    // البحث عن الترجمة
+    String normalized = docClass.toLowerCase().replaceAll(' ', '_');
+    return translations[normalized] ?? docClass;
+  }
   String _getIconForType(String type) {
     Map<String, String> icons = {
       'NATIONAL_ID_LABEL': 'badge',
@@ -252,7 +379,6 @@ class ApiContentService {
       'total_faces': lastResult!['summary']['total_faces'] ?? 0,
     };
   }
-
 }
 
 class ImageScanResult {
@@ -261,7 +387,7 @@ class ImageScanResult {
       required this.isClean
     });
 }
-// كلاس لتخزين نتيجة الفحص
+
 class ScanResult {
   final bool isSafe;
   final int maliciousCount;

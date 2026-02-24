@@ -9,6 +9,9 @@ import 'socket_service.dart';
 import 'package:path/path.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:waseed/config/appConfig.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
+import 'local_db/database_helper.dart';
 
 class ApiService {
   // ============================
@@ -430,6 +433,99 @@ class ApiService {
     // قطع اتصال الـ Socket عند تسجيل الخروج
     final socketService = SocketService();
     socketService.disconnectOnLogout();
+  }
+
+  // ===== وضع الطوارئ =====
+
+  /// إبلاغ السيرفر بتفعيل وضع الطوارئ (timeout 3 ثواني)
+  Future<bool> activateEmergencyModeOnServer() async {
+    try {
+      final token = await _storage.read(key: 'access_token');
+      if (token == null) return false;
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/emergency-mode'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+      ).timeout(const Duration(seconds: 3));
+
+      final data = jsonDecode(response.body);
+      return data['success'] == true;
+    } catch (e) {
+      // Timeout أو ما فيه نت - نكمل المسح المحلي
+      return false;
+    }
+  }
+
+  /// مسح جميع البيانات المحلية فوراً (وضع الطوارئ)
+  Future<void> emergencyWipeAllLocalData() async {
+    print('🚨 [EMERGENCY] === بداية مسح الطوارئ ===');
+
+    // 1. قطع اتصال الـ Socket فوراً
+    print('🚨 [EMERGENCY] 1/5 قطع اتصال Socket...');
+    final socketService = SocketService();
+    socketService.disconnectOnLogout();
+    print('✅ [EMERGENCY] 1/5 تم قطع Socket');
+
+    // 2. مسح كل الـ SecureStorage (tokens + مفاتيح تشفير + بصمة)
+    print('🚨 [EMERGENCY] 2/5 مسح SecureStorage...');
+    try {
+      await _storage.deleteAll();
+      print('✅ [EMERGENCY] 2/5 تم deleteAll بنجاح');
+    } catch (e) {
+      print('⚠️ [EMERGENCY] 2/5 فشل deleteAll: $e - جاري الحذف يدوياً...');
+      await _storage.delete(key: 'access_token');
+      await _storage.delete(key: 'refresh_token');
+      await _storage.delete(key: 'user_data');
+      await _storage.delete(key: 'refresh_data');
+      await _storage.delete(key: 'biometric_enabled');
+      await _storage.delete(key: 'biometric_user_email');
+      print('✅ [EMERGENCY] 2/5 تم الحذف اليدوي');
+    }
+    // تحقق: هل فعلاً انمسح؟
+    final tokenCheck = await _storage.read(key: 'access_token');
+    final bioCheck = await _storage.read(key: 'biometric_enabled');
+    print('🔍 [EMERGENCY] تحقق SecureStorage: token=${tokenCheck == null ? "ممسوح ✅" : "موجود ❌"}, biometric=${bioCheck == null ? "ممسوح ✅" : "موجود ❌"}');
+
+    // 3. مسح كل SharedPreferences
+    print('🚨 [EMERGENCY] 3/5 مسح SharedPreferences...');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final keysBefore = prefs.getKeys().length;
+      await prefs.clear();
+      final keysAfter = prefs.getKeys().length;
+      print('✅ [EMERGENCY] 3/5 SharedPreferences: كان $keysBefore مفتاح → الآن $keysAfter');
+    } catch (e) {
+      print('❌ [EMERGENCY] 3/5 فشل مسح SharedPreferences: $e');
+    }
+
+    // 4. مسح كل SQLite (رسائل + محادثات + مدد)
+    print('🚨 [EMERGENCY] 4/5 مسح SQLite...');
+    try {
+      final db = DatabaseHelper.instance;
+      await db.clearAllData();
+      print('✅ [EMERGENCY] 4/5 تم مسح SQLite (messages + conversations + durations)');
+    } catch (e) {
+      print('❌ [EMERGENCY] 4/5 فشل مسح SQLite: $e');
+    }
+
+    // 5. مسح ملفات مؤقتة
+    print('🚨 [EMERGENCY] 5/5 مسح ملفات مؤقتة...');
+    try {
+      final tempDir = await getTemporaryDirectory();
+      if (tempDir.existsSync()) {
+        tempDir.deleteSync(recursive: true);
+        print('✅ [EMERGENCY] 5/5 تم مسح مجلد temp');
+      } else {
+        print('✅ [EMERGENCY] 5/5 مجلد temp غير موجود أصلاً');
+      }
+    } catch (e) {
+      print('❌ [EMERGENCY] 5/5 فشل مسح temp: $e');
+    }
+
+    print('🚨 [EMERGENCY] === انتهى مسح الطوارئ ===');
   }
 
   // ================================

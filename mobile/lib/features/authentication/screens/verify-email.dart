@@ -126,10 +126,18 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
           // حفظ وقت تسجيل الدخول
           final prefs = await SharedPreferences.getInstance();
           await prefs.setString('last_login_time', DateTime.now().toIso8601String());
-          
+
+          // التحقق من وضع الطوارئ
+          final emergencyModeActivated = result['emergencyModeActivated'] == true;
+
           await Future.delayed(const Duration(milliseconds: 500));
           if (!mounted) return;
-          
+
+          if (emergencyModeActivated) {
+            await _showEmergencyModePasswordPrompt();
+            if (!mounted) return;
+          }
+
           Navigator.pushAndRemoveUntil(
             context,
             MaterialPageRoute(builder: (_) => const MainDashboard()),
@@ -153,6 +161,54 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       if (!mounted) return;
       _showMessage('حدث خطأ في الاتصال. يرجى المحاولة مرة أخرى', isError: true);
     }
+  }
+
+  // عرض رسالة وضع الطوارئ
+  Future<void> _showEmergencyModePasswordPrompt() async {
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Icon(Icons.shield_outlined, color: Colors.deepOrange, size: 28),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'تنبيه أمني',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'تم تفعيل وضع الطوارئ سابقاً.\nننصحك بتغيير كلمة المرور من إدارة الحساب لحماية حسابك.',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 15),
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              child: const Text(
+                'حسناً',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 15),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)

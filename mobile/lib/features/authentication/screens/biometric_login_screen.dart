@@ -47,7 +47,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
       // حفظ وقت تسجيل الدخول
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString('last_login_time', DateTime.now().toIso8601String());
-      
+
       Navigator.of(context).pushReplacementNamed('/dashboard');
     } else {
       _showMessage(result['message'] ?? 'فشل تسجيل الدخول', false);
@@ -82,6 +82,7 @@ class _BiometricLoginScreenState extends State<BiometricLoginScreen> {
       ),
     );
   }
+
 
   void _showMessage(String msg, bool isSuccess) {
     ScaffoldMessenger.of(context).showSnackBar(

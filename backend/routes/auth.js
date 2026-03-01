@@ -800,6 +800,13 @@ router.post('/verify-2fa', async (req, res) => {
 
     user.twoFACode = undefined;
     user.twoFAExpires = undefined;
+
+    // التحقق من وضع الطوارئ
+    const emergencyModeActivated = user.emergencyModeActivated || false;
+    if (emergencyModeActivated) {
+      user.emergencyModeActivated = false;
+    }
+
     await user.save();
 
     const accessToken = jwt.sign(
@@ -819,6 +826,7 @@ router.post('/verify-2fa', async (req, res) => {
       message: 'تم تسجيل الدخول بنجاح',
       accessToken,
       refreshToken,
+      emergencyModeActivated,
       user: {
         id: user.id,
         fullName: user.fullName,
@@ -1296,6 +1304,25 @@ router.post('/resend-2fa', async (req, res) => {
   }
 });
 
+// ===== وضع الطوارئ =====
+router.post('/emergency-mode', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
 
+    user.emergencyModeActivated = true;
+    user.emergencyModeAt = new Date();
+    user.identityPublicKey = undefined;
+    user.signedPreKey = undefined;
+    await user.save();
+
+    res.json({ success: true, message: 'تم تفعيل وضع الطوارئ' });
+  } catch (err) {
+    console.error('Emergency Mode Error:', err);
+    res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
+  }
+});
 
 module.exports = router;

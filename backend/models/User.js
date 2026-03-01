@@ -43,9 +43,10 @@ const UserSchema = new mongoose.Schema({
   newEmailVerificationCode: String,
   newEmailVerificationExpires: Date,
   pendingEmail: String,
-    
-  
-  
+
+  // وضع الطوارئ
+  emergencyModeActivated: { type: Boolean, default: false },
+  emergencyModeAt: { type: Date },
 });
 
 // دالة للتحقق من قوة الباسورد

@@ -616,6 +616,7 @@ class DatabaseHelper {
     final db = await database;
     await db.delete('messages');
     await db.delete('conversations');
+    await db.delete('user_conversation_duration');
   }
 
   Future<void> close() async {

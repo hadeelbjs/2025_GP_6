@@ -169,9 +169,9 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                             const SizedBox(height: 20),
 
                             _buildLogoutButton(context),
+                            const SizedBox(height: 12),
+                            _buildEmergencyModeButton(context),
                             const SizedBox(height: 20),
-
-                        
                           ],
                         ),
                       ),
@@ -1522,6 +1522,130 @@ void _showBiometricVerificationDialog() {
     _showMessage('تم تسجيل الخروج بنجاح', true);
 
     await Future.delayed(const Duration(milliseconds: 500));
+
+    if (!mounted) return;
+
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+  }
+
+  // ============================================
+  // وضع الطوارئ
+  // ============================================
+
+  Widget _buildEmergencyModeButton(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: ElevatedButton.icon(
+        onPressed: () => _showEmergencyModeDialog(context),
+        icon: const Icon(Icons.shield_outlined, size: 20),
+        label: const Text(
+          'وضع الطوارئ',
+          style: TextStyle(
+            fontSize: 16,
+            fontFamily: 'IBMPlexSansArabic',
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.deepOrange,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          elevation: 2,
+        ),
+      ),
+    );
+  }
+
+  void _showEmergencyModeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            title: Row(
+              children: [
+                Icon(
+                  Icons.warning_amber_rounded,
+                  color: Colors.deepOrange,
+                  size: 28,
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'وضع الطوارئ',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            content: const Text(
+              'هل أنت متأكد؟ سيتم مسح جميع البيانات المحلية فوراً ولا يمكن التراجع.',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 15),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(
+                  'إلغاء',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    color: AppColors.textHint,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  _handleEmergencyMode();
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepOrange,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text(
+                  'تأكيد',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _handleEmergencyMode() async {
+    print('🚨 [EMERGENCY-UI] المستخدم ضغط تأكيد وضع الطوارئ');
+
+    // إبلاغ السيرفر (بدون انتظار - timeout 3 ثواني داخلياً)
+    print('🚨 [EMERGENCY-UI] إرسال طلب للسيرفر...');
+    _apiService.activateEmergencyModeOnServer().then((success) {
+      print('🚨 [EMERGENCY-UI] استجابة السيرفر: ${success ? "نجح ✅" : "فشل أو timeout ⚠️"}');
+    });
+
+    // مسح جميع البيانات المحلية فوراً
+    print('🚨 [EMERGENCY-UI] بدء المسح المحلي...');
+    await _apiService.emergencyWipeAllLocalData();
+    print('🚨 [EMERGENCY-UI] انتهى المسح → الانتقال لشاشة Login');
 
     if (!mounted) return;
 

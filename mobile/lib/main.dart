@@ -207,8 +207,10 @@ class _SplashScreenState extends State<SplashScreen>
 
       final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
       final userId = userData['id'] as String;
-
+     
       print('👤 User ID: $userId');
+      final userEmail = userData['email'] as String;
+      print('user email: $userEmail');
 
       // 2. تهيئة SignalProtocolManager
       final signalManager = SignalProtocolManager();

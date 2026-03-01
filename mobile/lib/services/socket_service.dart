@@ -50,7 +50,7 @@ class SocketService {
   final Map<String, DateTime> _lastStatusRequest = {};
   static const Duration _statusRequestCooldown = Duration(seconds: 2);
 
-  static String get baseUrl => AppConfig.socketUrl;
+  static String? get baseUrl => AppConfig.socketUrl;
 
   Future<bool> connect() async {
     try {

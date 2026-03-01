@@ -14,7 +14,7 @@ class ApiService {
   // ============================
   // Base URL deployment
   // ============================
-  static String get baseUrl => AppConfig.apiBaseUrl;
+  static String? get baseUrl => AppConfig.apiBaseUrl;
 
   // Base URL بحسب المنصة
   // ============================

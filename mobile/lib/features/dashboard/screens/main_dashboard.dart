@@ -13,6 +13,9 @@ import '../../../services/socket_service.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/wifi_security_service.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'notifications.dart';
+import '../services/notification_service.dart';
+import '../../../core/models/app_notifications.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -48,6 +51,12 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
         _checkWifiOnDashboardOpen();
       }
     });
+
+    Future.delayed(const Duration(milliseconds: 800), () {
+    if (mounted) {
+      _checkEmailBreach();
+    }
+    });
     
     // التأكد من الاتصال بالـ Socket عند فتح Dashboard
     _ensureSocketConnection();
@@ -60,9 +69,27 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
       }
     }
   });
-}
-
   
+}
+bool _hasCheckedBreachThisSession = false;
+
+  Future<void> _checkEmailBreach() async {
+  if (_hasCheckedBreachThisSession) return;
+  _hasCheckedBreachThisSession = true;
+
+  try {
+    await NotificationService().checkEmailBreachAndNotify();
+
+    if (!mounted) return;
+
+    if (NotificationService().notifications
+        .any((n) => n.type == NotificationType.breachAlert)) {
+      _showBreachAlert();
+    }
+  } catch (e) {
+    print('خطأ في فحص HIBP: $e');
+  }
+}
   
   @override
   void dispose() {
@@ -174,12 +201,26 @@ Future<void> _initializeSocket() async {
       final result = await _apiService.getPendingRequests();
       
       if (!mounted) return;
+      
 
       if (result['code'] == 'SESSION_EXPIRED' || 
           result['code'] == 'TOKEN_EXPIRED' ||
           result['code'] == 'NO_TOKEN') {
         _handleSessionExpired();
         return;
+      }
+      if (result['success'] && result['requests'] != null) {
+        for (var req in result['requests']) {
+          NotificationService().addNotification(
+            AppNotification(
+              id: req['id'].toString(),
+              type: NotificationType.friendRequest,
+              title: 'طلب إضافة جديد',
+              message: '${req['name']} يريد إضافتك',
+              createdAt: DateTime.now(),
+            ),
+          );
+        }
       }
 
       if (result['success'] && mounted) {
@@ -335,6 +376,7 @@ Future<void> _initializeSocket() async {
   
 // Dialog لطلب الصلاحيات لأول مرة
   void _showPermissionRequestDialog() {
+    
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -565,6 +607,15 @@ Future<void> _handlePermissionGranted() async {
   // رسالة: التحذير الأمني
   
  void _showSecurityAlert(WifiSecurityStatus status) {
+  NotificationService().addNotification(
+  AppNotification(
+    id: DateTime.now().toString(),
+    type: NotificationType.wifiWarning,
+    title: 'تحذير: شبكة غير آمنة',
+    message: 'أنت متصل بشبكة ${status.ssid}',
+    createdAt: DateTime.now(),
+  ),
+);
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -633,6 +684,180 @@ Future<void> _handlePermissionGranted() async {
   );
 }
 
+void _showBreachAlert() {
+  // نجيب آخر تسريب من الإشعارات
+  final breachNotifications = NotificationService()
+      .notifications
+      .where((n) => n.type == NotificationType.breachAlert)
+      .toList();
+
+  final count = breachNotifications.length;
+  final firstName = count > 0 ? breachNotifications.first.title : '';
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        backgroundColor: const Color(0xFF2D1B69),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        title: Row(
+          children: [
+            Icon(Icons.warning_amber_rounded,
+                color: Colors.red.shade400, size: 32),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'تحذير: تسريب بيانات!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Text(
+            'تم اكتشاف بريدك الإلكتروني في $count تسريب للبيانات.\n\n'
+            'آخر تسريب: $firstName\n\n'
+            'التوصيات:\n'
+            '• غيّر كلمة المرور فوراً\n'
+            '• فعّل المصادقة الثنائية\n'
+            '• تحقق من إشعاراتك لمزيد من التفاصيل',
+            style: const TextStyle(
+              color: Colors.white,
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 14,
+              height: 1.6,
+            ),
+            textAlign: TextAlign.right,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              // ننقل المستخدم لصفحة الإشعارات مباشرة
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => SimpleNotificationsPage(),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.white.withOpacity(0.1),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text(
+              'عرض التفاصيل',
+              style: TextStyle(
+                color: Colors.white,
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'لاحقاً',
+              style: TextStyle(
+                color: Colors.white70,
+                fontFamily: 'IBMPlexSansArabic',
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+Widget _buildBellButton() {
+  final w = MediaQuery.of(context).size.width;
+
+  return StreamBuilder<List<AppNotification>>(
+    stream: NotificationService().notificationsStream,
+    builder: (context, snapshot) {
+      final notifications = snapshot.data ?? [];
+      final unreadCount =
+          notifications.where((n) => !n.isRead).length;
+
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(w * 0.03),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => SimpleNotificationsPage(),
+              ),
+            );
+          },
+          child: Container(
+            padding: EdgeInsets.all(w * 0.022),
+            decoration: BoxDecoration(
+              color: AppColors.secondary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(w * 0.03),
+              border: Border.all(
+                color: AppColors.secondary.withOpacity(0.2),
+              ),
+            ),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Icon(
+                  Icons.notifications,
+                  color: AppColors.textPrimary,
+                  size: w * 0.066,
+                ),
+
+                if (unreadCount > 0)
+                  Positioned(
+                    right: -4,
+                    top: -4,
+                    child: Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 18,
+                        minHeight: 18,
+                      ),
+                      child: Center(
+                        child: Text(
+                          unreadCount > 99 ? '99+' : '$unreadCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    },
+  );
+}
 // رسالة للشبكة الآمنة (جديدة)
 void _showSecureNetworkAlert(WifiSecurityStatus status) {
   showDialog(
@@ -709,68 +934,49 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
+        bottomNavigationBar: BottomNavBar(currentIndex: 0,),
         backgroundColor: AppColors.background,
-        body: SafeArea(
-          child: Column(
-            children: [
-              const HeaderWidget(
-                title: '',
-                showBackground: true,
-                alignTitleRight: false,
-              ),
+        body:  SafeArea(
+  child: Stack(
+    children: [
+      const HeaderWidget(
+        title: '',
+        showBackground: true,
+        alignTitleRight: false,
+      ),
 
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: width * 0.06),
-                  child: Transform.translate(
-                    offset: Offset(0, -height * 0.045),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 4),
+      Padding(
+        padding: EdgeInsets.only(
+          top: height * 0.12, // 👈 نتحكم بالموقع هنا
+          left: width * 0.06,
+          right: width * 0.06,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Align(
+              alignment: Alignment.topLeft,
+              child: _buildBellButton(),
+            ),
 
-                        const Align(
-                          alignment: Alignment.topLeft,
-                          child: _Bell(),
-                        ),
+            const SizedBox(height: 6),
 
-                        const SizedBox(height: 6),
-
-                        _buildTitle('مرحبًا بك', width * 0.085, context),
-
-                        const SizedBox(height: 10),
-
-                        _buildTitle('لوحة المعلومات', width * 0.05, context),
-
-                        const SizedBox(height: 8),
-
-                        _buildInfoCard(context),
-
-                        const SizedBox(height: 12),
-
-                        _buildTipHeader(context),
-
-                        const SizedBox(height: 8),
-
-                        _buildTipText(context),
-
-                        const Spacer(),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Bottom Navigation Bar
-             BottomNavBar(currentIndex: 0)
-
-            ],
-          ),
+            _buildTitle('مرحبًا بك', width * 0.085, context),
+            const SizedBox(height: 10),
+            _buildTitle('لوحة المعلومات', width * 0.05, context),
+            const SizedBox(height: 8),
+            _buildInfoCard(context),
+            const SizedBox(height: 12),
+            _buildTipHeader(context),
+            const SizedBox(height: 8),
+            _buildTipText(context),
+          ],
         ),
       ),
-    );
+    ],
+  ),
+),
+    ));
   }
 
 
@@ -887,7 +1093,6 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
     );
   }
 }
-
 class _Bell extends StatelessWidget {
   const _Bell();
 
@@ -897,7 +1102,7 @@ class _Bell extends StatelessWidget {
 
     return Transform.translate(
       offset: const Offset(0, -20), 
-      child: Stack(
+      child: Stack(  // ← شلنا GestureDetector من هنا
         clipBehavior: Clip.none,
         children: [
           Container(

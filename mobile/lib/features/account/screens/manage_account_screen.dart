@@ -28,7 +28,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
   final _messagingService = MessagingService();
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
-  static String get baseUrl => AppConfig.apiBaseUrl;
+  static String? get baseUrl => AppConfig.apiBaseUrl;
 
 
  

@@ -28,16 +28,24 @@ class HeaderWidget extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Container(decoration: BoxDecoration(color: AppColors.background)),
+          // Background color
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.background,
+            ),
+          ),
 
+          // Decorative background shapes (NOW NON-CLICKABLE)
           if (showBackground) ...[
             Align(
               alignment: Alignment.topCenter,
-              child: Transform.translate(
-                offset: Offset(-30, (-0.6 * h)),
-                child: Image.asset(
-                  'assets/images/Rectangle 13.png',
-                  width: w * 1.25,
+              child: IgnorePointer( // ✅ FIX
+                child: Transform.translate(
+                  offset: Offset(-30, (-0.6 * h)),
+                  child: Image.asset(
+                    'assets/images/Rectangle 13.png',
+                    width: w * 1.25,
+                  ),
                 ),
               ),
             ),
@@ -45,13 +53,16 @@ class HeaderWidget extends StatelessWidget {
             Positioned(
               top: -0.60 * h,
               right: 0.50 * w,
-              child: Image.asset(
-                'assets/images/Rectangle 14.png',
-                width: w * 0.58,
+              child: IgnorePointer( // ✅ FIX
+                child: Image.asset(
+                  'assets/images/Rectangle 14.png',
+                  width: w * 0.58,
+                ),
               ),
             ),
           ],
 
+          // Title / Back Button
           Positioned(
             right: 0,
             left: 0,

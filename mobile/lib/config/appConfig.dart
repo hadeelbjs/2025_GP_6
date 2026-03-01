@@ -2,8 +2,14 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppConfig {
-  static String get apiBaseUrl {
-    return dotenv.env['API_BASE_URL'] ?? 'http://localhost:3000/api';
+  static String? get apiBaseUrl {
+    if (isProduction) {
+      return dotenv.env['API_BASE_URL'];
+      }
+     
+    else {
+     return 'http://localhost:3000/api';
+     }
   }
 
   static bool get isProduction {
@@ -11,8 +17,17 @@ class AppConfig {
     return value == 'true' || value == '0';
   }
 
-  static String get socketUrl {
-    return dotenv.env['SOCKET_URL'] ?? 'http://localhost:3000';
+  static String? get socketUrl {
+    if(isProduction){
+    return dotenv.env['SOCKET_URL']; 
+    }else{
+    return 'http://localhost:3000';}
+  }
+
+  static String get hibpApikey {
+
+    return dotenv.env['HIBP_API_KEY'] ?? "00000000"; 
+
   }
 
   static String get virustotalApiKey {
@@ -48,7 +63,9 @@ class AppConfig {
     }
 
     if (isProduction) {
-      if (!apiBaseUrl.startsWith('https://')) {
+      final baseUrl = apiBaseUrl;
+
+      if (baseUrl != null && !baseUrl.startsWith('https://')) {
         print('⚠️ Warning: Production should use HTTPS!');
         return false;
       }

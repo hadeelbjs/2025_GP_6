@@ -1330,4 +1330,29 @@ class ApiService {
       };
     }
   }
+  Future<Map<String, dynamic>> checkAnomalies({
+  double? lat,
+  double? lng,
+  String? locationName,
+  String? ssid,
+  String? deviceName,
+}) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/anomaly/check'),
+      headers: headers,
+      body: jsonEncode({
+        if (lat != null) 'latitude': lat,
+        if (lng != null) 'longitude': lng,
+        if (locationName != null) 'locationName': locationName,
+        if (ssid != null) 'ssid': ssid,
+        if (deviceName != null) 'deviceName': deviceName,
+      }),
+    ).timeout(const Duration(seconds: 15));
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'anomalies': []};
+  }
+}
 }

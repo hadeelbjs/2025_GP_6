@@ -742,6 +742,9 @@ router.post('/login', async (req, res) => {
         message: `بيانات الدخول غير صحيحة. عدد المحاولات الفاشلة: ${user.failedLoginAttempts}${remaining > 0 ? ` (تبقى ${remaining} محاولات)` : ''}`
       });
     }
+    if (user.failedLoginAttempts > 0) {
+        user.pendingFailedAttemptsAlert = user.failedLoginAttempts;
+    }
 
     // إعادة تعيين عداد المحاولات الفاشلة في حالة نجاح تسجيل الدخول
     user.failedLoginAttempts = 0;

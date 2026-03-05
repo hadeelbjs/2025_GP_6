@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/colors.dart';
 import '../services/notification_service.dart';
 import '../../../core/models/app_notifications.dart';
+import '../../../services/biometric_service.dart';
+
 class SimpleNotificationsPage extends StatelessWidget {
   
   @override
@@ -35,17 +37,30 @@ class SimpleNotificationsPage extends StatelessWidget {
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: notifications.length,
-      itemBuilder: (context, index) {
+     itemBuilder: (context, index) {
   final n = notifications[index];
+  final isAnomaly = {
+    NotificationType.unknownDevice,
+    NotificationType.newLocation,
+    NotificationType.newWifi,
+    NotificationType.failedAttempts,
+  }.contains(n.type);
+
   return Padding(
     padding: const EdgeInsets.only(bottom: 10),
-    child: _buildNotificationCard(
-      icon: _getIcon(n.type),
-      title: n.title,
-      message: n.message,
-      time: _formatTime(n.createdAt),
-      color: _getColor(n.type),
-      isRead: n.isRead, 
+    child: Column(
+      children: [
+        _buildNotificationCard(
+          icon: _getIcon(n.type),
+          title: n.title,
+          message: n.message,
+          time: _formatTime(n.createdAt),
+          color: _getColor(n.type),
+          isRead: n.isRead,
+        ),
+        if (isAnomaly && n.actionTaken == null)
+          _buildAnomalyButtons(context, n),
+      ],
     ),
   );
 },
@@ -63,6 +78,14 @@ class SimpleNotificationsPage extends StatelessWidget {
       return Icons.warning_amber;
     case NotificationType.friendRequest:
       return Icons.person_add;
+      case NotificationType.unknownDevice: 
+         return Icons.devices;
+      case NotificationType.newLocation: 
+   return Icons.location_on;
+  case NotificationType.newWifi:    
+    return Icons.wifi;
+    case NotificationType.failedAttempts: 
+    return Icons.lock_outline;
   }
 }
 
@@ -74,6 +97,14 @@ Color _getColor(NotificationType type) {
       return Colors.red;
     case NotificationType.friendRequest:
       return Colors.blue;
+      case NotificationType.unknownDevice: 
+       return Colors.red;
+      case NotificationType.newLocation: 
+        return Colors.red;
+      case NotificationType.newWifi:  
+      return Colors.orange;
+    case NotificationType.failedAttempts:
+      return Colors.red;
   }
 }
 
@@ -188,4 +219,133 @@ String _formatTime(DateTime time) {
     ),
   );
 }
+}
+Widget _buildAnomalyButtons(BuildContext context, AppNotification n) {
+  return Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Row(
+      children: [
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _handleAction(context, n, false),
+            child: Container(
+              margin: const EdgeInsets.only(left: 4),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.red.withOpacity(0.3)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.gpp_bad_outlined, color: Colors.red, size: 18),
+                  SizedBox(width: 6),
+                  Text('لم أقم بذلك',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTap: () => _handleAction(context, n, true),
+            child: Container(
+              margin: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.green.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.green.withOpacity(0.3)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.verified_user_outlined, color: Colors.green, size: 18),
+                  SizedBox(width: 6),
+                  Text('أنا من فعل ذلك',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
+                      )),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+Future<void> _handleAction(BuildContext context, AppNotification n, bool wasMe) async {
+  if (!wasMe) {
+    final canUse = await BiometricService.canCheckBiometrics();
+    final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+    if (canUse && hasEnrolled) {
+      final verified = await BiometricService.authenticateWithBiometrics(
+        reason: 'تحقق من هويتك لتأكيد البلاغ',
+        biometricOnly: true,
+      );
+      if (!verified) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('فشل التحقق — لم يتم تسجيل البلاغ',
+                  style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+    }
+  }
+
+  NotificationService().updateAnomalyAction(n.id, wasMe);
+
+  if (!context.mounted) return;
+
+  if (!wasMe) {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Text('تحذير أمني عاجل',
+              style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', fontWeight: FontWeight.bold)),
+          content: const Text(
+            '• غيّر كلمة المرور فوراً\n• راجع الأجهزة المرتبطة\n• فعّل المصادقة الثنائية',
+            style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', height: 1.7),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('حسناً', style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic')),
+            ),
+          ],
+        ),
+      ),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text('تم تأكيد العملية بنجاح',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+        backgroundColor: Colors.green.shade600,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
 }

@@ -32,6 +32,11 @@ const UserSchema = new mongoose.Schema({
   biometricEnabled: { type: Boolean, default: false },
   biometricVerificationCode: String,
   biometricVerificationExpires: Date,
+
+registrationLocation: { lat: Number, lng: Number },
+registrationWifi: String,
+registrationDevice: String,
+pendingFailedAttemptsAlert: { type: Number, default: 0 },
     
   identityPublicKey: String,
   signedPreKey: {

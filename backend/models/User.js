@@ -37,6 +37,7 @@ registrationLocation: { lat: Number, lng: Number },
 registrationWifi: String,
 registrationDevice: String,
 pendingFailedAttemptsAlert: { type: Number, default: 0 },
+pendingUnknownDeviceAlert: { type: String, default: null },
     
   identityPublicKey: String,
   signedPreKey: {

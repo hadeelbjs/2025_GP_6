@@ -726,6 +726,7 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       user.failedLoginAttempts += 1;
       user.lastFailedLoginAt = new Date();
+      user.pendingFailedAttemptsAlert = user.failedLoginAttempts;
       await user.save();
 
       const remaining = 3 - user.failedLoginAttempts; 
@@ -812,6 +813,10 @@ router.post('/verify-2fa', async (req, res) => {
     }
 
     await user.save();
+    const { deviceName } = req.body;
+if (deviceName && user.registrationDevice && user.registrationDevice !== deviceName) {
+  await User.findByIdAndUpdate(user._id, { pendingUnknownDeviceAlert: deviceName });
+}
 
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },

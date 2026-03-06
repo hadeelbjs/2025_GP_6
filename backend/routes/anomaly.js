@@ -34,7 +34,7 @@ router.post('/check', authMiddleware, async (req, res) => {
         console.log(`   → Location: ${latitude}, ${longitude} — ${locationName}`);
 
         const user = await User.findById(userId).select(
-            'registrationLocation registrationWifi registrationDevice pendingFailedAttemptsAlert'
+            'registrationLocation registrationWifi registrationDevice pendingFailedAttemptsAlert pendingUnknownDeviceAlert'
         );
 
         if (!user) {
@@ -86,10 +86,8 @@ router.post('/check', authMiddleware, async (req, res) => {
             }
         }
 
-        // 
         // شبكة  جديدة
 
-   
         if (ssid && ssid !== 'unknown' && ssid !== '<unknown ssid>') {
             const savedWifi = user.registrationWifi;
             console.log(`📶 SSID: "${ssid}" | المحفوظة: "${savedWifi || 'لا يوجد بعد'}"`);
@@ -112,19 +110,15 @@ router.post('/check', authMiddleware, async (req, res) => {
             console.log(' SSID غير متاح — تخطي فحص الشبكة');
         }
 
-        // ─────────────────────────────────────────────────────────
-        // السيناريو 4 — محاولات دخول فاشلة سابقة
-        // auth.js يحفظ عدد المحاولات في pendingFailedAttemptsAlert
-        // هنا نقرأها ونرسلها كـ anomaly ثم نصفّرها
-        // ─────────────────────────────────────────────────────────
-        if (user.pendingFailedAttemptsAlert > 0) {
+        //  محاولات دخول فاشلة سابقة
+
+        if (user.pendingUnknownDeviceAlert) {
             anomalies.push({
-                type: 'failed_attempts',
-                detail: `كانت هناك ${user.pendingFailedAttemptsAlert} محاولة دخول فاشلة على حسابك`,
+                type: 'unknown_device',
+                detail: `تسجيل دخول من جهاز جديد: ${user.pendingUnknownDeviceAlert}`,
             });
-            console.log(`🚨 failed_attempts: ${user.pendingFailedAttemptsAlert}`);
-            await User.findByIdAndUpdate(userId, { pendingFailedAttemptsAlert: 0 });
-        }
+            await User.findByIdAndUpdate(userId, { pendingUnknownDeviceAlert: null });
+            }
 
         console.log(`Anomalies: ${anomalies.length}`);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');

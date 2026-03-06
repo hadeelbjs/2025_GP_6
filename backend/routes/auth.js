@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const PreKeyBundle = require('../models/PreKeyBundle');
 const { sendVerificationEmail, sendBiometricVerificationEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -1320,6 +1321,9 @@ router.post('/emergency-mode', authMiddleware, async (req, res) => {
     user.identityPublicKey = undefined;
     user.signedPreKey = undefined;
     await user.save();
+
+    // حذف مفاتيح التشفير الفعلية المعتمدة في النظام الحالي
+    await PreKeyBundle.deleteOne({ userId: req.userId });
 
     res.json({ success: true, message: 'تم تفعيل وضع الطوارئ' });
   } catch (err) {

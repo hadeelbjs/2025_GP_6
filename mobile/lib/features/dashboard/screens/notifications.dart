@@ -319,25 +319,37 @@ class SimpleNotificationsPage extends StatelessWidget {
     final canUse = await BiometricService.canCheckBiometrics();
     final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
 
-    if (canUse && hasEnrolled) {
-      final verified = await BiometricService.authenticateWithBiometrics(
-        reason: 'تحقق من هويتك لتأكيد البلاغ',
-        biometricOnly: true,
-      );
-      if (!verified) {
+        if (!canUse || !hasEnrolled) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: const Text('فشل التحقق — لم يتم تسجيل البلاغ',
+              content: const Text('يجب تفعيل البصمة أولاً من إعدادات الحساب',
                   style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
-              backgroundColor: Colors.red,
+              backgroundColor: Colors.orange,
               behavior: SnackBarBehavior.floating,
             ),
           );
         }
         return;
       }
-    }
+
+        final verified = await BiometricService.authenticateWithBiometrics(
+          reason: 'تحقق من هويتك لتأكيد البلاغ',
+          biometricOnly: true,
+        );
+        if (!verified) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: const Text('فشل التحقق — لم يتم تسجيل البلاغ',
+                    style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+                backgroundColor: Colors.red,
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+          return;
+        }
 
     // تحديث الإشعار — يظهر "تم الإبلاغ"
     NotificationService().updateAnomalyAction(n.id, false);

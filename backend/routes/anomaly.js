@@ -112,16 +112,23 @@ router.post('/check', authMiddleware, async (req, res) => {
 
         //  محاولات دخول فاشلة سابقة
 
-        if (user.pendingUnknownDeviceAlert) {
+       if (user.pendingFailedAttemptsAlert > 0) {
+            anomalies.push({
+                type: 'failed_attempts',
+                detail: `تم رصد محاولات لتسجيل الدخول إلى حسابك`,
+            });
+            console.log(`🚨 failed_attempts: ${user.pendingFailedAttemptsAlert}`);
+            await User.findByIdAndUpdate(userId, { pendingFailedAttemptsAlert: 0 });
+        }
+         if (user.pendingUnknownDeviceAlert && user.pendingUnknownDeviceAlert !== deviceName) {
             anomalies.push({
                 type: 'unknown_device',
                 detail: `تسجيل دخول من جهاز جديد: ${user.pendingUnknownDeviceAlert}`,
             });
+            console.log(`🚨 pending_unknown_device: ${user.pendingUnknownDeviceAlert}`);
             await User.findByIdAndUpdate(userId, { pendingUnknownDeviceAlert: null });
-            }
-
+        }
         console.log(`Anomalies: ${anomalies.length}`);
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
         return res.json({ success: true, anomalies });
 

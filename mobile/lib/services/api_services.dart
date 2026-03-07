@@ -299,6 +299,7 @@ class ApiService {
   Future<Map<String, dynamic>> verify2FA({
     required String email,
     required String code,
+    String? deviceName,
   }) async {
     try {
       final response = await http
@@ -308,7 +309,7 @@ class ApiService {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({'email': email, 'code': code}),
+            body: jsonEncode({'email': email, 'code': code, if (deviceName != null) 'deviceName': deviceName,}),
           )
           .timeout(const Duration(seconds: 10));
 

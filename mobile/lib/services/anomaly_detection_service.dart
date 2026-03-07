@@ -10,8 +10,10 @@ import '../features/dashboard/services/notification_service.dart';
 import '../core/models/app_notifications.dart';
 
 class AnomalyDetectionService {
+
   static const String _wifiSsidKey = 'last_checked_ssid';
   final ApiService _api = ApiService();
+  
 
   // ----------------------------------------------------------
   // الدالة الرئيسية — تُستدعى من main_dashboard.dart
@@ -51,12 +53,12 @@ class AnomalyDetectionService {
       if (result['success'] == true && result['anomalies'] != null) {
         final List anomalies = result['anomalies'];
         print('🚨 Anomalies: ${anomalies.length}');
-
         for (final a in anomalies) {
-          print('   → type: ${a['type']} | detail: ${a['detail']}');
+  print('   → type: ${a['type']} | detail: ${a['detail']}');
+
 
           NotificationService().addNotification(AppNotification(
-            id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
+              id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
             type: _mapType(a['type']),
             title: _getTitle(a['type']),
             message: a['detail'] ?? '',
@@ -189,7 +191,7 @@ class AnomalyDetectionService {
       case 'unknown_device':  return 'تسجيل دخول من جهاز جديد';
       case 'new_location':    return 'تسجيل دخول من موقع جديد';
       case 'new_wifi':        return 'اتصال بشبكة جديدة';
-      case 'failed_attempts': return 'محاولات دخول فاشلة';
+      case 'failed_attempts': return 'محاولات تسجيل دخول غير ناجحة';
       default:                return 'نشاط مشبوه';
     }
   }

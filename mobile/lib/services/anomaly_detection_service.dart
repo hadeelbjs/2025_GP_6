@@ -53,11 +53,21 @@ class AnomalyDetectionService {
       if (result['success'] == true && result['anomalies'] != null) {
         final List anomalies = result['anomalies'];
         print('🚨 Anomalies: ${anomalies.length}');
+        final prefs = await SharedPreferences.getInstance();
         for (final a in anomalies) {
-  print('   → type: ${a['type']} | detail: ${a['detail']}');
+          print('   → type: ${a['type']} | detail: ${a['detail']}');
 
+          if (a['type'] == 'new_wifi' || a['type'] == 'new_location') {
+            final key = 'last_shown_${a['type']}';
+            final lastShown = prefs.getString(key) ?? '';
+            if (lastShown == a['detail']) {
+              print('   ⏭️ تم تخطي — نفس الإشعار السابق');
+              continue;
+            }
+            await prefs.setString(key, a['detail']);
+          }
 
-          NotificationService().addNotification(AppNotification(
+  NotificationService().addNotification(AppNotification(
               id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
             type: _mapType(a['type']),
             title: _getTitle(a['type']),

@@ -8,6 +8,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
 const { startMessageExpiryJob, startDeliveredMessagesCleanup } = require('./jobs/messageCleanup');
+const anomalyRoutes = require('./routes/anomaly');
 
 const app = express();
 const server = http.createServer(app); 
@@ -94,6 +95,8 @@ app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/upload', uploadLimiter);
+app.use('/api/anomaly', anomalyRoutes);
+
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)

@@ -220,4 +220,13 @@ void resetSession() {
   }
 
   int get unreadCount => _notifications.where((e) => !e.isRead).length;
+  void updateAnomalyAction(String id, bool wasMe) {
+  final index = _notifications.indexWhere((n) => n.id == id);
+  if (index == -1) return;
+  _notifications[index] = _notifications[index].copyWith(
+    isRead: true,
+    actionTaken: wasMe,
+  );
+  _controller.add(_notifications);
+}
 }

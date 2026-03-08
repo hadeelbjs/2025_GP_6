@@ -8,6 +8,8 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../services/messaging_service.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:device_info_plus/device_info_plus.dart';
+import 'dart:io';
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
   final String? fullName;
@@ -98,16 +100,29 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
 
     setState(() => _isLoading = true);
+String? deviceName;
 
     try {
-      final result = widget.is2FA
+         try {
+            final deviceInfo = DeviceInfoPlugin();
+            if (Platform.isAndroid) {
+              final info = await deviceInfo.androidInfo;
+              deviceName = '${info.manufacturer} ${info.model}';
+            } else if (Platform.isIOS) {
+              final info = await deviceInfo.iosInfo;
+              deviceName = info.name;
+            }
+          } catch (_) {}
+          
+          final result = widget.is2FA
           ? await _apiService.verify2FA(
               email: widget.email,
               code: code,
+              deviceName: deviceName,
             )
           : await _apiService.verifyEmailAndCreate(code: code, newRegistrationId: widget.newRegistrationId!,);
 
-
+    
       if (!mounted) return;
 
       if (result['success']) {

@@ -1533,28 +1533,34 @@ void _showBiometricVerificationDialog() {
   // ============================================
 
   Widget _buildEmergencyModeButton(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: ElevatedButton.icon(
+      child: _buildEmergencyOutlinedButton(context),
+    );
+  }
+
+  Widget _buildEmergencyOutlinedButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
         onPressed: () => _showEmergencyModeDialog(context),
         icon: const Icon(Icons.shield_outlined, size: 20),
         label: const Text(
-          'وضع الطوارئ',
+          'تفعيل وضع الطوارئ',
           style: TextStyle(
-            fontSize: 16,
+            fontSize: 15,
             fontFamily: 'IBMPlexSansArabic',
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.w700,
           ),
         ),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.deepOrange,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: Colors.red.shade700,
+          side: BorderSide(color: Colors.red.shade300, width: 1.4),
+          backgroundColor: Colors.red.shade50.withOpacity(0.45),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
           ),
-          elevation: 2,
         ),
       ),
     );
@@ -1590,9 +1596,51 @@ void _showBiometricVerificationDialog() {
                 ),
               ],
             ),
-            content: const Text(
-              'هل أنت متأكد؟ سيتم مسح جميع البيانات المحلية فوراً ولا يمكن التراجع.',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 15),
+            content: const SizedBox(
+              width: 320,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'إذا فعّلت وضع الطوارئ، راح يتم فورًا:',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    '• حذف المحادثات والصور والملفات  ',
+                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    '• إيقاف تفعيل البصمة ',
+                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                  ),
+                  SizedBox(height: 6),
+                  Text(
+                    '• تسجيل خروجك من هذا الجهاز',
+                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                  ),
+                  SizedBox(height: 10),
+                  Text(
+                    'هذا الإجراء ما يحذف حسابك، فقط يمسح بياناتك من التطبيق.',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'هل تريد المتابعة؟',
+                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                  ),
+                ],
+              ),
             ),
             actions: [
               TextButton(
@@ -1619,7 +1667,7 @@ void _showBiometricVerificationDialog() {
                   ),
                 ),
                 child: const Text(
-                  'تأكيد',
+                  'تفعيل الطوارئ',
                   style: TextStyle(
                     fontFamily: 'IBMPlexSansArabic',
                     fontSize: 15,
@@ -1634,18 +1682,11 @@ void _showBiometricVerificationDialog() {
   }
 
   Future<void> _handleEmergencyMode() async {
-    print('🚨 [EMERGENCY-UI] المستخدم ضغط تأكيد وضع الطوارئ');
-
     // إبلاغ السيرفر (بدون انتظار - timeout 3 ثواني داخلياً)
-    print('🚨 [EMERGENCY-UI] إرسال طلب للسيرفر...');
-    _apiService.activateEmergencyModeOnServer().then((success) {
-      print('🚨 [EMERGENCY-UI] استجابة السيرفر: ${success ? "نجح ✅" : "فشل أو timeout ⚠️"}');
-    });
+    _apiService.activateEmergencyModeOnServer().then((_) {});
 
     // مسح جميع البيانات المحلية فوراً
-    print('🚨 [EMERGENCY-UI] بدء المسح المحلي...');
     await _apiService.emergencyWipeAllLocalData();
-    print('🚨 [EMERGENCY-UI] انتهى المسح → الانتقال لشاشة Login');
 
     if (!mounted) return;
 

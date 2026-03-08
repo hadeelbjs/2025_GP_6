@@ -8,6 +8,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
+const PreKeyBundle = require('../models/PreKeyBundle');
 const { sendVerificationEmail, sendBiometricVerificationEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -725,6 +726,7 @@ router.post('/login', async (req, res) => {
     if (!isMatch) {
       user.failedLoginAttempts += 1;
       user.lastFailedLoginAt = new Date();
+      user.pendingFailedAttemptsAlert = user.failedLoginAttempts;
       await user.save();
 
       const remaining = 3 - user.failedLoginAttempts; 
@@ -741,6 +743,9 @@ router.post('/login', async (req, res) => {
         success: false,
         message: `بيانات الدخول غير صحيحة. عدد المحاولات الفاشلة: ${user.failedLoginAttempts}${remaining > 0 ? ` (تبقى ${remaining} محاولات)` : ''}`
       });
+    }
+    if (user.failedLoginAttempts > 0) {
+        user.pendingFailedAttemptsAlert = user.failedLoginAttempts;
     }
 
     // إعادة تعيين عداد المحاولات الفاشلة في حالة نجاح تسجيل الدخول
@@ -808,6 +813,10 @@ router.post('/verify-2fa', async (req, res) => {
     }
 
     await user.save();
+    const { deviceName } = req.body;
+if (deviceName && user.registrationDevice && user.registrationDevice !== deviceName) {
+  await User.findByIdAndUpdate(user._id, { pendingUnknownDeviceAlert: deviceName });
+}
 
     const accessToken = jwt.sign(
       { user: { id: user.id, username: user.username } },
@@ -1317,6 +1326,9 @@ router.post('/emergency-mode', authMiddleware, async (req, res) => {
     user.identityPublicKey = undefined;
     user.signedPreKey = undefined;
     await user.save();
+
+    // حذف مفاتيح التشفير الفعلية المعتمدة في النظام الحالي
+    await PreKeyBundle.deleteOne({ userId: req.userId });
 
     res.json({ success: true, message: 'تم تفعيل وضع الطوارئ' });
   } catch (err) {

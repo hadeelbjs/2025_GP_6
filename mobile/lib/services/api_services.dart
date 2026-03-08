@@ -299,6 +299,7 @@ class ApiService {
   Future<Map<String, dynamic>> verify2FA({
     required String email,
     required String code,
+    String? deviceName,
   }) async {
     try {
       final response = await http
@@ -308,7 +309,7 @@ class ApiService {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({'email': email, 'code': code}),
+            body: jsonEncode({'email': email, 'code': code, if (deviceName != null) 'deviceName': deviceName,}),
           )
           .timeout(const Duration(seconds: 10));
 
@@ -464,71 +465,41 @@ class ApiService {
 
   /// مسح جميع البيانات المحلية فوراً (وضع الطوارئ)
   Future<void> emergencyWipeAllLocalData() async {
-    print('🚨 [EMERGENCY] === بداية مسح الطوارئ ===');
-
     // 1. قطع اتصال الـ Socket فوراً
-    print('🚨 [EMERGENCY] 1/5 قطع اتصال Socket...');
     final socketService = SocketService();
     socketService.disconnectOnLogout();
-    print('✅ [EMERGENCY] 1/5 تم قطع Socket');
 
     // 2. مسح كل الـ SecureStorage (tokens + مفاتيح تشفير + بصمة)
-    print('🚨 [EMERGENCY] 2/5 مسح SecureStorage...');
     try {
       await _storage.deleteAll();
-      print('✅ [EMERGENCY] 2/5 تم deleteAll بنجاح');
     } catch (e) {
-      print('⚠️ [EMERGENCY] 2/5 فشل deleteAll: $e - جاري الحذف يدوياً...');
       await _storage.delete(key: 'access_token');
       await _storage.delete(key: 'refresh_token');
       await _storage.delete(key: 'user_data');
       await _storage.delete(key: 'refresh_data');
       await _storage.delete(key: 'biometric_enabled');
       await _storage.delete(key: 'biometric_user_email');
-      print('✅ [EMERGENCY] 2/5 تم الحذف اليدوي');
     }
-    // تحقق: هل فعلاً انمسح؟
-    final tokenCheck = await _storage.read(key: 'access_token');
-    final bioCheck = await _storage.read(key: 'biometric_enabled');
-    print('🔍 [EMERGENCY] تحقق SecureStorage: token=${tokenCheck == null ? "ممسوح ✅" : "موجود ❌"}, biometric=${bioCheck == null ? "ممسوح ✅" : "موجود ❌"}');
 
     // 3. مسح كل SharedPreferences
-    print('🚨 [EMERGENCY] 3/5 مسح SharedPreferences...');
     try {
       final prefs = await SharedPreferences.getInstance();
-      final keysBefore = prefs.getKeys().length;
       await prefs.clear();
-      final keysAfter = prefs.getKeys().length;
-      print('✅ [EMERGENCY] 3/5 SharedPreferences: كان $keysBefore مفتاح → الآن $keysAfter');
-    } catch (e) {
-      print('❌ [EMERGENCY] 3/5 فشل مسح SharedPreferences: $e');
-    }
+    } catch (_) {}
 
     // 4. مسح كل SQLite (رسائل + محادثات + مدد)
-    print('🚨 [EMERGENCY] 4/5 مسح SQLite...');
     try {
       final db = DatabaseHelper.instance;
       await db.clearAllData();
-      print('✅ [EMERGENCY] 4/5 تم مسح SQLite (messages + conversations + durations)');
-    } catch (e) {
-      print('❌ [EMERGENCY] 4/5 فشل مسح SQLite: $e');
-    }
+    } catch (_) {}
 
     // 5. مسح ملفات مؤقتة
-    print('🚨 [EMERGENCY] 5/5 مسح ملفات مؤقتة...');
     try {
       final tempDir = await getTemporaryDirectory();
       if (tempDir.existsSync()) {
         tempDir.deleteSync(recursive: true);
-        print('✅ [EMERGENCY] 5/5 تم مسح مجلد temp');
-      } else {
-        print('✅ [EMERGENCY] 5/5 مجلد temp غير موجود أصلاً');
       }
-    } catch (e) {
-      print('❌ [EMERGENCY] 5/5 فشل مسح temp: $e');
-    }
-
-    print('🚨 [EMERGENCY] === انتهى مسح الطوارئ ===');
+    } catch (_) {}
   }
 
   // ================================
@@ -1333,4 +1304,29 @@ class ApiService {
       };
     }
   }
+  Future<Map<String, dynamic>> checkAnomalies({
+  double? lat,
+  double? lng,
+  String? locationName,
+  String? ssid,
+  String? deviceName,
+}) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/anomaly/check'),
+      headers: headers,
+      body: jsonEncode({
+        if (lat != null) 'latitude': lat,
+        if (lng != null) 'longitude': lng,
+        if (locationName != null) 'locationName': locationName,
+        if (ssid != null) 'ssid': ssid,
+        if (deviceName != null) 'deviceName': deviceName,
+      }),
+    ).timeout(const Duration(seconds: 15));
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'anomalies': []};
+  }
+}
 }

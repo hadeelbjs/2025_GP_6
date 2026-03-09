@@ -5,6 +5,8 @@ import '../services/notification_service.dart';
 import '../../../core/models/app_notifications.dart';
 import '../../../services/biometric_service.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../../services/api_services.dart';
+
 
 class SimpleNotificationsPage extends StatelessWidget {
   const SimpleNotificationsPage({super.key});
@@ -364,7 +366,11 @@ class SimpleNotificationsPage extends StatelessWidget {
     NotificationService().updateAnomalyAction(n.id, false);
 
     if (!context.mounted) return;
-    _showSecurityAlert(context, n.type);
+    if (n.type == NotificationType.failedAttempts) {
+  _showSecurityAlert(context, n.type);
+} else {
+  _showForcePasswordChangeDialog(context);
+}
   }
 
   // ─── Detail Dialog ───────────────────────────────────────────
@@ -649,6 +655,169 @@ class SimpleNotificationsPage extends StatelessWidget {
       ),
     );
   }
+   void _showForcePasswordChangeDialog(BuildContext context) {
+  final currentPasswordController = TextEditingController();
+  final newPasswordController = TextEditingController();
+  final confirmPasswordController = TextEditingController();
+  final apiService = ApiService();
+
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => Directionality(
+      textDirection: TextDirection.rtl,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.lock_reset, color: Color(0xFF2D1B69)),
+            SizedBox(width: 8),
+            Text(
+              'يجب تغيير كلمة المرور',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+             children: [
+           Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D1B69).withOpacity(0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: const Color(0xFF2D1B69).withOpacity(0.25)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Color(0xFF2D1B69), size: 22),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'تم رصد نشاط مشبوه على حسابك.\nلحماية حسابك يجب تغيير كلمة المرور الآن.',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 13,
+                      color: Color(0xFF2D1B69),
+                      height: 1.6,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: currentPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'كلمة المرور الحالية',
+                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.lock),
+                ),
+                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: newPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'كلمة المرور الجديدة',
+                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                ),
+                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: confirmPasswordController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'تأكيد كلمة المرور',
+                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  prefixIcon: const Icon(Icons.lock_outline),
+                ),
+                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              'لاحقاً',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.grey),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (newPasswordController.text != confirmPasswordController.text) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('كلمة المرور غير متطابقة',
+                        style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+              if (newPasswordController.text.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('كلمة المرور يجب أن تكون 6 أحرف على الأقل',
+                        style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+                    backgroundColor: Colors.red,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+                return;
+              }
+
+              final result = await apiService.changePassword(
+                currentPasswordController.text,
+                newPasswordController.text,
+              );
+
+              if (!context.mounted) return;
+              Navigator.pop(context);
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    result['success'] == true ? 'تم تغيير كلمة المرور بنجاح ' : result['message'] ?? 'حدث خطأ',
+                    style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                  ),
+                  backgroundColor: result['success'] == true ? Colors.green : Colors.red,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2D1B69),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            child: const Text(
+              'تغيير الآن',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
 
   // ─── Alert Data ──────────────────────────────────────────────
   Map<String, dynamic> _getAlertData(NotificationType type) {

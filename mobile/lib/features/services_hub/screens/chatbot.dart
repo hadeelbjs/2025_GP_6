@@ -25,7 +25,6 @@ class ChatbotIntroScreen extends StatelessWidget {
           backgroundColor: Colors.white,
           elevation: 0,
           automaticallyImplyLeading: true,
-          centerTitle: true,
           title: const Text(
             'مساعدك الذكي',
             style: TextStyle(
@@ -232,7 +231,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
           backgroundColor: Colors.white,
           elevation: 0,
           automaticallyImplyLeading: true,
-          centerTitle: true,
           title: const Text(
             'مساعدك الذكي',
             style: TextStyle(

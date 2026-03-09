@@ -18,6 +18,7 @@ import '../services/notification_service.dart';
 import '../../../core/models/app_notifications.dart';
 import '../../../services/anomaly_detection_service.dart';
 
+import 'dart:convert';
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
 
@@ -45,6 +46,31 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
     // للواي فاي تاخير بسيط
     _loadNotificationCount();
     _loadLastLoginTime();
+    // ─── اشعار تجريبي - احذفه بعد ما تشوف الشكل ───
+Future.delayed(const Duration(seconds: 2), () {
+  NotificationService().addNotification(
+    AppNotification(
+      id: 'test_breach_1',
+      type: NotificationType.breachAlert,
+      title: 'تسريب: Adobe',
+      message: jsonEncode({
+        'hasPassword': true,
+        'dataClasses': [
+          'عناوين البريد الإلكتروني',
+          'كلمات المرور',
+          'أسماء المستخدمين',
+          'تلميحات كلمات المرور',
+        ],
+        'breachDate': '2013-10-04',
+        'domain': 'adobe.com',
+      }),
+      createdAt: DateTime.now(),
+      isRead: false,
+    ),
+  );
+    _showBreachAlert();
+
+});
 
     
    Future.delayed(const Duration(milliseconds: 500), () {
@@ -76,12 +102,8 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
   });
   
 }
-bool _hasCheckedBreachThisSession = false;
 
-  Future<void> _checkEmailBreach() async {
-  if (_hasCheckedBreachThisSession) return;
-  _hasCheckedBreachThisSession = true;
-
+ Future<void> _checkEmailBreach() async {
   try {
     await NotificationService().checkEmailBreachAndNotify();
 
@@ -688,16 +710,13 @@ Future<void> _handlePermissionGranted() async {
     ),
   );
 }
-
 void _showBreachAlert() {
-  // نجيب آخر تسريب من الإشعارات
   final breachNotifications = NotificationService()
       .notifications
       .where((n) => n.type == NotificationType.breachAlert)
       .toList();
 
   final count = breachNotifications.length;
-  final firstName = count > 0 ? breachNotifications.first.title : '';
 
   showDialog(
     context: context,
@@ -706,17 +725,14 @@ void _showBreachAlert() {
       textDirection: TextDirection.rtl,
       child: AlertDialog(
         backgroundColor: const Color(0xFF2D1B69),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            Icon(Icons.warning_amber_rounded,
-                color: Colors.red.shade400, size: 32),
+            Icon(Icons.security, color: Colors.red.shade400, size: 32),
             const SizedBox(width: 10),
             const Expanded(
               child: Text(
-                'تحذير: تسريب بيانات!',
+                'تنبيه أمني',
                 style: TextStyle(
                   color: Colors.white,
                   fontFamily: 'IBMPlexSansArabic',
@@ -727,33 +743,24 @@ void _showBreachAlert() {
             ),
           ],
         ),
-        content: SingleChildScrollView(
-          child: Text(
-            'تم اكتشاف بريدك الإلكتروني في $count تسريب للبيانات.\n\n'
-            'آخر تسريب: $firstName\n\n'
-            'التوصيات:\n'
-            '• غيّر كلمة المرور فوراً\n'
-            '• فعّل المصادقة الثنائية\n'
-            '• تحقق من إشعاراتك لمزيد من التفاصيل',
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
+        content: Text(
+          'تم رصد بريدك الإلكتروني في $count تسريب جديد للبيانات.\n\nاضغط على الإشعار لمعرفة التفاصيل.',
+          style: const TextStyle(
+            color: Colors.white,
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 14,
+            height: 1.6,
           ),
+          textAlign: TextAlign.right,
         ),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              // ننقل المستخدم لصفحة الإشعارات مباشرة
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => SimpleNotificationsPage(),
-                ),
+                    builder: (context) => SimpleNotificationsPage()),
               );
             },
             style: TextButton.styleFrom(
@@ -761,11 +768,10 @@ void _showBreachAlert() {
               padding:
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
+                  borderRadius: BorderRadius.circular(10)),
             ),
             child: const Text(
-              'عرض التفاصيل',
+              'عرض الإشعارات',
               style: TextStyle(
                 color: Colors.white,
                 fontFamily: 'IBMPlexSansArabic',
@@ -778,9 +784,7 @@ void _showBreachAlert() {
             child: const Text(
               'لاحقاً',
               style: TextStyle(
-                color: Colors.white70,
-                fontFamily: 'IBMPlexSansArabic',
-              ),
+                  color: Colors.white70, fontFamily: 'IBMPlexSansArabic'),
             ),
           ),
         ],

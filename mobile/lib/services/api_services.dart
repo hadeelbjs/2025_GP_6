@@ -12,7 +12,7 @@ import 'package:waseed/config/appConfig.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'local_db/database_helper.dart';
-
+import '../features/dashboard/services/notification_service.dart';
 class ApiService {
   // ============================
   // Base URL deployment
@@ -430,6 +430,9 @@ class ApiService {
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'user_data');
     await _storage.delete(key: 'refresh_data');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('known_breach_names');
+    NotificationService().resetSession();
 
     // قطع اتصال الـ Socket عند تسجيل الخروج
     final socketService = SocketService();

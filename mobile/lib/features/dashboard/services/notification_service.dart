@@ -5,6 +5,8 @@ import 'dart:convert';
 import '../../../core/models/post.dart';
 import 'package:http/http.dart' as http;
 import '../../../config/appConfig.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
 class NotificationService {
   static final NotificationService _instance = NotificationService._internal();
   factory NotificationService() => _instance;
@@ -20,60 +22,139 @@ class NotificationService {
 
   Stream<List<AppNotification>> get notificationsStream => _controller.stream;
   List<AppNotification> get notifications => _notifications;
+  bool _hasCheckedBreach = false;
+  static const Map<String, String> _dataClassTranslations = {
+  'Email addresses': 'عناوين البريد الإلكتروني',
+  'Passwords': 'كلمات المرور',
+  'Usernames': 'أسماء المستخدمين',
+  'IP addresses': 'عناوين IP',
+  'Phone numbers': 'أرقام الهاتف',
+  'Physical addresses': 'العناوين الفعلية',
+  'Names': 'الأسماء',
+  'Dates of birth': 'تواريخ الميلاد',
+  'Credit cards': 'بطاقات الائتمان',
+  'Bank account numbers': 'أرقام الحسابات البنكية',
+  'Social security numbers': 'أرقام الضمان الاجتماعي',
+  'Geographic locations': 'المواقع الجغرافية',
+  'Device information': 'معلومات الجهاز',
+  'Password hints': 'تلميحات كلمات المرور',
+  'Security questions and answers': 'أسئلة وأجوبة الأمان',
+  'Profile photos': 'صور الملف الشخصي',
+  'Genders': 'الجنس',
+  'Ages': 'الأعمار',
+  'Spoken languages': 'اللغات',
+  'Education levels': 'المستويات التعليمية',
+  'Job titles': 'المسميات الوظيفية',
+  'Government issued IDs': 'بطاقات الهوية الحكومية',
+  'Bios': 'السيرة الذاتية',
+  'Social media profiles': 'ملفات التواصل الاجتماعي',
+  'User': 'بيانات المستخدم',
+  'Website URLs': 'روابط المواقع',
+  'website URLs': 'روابط المواقع',
+  'Website activity': 'نشاط الموقع',
+  'Browsing histories': 'سجل التصفح',
+  'Chat logs': 'سجلات المحادثات',
+};
 
+String _translateDataClass(String english) {
+  return _dataClassTranslations[english] ?? english;
+}
   // ─── HIBP: تحقق من تسريب الإيميل ──────────────────────────
-  Future<void> checkEmailBreachAndNotify() async {
-    final email = await getUserData('email');
+ Future<void> checkEmailBreachAndNotify() async {
+  if (_hasCheckedBreach) return;
+  _hasCheckedBreach = true;
 
-    if (email == 'No data' || email == 'not valid key') {
-      print('❌ تعذّر جلب الإيميل');
-      return;
-    }
+  final email = await getUserData('email');
+  if (email == 'No data' || email == 'not valid key') {
+    _hasCheckedBreach = false;
+    return;
+  }
 
-    try {
-      final url = Uri.parse(
-        '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
-      );
+  try {
+    final url = Uri.parse(
+      '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
+    );
 
-      final response = await http.get(url, headers: {
-        'hibp-api-key': _hibpApiKey,
-        'user-agent': 'MyFlutterApp',
-      });
+    final response = await http.get(url, headers: {
+      'hibp-api-key': _hibpApiKey,
+      'user-agent': 'MyFlutterApp',
+    });
 
-      if (response.statusCode == 200) {
-        final List breaches = jsonDecode(response.body);
+    if (response.statusCode == 200) {
+      final List breaches = jsonDecode(response.body);
+      final prefs = await SharedPreferences.getInstance();
 
-        for (final breach in breaches) {
-          final notification = AppNotification(
+      // ─── جيب القديمة ──────────────────────────────────────
+      // الصيغة: {"Adobe": "2013-10-04", "LinkedIn": "2012-05-05"}
+      final savedJson = prefs.getString('known_breaches') ?? '{}';
+      final Map<String, dynamic> savedBreaches = jsonDecode(savedJson);
+
+      final List newBreaches = breaches.where((breach) {
+        final name = breach['Name'] as String;
+        final date = breach['BreachDate'] as String;
+
+        // جديد إذا: ما موجود قبل، أو نفس الاسم لكن التاريخ تغير
+        if (!savedBreaches.containsKey(name)) return true;
+        if (savedBreaches[name] != date) return true;
+        return false;
+      }).toList();
+
+      if (newBreaches.isNotEmpty) {
+        for (final breach in newBreaches) {
+          final List<String> dataClassesList =
+              (breach['DataClasses'] as List)
+                  .map((d) => _translateDataClass(d as String))
+                  .toList();
+
+          final bool hasPassword = (breach['DataClasses'] as List)
+              .any((d) => (d as String).toLowerCase().contains('password'));
+
+          final messageData = jsonEncode({
+            'hasPassword': hasPassword,
+            'dataClasses': dataClassesList,
+            'breachDate': breach['BreachDate'] as String, // ✅
+          });
+
+          addNotification(AppNotification(
             id: 'hibp_${breach['Name']}',
             type: NotificationType.breachAlert,
-            title: 'تسريب بيانات: ${breach['Name']}',
-            message: 'تم رصد بريدك الإلكتروني في تسريب "${breach['Title']}" بتاريخ ${breach['BreachDate']}.',
+            title: 'تسريب: ${breach['Title']}',
+            message: messageData,
             createdAt: DateTime.now(),
             isRead: false,
-          );
-          addNotification(notification);
+          ));
         }
 
-        print('🔴 وُجد ${breaches.length} تسريب للإيميل: $email');
+        // ─── احفظ كل الـ breaches الحالية ────────────────────
+        final Map<String, String> allBreaches = {
+          for (var b in breaches)
+            b['Name'] as String: b['BreachDate'] as String,
+        };
+        await prefs.setString('known_breaches', jsonEncode(allBreaches));
 
-      } else if (response.statusCode == 404) {
-        print('✅ الإيميل آمن، لا يوجد تسريبات');
-
-      } else if (response.statusCode == 401) {
-        print('❌ API Key غير صحيح');
-
-      } else if (response.statusCode == 429) {
-        print('⏳ تجاوزت الحد المسموح، انتظر قليلاً');
-
+        print('تسريبات جديدة: ${newBreaches.length}');
       } else {
-        throw Exception('HIBP Error: ${response.statusCode}');
+        print('لا يوجد تسريبات جديدة');
       }
 
-    } catch (e) {
-      print('❌ خطأ في التحقق من HIBP: $e');
+    } else if (response.statusCode == 404) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('known_breaches');
+      print('الإيميل آمن');
+    } else if (response.statusCode == 401) {
+      print('API Key غير صحيح');
+      _hasCheckedBreach = false;
+    } else if (response.statusCode == 429) {
+      print('تجاوزت الحد المسموح');
+      _hasCheckedBreach = false;
+    } else {
+      throw Exception('HIBP Error: ${response.statusCode}');
     }
+  } catch (e) {
+    print('خطأ في التحقق من HIBP: $e');
+    _hasCheckedBreach = false;
   }
+}
 
   // ─── Fetch Post ────────────────────────────────────────────
   Future<Post> fetchPost() async {
@@ -107,7 +188,12 @@ class NotificationService {
 
     return 'not valid key';
   }
-
+  
+void resetSession() {
+  _hasCheckedBreach = false;
+  _notifications.clear();
+  _controller.add(_notifications);
+}
   // ─── Notifications ─────────────────────────────────────────
  void addNotification(AppNotification notification) {
   // تحقق إذا الإشعار موجود مسبقاً بنفس الـ id

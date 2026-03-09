@@ -12,35 +12,43 @@ class ServicesScreen extends StatefulWidget {
   State<ServicesScreen> createState() => _ServicesScreenState();
 }
 
-class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObserver {
+class _ServicesScreenState extends State<ServicesScreen>
+    with WidgetsBindingObserver {
   final TextEditingController _searchController = TextEditingController();
   final _messagingService = MessagingService();
   final _apiService = ApiService();
-  
+
   final List<Map<String, dynamic>> _allServices = [
     {
       'title': ' التحقق من أمان المحتوى',
       'description': 'التحقق من أمان الروابط أو رموز الـ QR أو الملفات',
       'icons': [Icons.link, Icons.file_copy_rounded, Icons.qr_code],
       'color': const Color.fromARGB(198, 40, 27, 103),
-      'route': '/content-scan'
+      'route': '/content-scan',
     },
     {
       'title': 'كشف البيانات الحساسة في الصور',
       'description': 'افحص صورك قبل المشاركة للتأكد من خصوصيتك',
       'icons': [Icons.image],
-      'color': const Color.fromARGB(198, 40, 27, 103), 
-      'route': '/image-scanner'
+      'color': const Color.fromARGB(198, 40, 27, 103),
+      'route': '/image-scanner',
     },
     {
       'title': 'مساعدك الذكي',
       'description': 'تحدث مع المساعد للحصول على نصائح أمنية وإرشادات',
       'icons': [Icons.chat_bubble],
       'color': const Color.fromARGB(198, 40, 27, 103),
-      'route': '/chatbot' 
-    }
+      'route': '/chatbot',
+    },
+    {
+      'title': 'مولّد كلمات المرور',
+      'description': 'أنشئ كلمات مرور قوية وعشوائية تساعدك على حماية حساباتك',
+      'icons': [Icons.key_rounded],
+      'color': const Color.fromARGB(198, 40, 27, 103),
+      'route': '/password_generator',
+    },
   ];
-  
+
   List<Map<String, dynamic>> _filteredServices = [];
 
   @override
@@ -93,25 +101,25 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
   Future<void> _requestAllContactsStatus() async {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       if (!_messagingService.isConnected) {
         print('⚠️ Socket not connected, skipping status requests');
         return;
       }
 
       final result = await _apiService.getContactsList();
-      
+
       if (result['success'] == true && result['contacts'] != null) {
         final contacts = result['contacts'] as List;
         print(' Requesting status for ${contacts.length} contacts...');
-        
+
         for (var contact in contacts) {
           final contactId = contact['id']?.toString();
           if (contactId != null) {
             _messagingService.requestUserStatus(contactId);
           }
         }
-        
+
         print('✅ Status requests sent for all contacts');
       }
     } catch (e) {
@@ -125,11 +133,12 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
         _filteredServices = _allServices;
       } else {
         final searchLower = query.trim().toLowerCase();
-        
+
         final matches = _allServices.where((service) {
           final title = service['title'].toString().toLowerCase();
           final description = service['description'].toString().toLowerCase();
-          return title.contains(searchLower) || description.contains(searchLower);
+          return title.contains(searchLower) ||
+              description.contains(searchLower);
         }).toList();
 
         _filteredServices = matches;
@@ -152,7 +161,10 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
                 alignTitleRight: true,
               ),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 10,
+                ),
                 child: custom.SearchBar(
                   controller: _searchController,
                   onChanged: _filter,
@@ -166,9 +178,13 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
                       ? _buildNoResults()
                       : ListView.builder(
                           key: ValueKey(_filteredServices.length),
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 20,
+                            vertical: 10,
+                          ),
                           itemCount: _filteredServices.length,
-                          itemBuilder: (context, index) => _buildServiceCard(_filteredServices[index]),
+                          itemBuilder: (context, index) =>
+                              _buildServiceCard(_filteredServices[index]),
                         ),
                 ),
               ),
@@ -208,10 +224,12 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: (service['icons'] as List<IconData>)
-                    .map((icon) => Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 5),
-                          child: Icon(icon, color: Colors.white, size: 26),
-                        ))
+                    .map(
+                      (icon) => Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: Icon(icon, color: Colors.white, size: 26),
+                      ),
+                    )
                     .toList(),
               ),
               const SizedBox(height: 12),
@@ -240,14 +258,21 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
               ),
               const SizedBox(height: 12),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: const Text(
                   'ابدأ الخدمة',
-                  style: TextStyle(color: Colors.white, fontSize: 11, fontFamily: 'IBMPlexSansArabic'),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontFamily: 'IBMPlexSansArabic',
+                  ),
                 ),
               ),
             ],
@@ -263,8 +288,10 @@ class _ServicesScreenState extends State<ServicesScreen> with WidgetsBindingObse
       children: [
         Icon(Icons.search_off_rounded, size: 70, color: Colors.grey.shade300),
         const SizedBox(height: 10),
-        const Text('لم يتم العثور على هذه الخدمة', 
-          style: TextStyle(color: Colors.grey, fontFamily: 'IBMPlexSansArabic')),
+        const Text(
+          'لم يتم العثور على هذه الخدمة',
+          style: TextStyle(color: Colors.grey, fontFamily: 'IBMPlexSansArabic'),
+        ),
       ],
     );
   }

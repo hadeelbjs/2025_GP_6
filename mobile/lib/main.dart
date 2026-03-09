@@ -24,6 +24,7 @@ import 'services/wifi_security_service.dart';
 import 'package:geolocator/geolocator.dart';
 import 'features/services_hub/screens/image_scanner_screen.dart';
 import 'features/services_hub/screens/chatbot.dart';
+import 'features/services_hub/screens/password_generator.dart';
 
 void main() async {
   await dotenv.load(fileName: ".env");
@@ -62,6 +63,7 @@ class MyApp extends StatelessWidget {
             const ProtectedRoute(child: AccountManagementScreen()),
         '/image-scanner': (context) => const ImageScannerScreen(),
         '/chatbot': (context) => const ChatbotScreen(),
+        '/password_generator': (context) => const PasswordGeneratorScreen(),
       },
     );
   }
@@ -207,7 +209,7 @@ class _SplashScreenState extends State<SplashScreen>
 
       final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
       final userId = userData['id'] as String;
-     
+
       print('👤 User ID: $userId');
       final userEmail = userData['email'] as String;
       print('user email: $userEmail');

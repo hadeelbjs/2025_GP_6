@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const PreKeyBundle = require('../models/PreKeyBundle');
+const Message = require('../models/Message');
 const { sendVerificationEmail, sendBiometricVerificationEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
@@ -1329,6 +1330,22 @@ router.post('/emergency-mode', authMiddleware, async (req, res) => {
 
     // حذف مفاتيح التشفير الفعلية المعتمدة في النظام الحالي
     await PreKeyBundle.deleteOne({ userId: req.userId });
+
+    // إشعار الأطراف الذين لديهم محادثات مع هذا المستخدم لتفعيل إعادة الربط المشفر
+    const io = req.app.get('io');
+    if (io && io.sendToUser) {
+      const sentTo = await Message.distinct('recipientId', { senderId: user._id });
+      const receivedFrom = await Message.distinct('senderId', { recipientId: user._id });
+      const peerIds = [...new Set([...sentTo, ...receivedFrom].map((id) => id.toString()))]
+        .filter((id) => id !== user.id.toString());
+
+      for (const peerId of peerIds) {
+        io.sendToUser(peerId, 'contact:emergency_mode_activated', {
+          userId: user.id.toString(),
+          at: user.emergencyModeAt,
+        });
+      }
+    }
 
     res.json({ success: true, message: 'تم تفعيل وضع الطوارئ' });
   } catch (err) {

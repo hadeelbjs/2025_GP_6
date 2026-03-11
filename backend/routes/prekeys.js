@@ -161,7 +161,6 @@ router.get('/:userId', auth, async (req, res) => {
     if (!bundle) {
       return res.status(404).json({
         success: false,
-        code: 'NO_PREKEY_BUNDLE',
         message: 'لم يتم العثور على مفاتيح المستخدم'
       });
     }

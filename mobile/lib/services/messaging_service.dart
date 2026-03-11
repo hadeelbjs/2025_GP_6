@@ -4,7 +4,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'socket_service.dart';
 import 'api_services.dart';
@@ -216,20 +215,6 @@ class MessagingService {
         attachmentType = 'file';
         attachmentName = fileName ?? attachmentFile.path.split('/').last;
 
-      }
-
-      final prefs = await SharedPreferences.getInstance();
-      final rekeyRequired = prefs.getBool('rekey_required_$recipientId') ?? false;
-      if (rekeyRequired) {
-        final rekeySuccess = await createNewSession(recipientId);
-        if (!rekeySuccess) {
-          return {
-            'success': false,
-            'code': 'REKEY_REQUIRED',
-            'message': 'بانتظار الطرف الآخر لإعادة رفع مفاتيح التشفير',
-          };
-        }
-        await prefs.remove('rekey_required_$recipientId');
       }
 
       final hasSession = await _signalProtocol.sessionExists(recipientId);
@@ -477,20 +462,6 @@ class MessagingService {
 
   Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
     try {
-      if (data['type'] == 'peer_emergency_mode') {
-        final peerId = data['userId'];
-        if (peerId is String && peerId.isNotEmpty) {
-          await _signalProtocol.deleteSession(peerId);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('rekey_required_$peerId', true);
-        }
-
-        if (!_messageStatusController.isClosed) {
-          _messageStatusController.add(Map<String, dynamic>.from(data));
-        }
-        return;
-      }
-
       if (data['type'] == 'recipient_failed_verification') {
         final recipientId = data['recipientId'];
         print('⚠️ Handling failed verification for recipient: $recipientId');

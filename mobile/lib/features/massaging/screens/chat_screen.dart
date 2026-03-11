@@ -83,7 +83,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   StreamSubscription? _userStatusSubscription;
   StreamSubscription? _connectionSubscription;
   bool _isOtherUserOnline = false;
-  bool _rekeyRequired = false;
 
   //  للكشف عن Screenshot في iOS
   // StreamSubscription? _screenshotSubscription;
@@ -973,17 +972,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     _statusSubscription = _messagingService.onMessageStatusUpdate.listen((
       data,
     ) {
-      if (data['type'] == 'peer_emergency_mode') {
-        final peerId = data['userId'];
-        if (peerId == widget.userId && mounted) {
-          setState(() {
-            _rekeyRequired = true;
-          });
-          _showMessage('تم تفعيل وضع الطوارئ للطرف الآخر. أعد المحاولة بعد إعادة تهيئة التشفير.', false);
-        }
-        return;
-      }
-
       // التعامل مع فشل التحقق عند المستقبل
       if (data['type'] == 'recipient_failed_verification') {
         final recipientId = data['recipientId'];
@@ -1209,15 +1197,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         setState(() {
           _pendingImageFile = null;
           _pendingFile = null;
-          _rekeyRequired = false;
         });
         await _loadMessagesFromDatabase();
       } else {
-        if (result['code'] == 'REKEY_REQUIRED') {
-          setState(() {
-            _rekeyRequired = true;
-          });
-        }
         _showMessage(result['message'] ?? 'فشل الإرسال', false);
       }
     } catch (e) {
@@ -2073,12 +2055,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
   Widget _buildInputBar() {
   final canSend = currentDuration != null &&
-      !_rekeyRequired &&
       (_messageController.text.trim().isNotEmpty ||
           _pendingImageFile != null ||
           _pendingFile != null);
 
-  final isEnabled = currentDuration != null && !_rekeyRequired;
+  final isEnabled = currentDuration != null;
 
   return Container(
     padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
@@ -2280,9 +2261,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
                           decoration: InputDecoration(
                             hintText: isEnabled
                                 ? 'اكتب رسالتك هنا...'
-                                : (_rekeyRequired
-                                      ? 'جاري إعادة تهيئة التشفير...'
-                                      : 'اختر المدة أولاً'),
+                                : 'اختر المدة أولاً',
                             hintStyle: TextStyle(
                               color: AppColors.textHint,
                               fontSize: 17,

@@ -3,6 +3,22 @@ const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const PreKeyBundle = require('../models/PreKeyBundle');
+const Message = require('../models/Message');
+
+// ===================================
+// 🔔 إشعار جهات الاتصال بتحديث المفاتيح
+// ===================================
+async function notifyContactsKeysUpdated(req, userId) {
+  const io = req.app.get('io');
+  if (!io || !io.sendToUser) return;
+  const sentTo = await Message.distinct('recipientId', { senderId: userId });
+  const receivedFrom = await Message.distinct('senderId', { recipientId: userId });
+  const peerIds = [...new Set([...sentTo, ...receivedFrom].map((id) => id.toString()))]
+    .filter((id) => id !== userId.toString());
+  for (const peerId of peerIds) {
+    io.sendToUser(peerId, 'contact:keys_updated', { userId: userId.toString() });
+  }
+}
 
 // ===================================
 // 📤 رفع PreKey Bundle (كامل أو جزئي)
@@ -59,6 +75,7 @@ router.post('/upload', auth, async (req, res) => {
         
         console.log(`✅ Bundle updated completely. New version: ${bundle.version}`);
         
+        await notifyContactsKeysUpdated(req, req.user.id);
         return res.json({
           success: true,
           userId: req.user.id,
@@ -91,6 +108,7 @@ router.post('/upload', auth, async (req, res) => {
         console.log(`✅ PreKeys added. Total: ${bundle.preKeys.length}`);
         console.log(`  Version unchanged: ${bundle.version}`);
 
+        await notifyContactsKeysUpdated(req, req.user.id);
         return res.json({
           success: true,
           message: `تم إضافة ${newPreKeys.length} مفتاح جديد`,
@@ -131,6 +149,7 @@ router.post('/upload', auth, async (req, res) => {
     console.log(`Bundle created with ${bundle.preKeys.length} PreKeys`);
     console.log(`  Version: ${bundle.version}`);
 
+    await notifyContactsKeysUpdated(req, req.user.id);
     res.json({
       success: true,
       message: 'تم رفع المفاتيح بنجاح',

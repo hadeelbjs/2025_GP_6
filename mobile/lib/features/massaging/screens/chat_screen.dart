@@ -241,9 +241,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
   void _startRekeyRetryTimer() {
     _rekeyRetryTimer?.cancel();
-    _rekeyRetryTimer = Timer.periodic(const Duration(seconds: 12), (_) {
-      _attemptRekeyRecovery();
-    });
   }
 
   Future<void> _attemptRekeyRecovery() async {
@@ -1032,6 +1029,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         final peerId = data['userId'];
         if (peerId == widget.userId && mounted) {
           _setRekeyRequired(true);
+        }
+        return;
+      }
+
+      if (data['type'] == 'peer_keys_updated') {
+        final peerId = data['userId'];
+        if (peerId == widget.userId && mounted && _rekeyRequired) {
+          _attemptRekeyRecovery();
         }
         return;
       }

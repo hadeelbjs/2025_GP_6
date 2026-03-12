@@ -299,6 +299,13 @@ class SocketService {
       });
     });
 
+    _socket!.on('contact:keys_updated', (data) {
+      _statusController.add({
+        'type': 'peer_keys_updated',
+        'userId': data['userId'],
+      });
+    });
+
     _socket!.on('disconnect', (reason) {
       if (reason != 'transport close' && reason != 'io server disconnect') {
         print('❌ Socket disconnected: $reason');

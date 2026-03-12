@@ -241,6 +241,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
   void _startRekeyRetryTimer() {
     _rekeyRetryTimer?.cancel();
+    _rekeyRetryTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      _attemptRekeyRecovery();
+    });
   }
 
   Future<void> _attemptRekeyRecovery() async {

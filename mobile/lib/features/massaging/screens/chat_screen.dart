@@ -1036,14 +1036,6 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         return;
       }
 
-      if (data['type'] == 'peer_keys_updated') {
-        final peerId = data['userId'];
-        if (peerId == widget.userId && mounted && _rekeyRequired) {
-          _attemptRekeyRecovery();
-        }
-        return;
-      }
-
       if (data['type'] == 'recipient_failed_verification') {
         final recipientId = data['recipientId'];
         if (recipientId == widget.userId && mounted) {

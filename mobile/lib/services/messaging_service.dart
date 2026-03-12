@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'socket_service.dart';
 import 'api_services.dart';
@@ -217,12 +218,44 @@ class MessagingService {
 
       }
 
+      // لا ترسل باستخدام session قديمة إذا مفاتيح الطرف الآخر غير موجودة على السيرفر
+      final peerVersionResult = await _apiService.getPeerKeysVersion(recipientId);
+      final peerKeysExist = peerVersionResult['success'] == true &&
+          peerVersionResult['exists'] == true;
+      if (peerVersionResult['success'] == true && !peerKeysExist) {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('rekey_required_$recipientId', true);
+        return {
+          'success': false,
+          'code': 'REKEY_REQUIRED',
+          'message': 'الطرف الآخر لم يرفع مفاتيح التشفير الجديدة بعد',
+        };
+      }
+
+      final prefs = await SharedPreferences.getInstance();
+      final rekeyRequired = prefs.getBool('rekey_required_$recipientId') ?? false;
+      if (rekeyRequired) {
+        final rekeySuccess = await createNewSession(recipientId);
+        if (!rekeySuccess) {
+          return {
+            'success': false,
+            'code': 'REKEY_REQUIRED',
+            'message': 'تعذر إنشاء جلسة تشفير جديدة حالياً',
+          };
+        }
+        await prefs.remove('rekey_required_$recipientId');
+      }
+
       final hasSession = await _signalProtocol.sessionExists(recipientId);
       if (!hasSession) {
         print('⚠️ No session found with $recipientId. Creating one...');
         final sessionCreated = await createNewSession(recipientId);
         if (!sessionCreated) {
-          throw Exception('Failed to create new session with $recipientId');
+          return {
+            'success': false,
+            'code': 'REKEY_REQUIRED',
+            'message': 'تعذر إنشاء جلسة تشفير جديدة مع الطرف الآخر',
+          };
         }
       }
 
@@ -462,6 +495,20 @@ class MessagingService {
 
   Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
     try {
+      if (data['type'] == 'peer_emergency_mode') {
+        final peerId = data['userId'];
+        if (peerId is String && peerId.isNotEmpty) {
+          await _signalProtocol.deleteSession(peerId);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('rekey_required_$peerId', true);
+        }
+
+        if (!_messageStatusController.isClosed) {
+          _messageStatusController.add(Map<String, dynamic>.from(data));
+        }
+        return;
+      }
+
       if (data['type'] == 'recipient_failed_verification') {
         final recipientId = data['recipientId'];
         print('⚠️ Handling failed verification for recipient: $recipientId');

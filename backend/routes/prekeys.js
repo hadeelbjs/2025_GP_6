@@ -152,6 +152,36 @@ router.post('/upload', auth, async (req, res) => {
 // ===================================
 // 📥 جلب PreKey Bundle لمستخدم معين
 // ===================================
+router.get('/version/user/:userId', auth, async (req, res) => {
+  try {
+    const bundle = await PreKeyBundle.findOne({
+      userId: req.params.userId
+    }).select('version updatedAt');
+
+    if (!bundle) {
+      return res.json({
+        success: true,
+        version: null,
+        exists: false
+      });
+    }
+
+    res.json({
+      success: true,
+      version: bundle.version,
+      exists: true,
+      lastUpdate: bundle.updatedAt
+    });
+
+  } catch (err) {
+    console.error('❌ Get User Version Error:', err);
+    res.status(500).json({
+      success: false,
+      message: 'حدث خطأ في جلب نسخة مفاتيح المستخدم'
+    });
+  }
+});
+
 router.get('/:userId', auth, async (req, res) => {
   try {
     const bundle = await PreKeyBundle.findOne({
@@ -161,6 +191,7 @@ router.get('/:userId', auth, async (req, res) => {
     if (!bundle) {
       return res.status(404).json({
         success: false,
+        code: 'NO_PREKEY_BUNDLE',
         message: 'لم يتم العثور على مفاتيح المستخدم'
       });
     }

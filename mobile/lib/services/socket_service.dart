@@ -291,6 +291,14 @@ class SocketService {
       });
     });
 
+    _socket!.on('contact:emergency_mode_activated', (data) {
+      _statusController.add({
+        'type': 'peer_emergency_mode',
+        'userId': data['userId'],
+        'at': data['at'],
+      });
+    });
+
     _socket!.on('disconnect', (reason) {
       if (reason != 'transport close' && reason != 'io server disconnect') {
         print('❌ Socket disconnected: $reason');

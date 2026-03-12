@@ -1088,6 +1088,30 @@ class ApiService {
     }
   }
 
+  Future<Map<String, dynamic>> getPeerKeysVersion(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/prekeys/version/user/$userId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'version': data['version'],
+          'exists': data['exists'] == true,
+          'lastUpdate': data['lastUpdate'],
+        };
+      }
+
+      return {'success': false, 'message': 'Failed to get peer version'};
+    } catch (e) {
+      print('❌ Error getting peer keys version: $e');
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
   // ===================================
   // 🔄 التحقق من حالة المزامنة
   // ===================================

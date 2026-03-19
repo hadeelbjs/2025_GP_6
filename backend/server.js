@@ -11,6 +11,7 @@ const { startMessageExpiryJob, startDeliveredMessagesCleanup } = require('./jobs
 const anomalyRoutes = require('./routes/anomaly');
 
 const app = express();
+app.set('trust proxy', 1);
 const server = http.createServer(app); 
 
 const io = socketIO(server, {

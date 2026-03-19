@@ -130,7 +130,7 @@ void _handleDeepLinks() async {
 
 Future<void> _freezeAccount(String token) async {
   final api = ApiService();
-  await api.freezeByToken(token);
+ 
   navigatorKey.currentState?.pushNamedAndRemoveUntil('/frozen', (r) => false);
 }
   @override

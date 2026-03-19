@@ -25,7 +25,7 @@ const generateCode = () => {
 
 
 async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
-const freezeLink = `${process.env.BASE_URL}/api/user/freeze-by-token?token=${freezeToken}`;    const changeLabel = 
+const freezeLink = `waseed://frozen?token=${freezeToken}`;   const changeLabel = 
         changeType === 'email' ? 'بريدك الإلكتروني' :
         changeType === 'phone' ? 'رقم جوالك' : 'كلمة مرورك';
 

@@ -93,7 +93,6 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
-      _handleDeepLinks();
 
 
     _animationController = AnimationController(
@@ -109,30 +108,7 @@ class _SplashScreenState extends State<SplashScreen>
     _checkAuthStatus();
   }
 
-void _handleDeepLinks() async {
-  final appLinks = AppLinks();
-  
-  try {
-    final initialLink = await appLinks.getInitialLink();
-    if (initialLink?.host == 'frozen') {
-      final token = initialLink?.queryParameters['token'];
-      if (token != null) await _freezeAccount(token);
-    }
-  } catch (_) {}
 
-  appLinks.uriLinkStream.listen((uri) {
-    if (uri.host == 'frozen') {
-      final token = uri.queryParameters['token'];
-      if (token != null) _freezeAccount(token);
-    }
-  });
-}
-
-Future<void> _freezeAccount(String token) async {
-  final api = ApiService();
- 
-  navigatorKey.currentState?.pushNamedAndRemoveUntil('/frozen', (r) => false);
-}
   @override
   void dispose() {
     _animationController.dispose();

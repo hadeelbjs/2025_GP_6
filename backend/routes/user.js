@@ -25,11 +25,12 @@ const generateCode = () => {
 
 
 async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
-const freezeLink = `waseed://frozen?token=${freezeToken}`;   const changeLabel = 
+    const freezeLink = `${process.env.BASE_URL}/api/user/freeze-by-token?token=${freezeToken}`;
+    const changeLabel = 
         changeType === 'email' ? 'بريدك الإلكتروني' :
         changeType === 'phone' ? 'رقم جوالك' : 'كلمة مرورك';
 
-   await sendActivityAlertEmail(oldEmail, fullName, `تنبيه أمني — تم تغيير ${changeLabel}`, `
+    await sendActivityAlertEmail(oldEmail, fullName, `تنبيه أمني — تم تغيير ${changeLabel}`, `
         <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
             <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
                 <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
@@ -41,14 +42,14 @@ const freezeLink = `waseed://frozen?token=${freezeToken}`;   const changeLabel =
                 <div style="text-align:center;margin:30px 0;">
                     <a href="${freezeLink}" 
                        style="background:#dc2626;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
-                         تجميد حسابي فوراً
+                        تجميد حسابي فوراً
                     </a>
                 </div>
                 <p style="font-size:13px;color:#888">إذا كنت أنت من قام بهذا التغيير، تجاهل هذه الرسالة.</p>
                 <p style="font-size:13px;color:#888">هذا الرابط صالح لمدة 30 دقيقة.</p>
             </div>
         </div>`
-);
+    );
 }
 // ============================================
 // تحديث الصورة الرمزية (Memoji)
@@ -549,19 +550,80 @@ router.get('/freeze-by-token', async (req, res) => {
     try {
         const user = await User.findOne({ freezeToken: token });
         if (!user) {
-           return res.redirect(`waseed://frozen?error=invalid`);
+            return res.send(`
+                <!DOCTYPE html>
+                <html dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { background: #0F0A1E; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial; }
+                        .box { background: #1A1035; border: 1px solid rgba(220,38,38,0.3); border-radius: 20px; padding: 40px 32px; max-width: 380px; width: 90%; text-align: center; }
+                        h2 { color: #ef4444; font-size: 20px; margin-bottom: 12px; }
+                        p { color: #9CA3AF; font-size: 14px; line-height: 1.7; }
+                    </style>
+                </head>
+                <body>
+                    <div class="box">
+                        <h2>الرابط غير صالح</h2>
+                        <p>هذا الرابط منتهي أو مستخدم مسبقاً</p>
+                    </div>
+                </body>
+                </html>
+            `);
         }
+
         const unfreezeCode = crypto.randomInt(100000, 999999).toString();
         user.isAccountFrozen = true;
         user.unfreezeCode = unfreezeCode;
         user.unfreezeCodeExpires = new Date(Date.now() + 30 * 60 * 1000);
         user.freezeToken = undefined;
         await user.save();
+
         const emailToSend = user.previousEmail || user.email;
         await sendVerificationEmail(emailToSend, user.fullName, unfreezeCode);
-        res.redirect(`waseed://frozen`);
+
+        return res.send(`
+            <!DOCTYPE html>
+            <html dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { background: #0F0A1E; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial; }
+                    .box { background: #1A1035; border: 1px solid rgba(220,38,38,0.3); border-radius: 20px; padding: 40px 32px; max-width: 380px; width: 90%; text-align: center; }
+                    .icon { font-size: 48px; margin-bottom: 20px; }
+                    h2 { color: #ffffff; font-size: 22px; margin-bottom: 16px; }
+                    p { color: #9CA3AF; font-size: 15px; line-height: 1.8; }
+                    strong { color: #A78BFA; }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    <div class="icon">🔒</div>
+                    <h2>تم تجميد حسابك</h2>
+                    <p>تم إرسال رمز فك التجميد إلى بريدك الإلكتروني</p>
+                    <br>
+                    <a href="waseed://frozen" 
+                       style="display:inline-block;background:#2D1B69;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:16px;font-weight:bold;margin-top:16px;">
+                        افتح تطبيق وصيد
+                    </a>
+                </div>
+            </body>
+            </html>
+        `);
+
     } catch (err) {
-        res.redirect(`waseed://frozen?error=server`);
+        console.error('Freeze by token error:', err);
+        return res.status(500).send(`
+            <!DOCTYPE html>
+            <html dir="rtl">
+            <head><meta charset="UTF-8">
+            <style>* {margin:0;padding:0} body{background:#0F0A1E;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Arial;} p{color:#ef4444;font-size:18px;}</style>
+            </head>
+            <body><p>حدث خطأ، حاول مرة أخرى</p></body>
+            </html>
+        `);
     }
 });
 

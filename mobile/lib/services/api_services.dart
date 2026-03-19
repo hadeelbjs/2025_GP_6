@@ -1353,4 +1353,31 @@ class ApiService {
     return {'success': false, 'anomalies': []};
   }
 }
+Future<Map<String, dynamic>> unfreezeAccount({
+  required String email,
+  required String code,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/unfreeze-account'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'code': code}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
+Future<Map<String, dynamic>> freezeByToken(String token) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/freeze-by-token'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'token': token}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false};
+  }
+}
 }

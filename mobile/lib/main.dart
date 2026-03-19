@@ -25,6 +25,10 @@ import 'package:geolocator/geolocator.dart';
 import 'features/services_hub/screens/image_scanner_screen.dart';
 import 'features/services_hub/screens/chatbot.dart';
 import 'features/services_hub/screens/password_generator.dart';
+import 'features/account/screens/frozen_account_screen.dart';
+import 'package:app_links/app_links.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   await dotenv.load(fileName: ".env");
@@ -45,6 +49,7 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         fontFamily: 'IBMPlexSansArabic',
       ),
+      navigatorKey: navigatorKey,
       initialRoute: '/splash',
       routes: {
         '/splash': (context) => const SplashScreen(),
@@ -64,6 +69,7 @@ class MyApp extends StatelessWidget {
         '/image-scanner': (context) => const ImageScannerScreen(),
         '/chatbot': (context) => const ChatbotScreen(),
         '/password_generator': (context) => const PasswordGeneratorScreen(),
+        '/frozen': (context) => const FrozenAccountScreen(),
       },
     );
   }
@@ -87,6 +93,8 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   void initState() {
     super.initState();
+      _handleDeepLinks();
+
 
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
@@ -101,6 +109,30 @@ class _SplashScreenState extends State<SplashScreen>
     _checkAuthStatus();
   }
 
+void _handleDeepLinks() async {
+  final appLinks = AppLinks();
+  
+  try {
+    final initialLink = await appLinks.getInitialLink();
+    if (initialLink?.host == 'frozen') {
+      final token = initialLink?.queryParameters['token'];
+      if (token != null) await _freezeAccount(token);
+    }
+  } catch (_) {}
+
+  appLinks.uriLinkStream.listen((uri) {
+    if (uri.host == 'frozen') {
+      final token = uri.queryParameters['token'];
+      if (token != null) _freezeAccount(token);
+    }
+  });
+}
+
+Future<void> _freezeAccount(String token) async {
+  final api = ApiService();
+  await api.freezeByToken(token);
+  navigatorKey.currentState?.pushNamedAndRemoveUntil('/frozen', (r) => false);
+}
   @override
   void dispose() {
     _animationController.dispose();

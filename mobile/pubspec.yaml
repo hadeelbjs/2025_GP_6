@@ -88,6 +88,9 @@ dependencies:
   http_parser: ^4.0.2
   device_info_plus: ^10.1.0
   geocoding: ^3.0.0
+  app_links: ^6.0.0
+
+
   
 flutter_local_notifications: ^17.0.0
 

@@ -28,6 +28,13 @@ const authMiddleware = async (req, res, next) => {
         code: 'USER_NOT_FOUND'
       });
     }
+    if (user.isAccountFrozen) {
+        return res.status(403).json({
+            success: false,
+            frozen: true,
+            message: 'تم تجميد حسابك — تحقق من بريدك الإلكتروني'
+        });
+    }
 
     // إضافة بيانات المستخدم إلى الـ request
     req.user = user;

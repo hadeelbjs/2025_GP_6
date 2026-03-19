@@ -113,10 +113,26 @@ const sendBiometricVerificationEmail = async (email, fullName, verificationCode)
     };
   }
 };
+const sendActivityAlertEmail = async (email, fullName, subject, htmlContent) => {
+  try {
+    const data = await resend.emails.send({
+      from: `وصـيد <${process.env.EMAIL_FROM}>`,
+      to: email,
+      subject: subject,
+      html: htmlContent,
+    });
+    console.log('✅ Activity alert email sent:', data.id);
+    return { success: true, messageId: data.id };
+  } catch (error) {
+    console.error('❌ Activity alert email error:', error);
+    return { success: false, error: error.message };
+  }
+};
 
 module.exports = { 
   sendVerificationEmail,
-  sendBiometricVerificationEmail  
+  sendBiometricVerificationEmail, 
+   sendActivityAlertEmail
 };
 
 /*

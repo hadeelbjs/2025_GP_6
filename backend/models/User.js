@@ -56,6 +56,7 @@ pendingUnknownDeviceAlert: { type: String, default: null },
   unfreezeCode: String,
   unfreezeCodeExpires: Date,
   freezeToken: String,
+  freezeTokenExpires: Date,
 
 
   // وضع الطوارئ

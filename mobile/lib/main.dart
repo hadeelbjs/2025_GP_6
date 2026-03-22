@@ -27,6 +27,9 @@ import 'features/services_hub/screens/chatbot.dart';
 import 'features/services_hub/screens/password_generator.dart';
 import 'features/account/screens/frozen_account_screen.dart';
 import 'package:app_links/app_links.dart';
+import 'features/authentication/screens/reset_password.dart';
+
+
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -37,9 +40,30 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({Key? key}) : super(key: key);
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
 
+class _MyAppState extends State<MyApp> {
+  late AppLinks _appLinks;
+
+  @override
+  void initState() {
+    super.initState();
+    _appLinks = AppLinks();
+    _appLinks.uriLinkStream.listen((uri) {
+      if (uri.scheme == 'waseed' && uri.host == 'frozen') {
+        final type = uri.queryParameters['type'] ?? 'email';
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/frozen',
+          (route) => false,
+          arguments: {'type': type},
+        );
+      }
+    });
+  }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -70,6 +94,8 @@ class MyApp extends StatelessWidget {
         '/chatbot': (context) => const ChatbotScreen(),
         '/password_generator': (context) => const PasswordGeneratorScreen(),
         '/frozen': (context) => const FrozenAccountScreen(),
+        '/forgot-password': (context) => const ResetPasswordScreen(),
+
       },
     );
   }

@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-const { sendVerificationEmail , sendActivityAlertEmail } = require('../utils/emailService');
+const { sendVerificationEmail , sendActivityAlertEmail , sendUnfreezeCodeEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
@@ -25,31 +25,59 @@ const generateCode = () => {
 
 
 async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
-    const freezeLink = `${process.env.BASE_URL}/api/user/freeze-by-token?token=${freezeToken}`;
-    const changeLabel = 
-        changeType === 'email' ? 'بريدك الإلكتروني' :
-        changeType === 'phone' ? 'رقم جوالك' : 'كلمة مرورك';
 
-    await sendActivityAlertEmail(oldEmail, fullName, `تنبيه أمني — تم تغيير ${changeLabel}`, `
-        <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
-            <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
-                <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
-            </div>
-            <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
-                <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
-                <p style="font-size:15px">تم تغيير <strong>${changeLabel}</strong> في حسابك.</p>
-                <p style="font-size:15px;color:#555">إذا لم تكن أنت من قام بذلك، اضغط الزر أدناه لتجميد حسابك فوراً:</p>
-                <div style="text-align:center;margin:30px 0;">
-                    <a href="${freezeLink}" 
-                       style="background:#dc2626;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
-                        تجميد حسابي فوراً
-                    </a>
-                </div>
-                <p style="font-size:13px;color:#888">إذا كنت أنت من قام بهذا التغيير، تجاهل هذه الرسالة.</p>
-                <p style="font-size:13px;color:#888">هذا الرابط صالح لمدة 30 دقيقة.</p>
-            </div>
-        </div>`
+  // تغيير الجوال — إشعار فقط بدون تجميد
+  if (changeType === 'phone') {
+    await sendActivityAlertEmail(
+      oldEmail,
+      fullName,
+      'تنبيه أمني — تم تغيير رقم جوالك',
+      `
+      <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
+        <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+          <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
+        </div>
+        <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
+          <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
+          <p style="font-size:15px">تم تغيير <strong>رقم جوالك</strong> في حسابك.</p>
+          <p style="font-size:15px;color:#555">إذا لم تكن أنت من قام بذلك، يُنصح بفتح التطبيق والذهاب إلى إعدادات الحساب وتغيير رقم الجوال فوراً.</p>
+          <p style="font-size:13px;color:#888">إذا كنت أنت من قام بهذا التغيير، تجاهل هذه الرسالة.</p>
+        </div>
+      </div>
+      `
     );
+    return;
+  }
+
+  // تغيير الإيميل أو الباسورد — تجميد
+  const freezeLink = `${process.env.BASE_URL}/api/user/freeze-by-token?token=${freezeToken}&type=${changeType}`;
+  const changeLabel = changeType === 'email' ? 'بريدك الإلكتروني' : 'كلمة مرورك';
+
+  await sendActivityAlertEmail(
+    oldEmail,
+    fullName,
+    `تنبيه أمني — تم تغيير ${changeLabel}`,
+    `
+    <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
+      <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+        <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
+      </div>
+      <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
+        <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
+        <p style="font-size:15px">تم تغيير <strong>${changeLabel}</strong> في حسابك.</p>
+        <p style="font-size:15px;color:#555">إذا لم تكن أنت من قام بذلك، اضغط الزر أدناه لتجميد حسابك فوراً:</p>
+        <div style="text-align:center;margin:30px 0;">
+          <a href="${freezeLink}" 
+             style="background:#dc2626;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
+            تجميد حسابي فوراً
+          </a>
+        </div>
+        <p style="font-size:13px;color:#888">إذا كنت أنت من قام بهذا التغيير، تجاهل هذه الرسالة.</p>
+        <p style="font-size:13px;color:#888">هذا الرابط صالح لمدة 30 دقيقة.</p>
+      </div>
+    </div>
+    `
+  );
 }
 // ============================================
 // تحديث الصورة الرمزية (Memoji)
@@ -263,6 +291,8 @@ router.post('/verify-email-change', auth, async (req, res) => {
     user.newEmailVerificationExpires = undefined;
     user.pendingEmail = undefined;
     user.freezeToken = freezeToken;
+    user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); // ← أضيف
+
     await user.save();
     await sendActivityAlert(oldEmail, user.fullName, 'email', freezeToken);
 
@@ -383,13 +413,12 @@ router.post('/verify-phone-change', auth, async (req, res) => {
       .create({ to: normalizedPhone, code });
 
     if (check.status === 'approved') {
-      const freezeToken = crypto.randomBytes(32).toString('hex');
       user.phone = normalizedPhone;
       user.isPhoneVerified = true;
       user.pendingPhone = undefined;
-      user.freezeToken = freezeToken;
+      
       await user.save();
-      await sendActivityAlert(user.email, user.fullName, 'phone', freezeToken);
+      await sendActivityAlert(user.email, user.fullName, 'phone', null);
 
       return res.json({
         success: true,
@@ -466,6 +495,7 @@ router.post('/change-password', [
     const freezeToken = crypto.randomBytes(32).toString('hex');
     user.password = hashedPassword;
     user.freezeToken = freezeToken;
+    user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); 
     await user.save();
     await sendActivityAlert(user.email, user.fullName, 'password', freezeToken);
 
@@ -546,10 +576,12 @@ router.delete('/delete-account', auth, async (req, res) => {
 
 // تجميد الحساب عبر رابط الإيميل
 router.get('/freeze-by-token', async (req, res) => {
-    const { token } = req.query;
+    const { token, type } = req.query;
     try {
-        const user = await User.findOne({ freezeToken: token });
-        if (!user) {
+const user = await User.findOne({ 
+  freezeToken: token,
+  freezeTokenExpires: { $gt: Date.now() } // ← أضيف
+});        if (!user) {
             return res.send(`
                 <!DOCTYPE html>
                 <html dir="rtl">
@@ -581,7 +613,7 @@ router.get('/freeze-by-token', async (req, res) => {
         await user.save();
 
         const emailToSend = user.previousEmail || user.email;
-        await sendVerificationEmail(emailToSend, user.fullName, unfreezeCode);
+        await sendUnfreezeCodeEmail(emailToSend, user.fullName, unfreezeCode);
 
         return res.send(`
             <!DOCTYPE html>
@@ -604,7 +636,7 @@ router.get('/freeze-by-token', async (req, res) => {
                     <h2>تم تجميد حسابك</h2>
                     <p>تم إرسال رمز فك التجميد إلى بريدك الإلكتروني</p>
                     <br>
-                    <a href="waseed://frozen" 
+                      <a href="waseed://frozen?type=${type || 'email'}"
                        style="display:inline-block;background:#2D1B69;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:16px;font-weight:bold;margin-top:16px;">
                         افتح تطبيق وصيد
                     </a>
@@ -633,20 +665,33 @@ router.post('/unfreeze-account', async (req, res) => {
     try {
         const user = await User.findOne({
             $or: [
-                { email: email.toLowerCase() },
+                { previousEmail: { $exists: false }, email: email.toLowerCase() },
                 { previousEmail: email.toLowerCase() }
             ],
             unfreezeCode: code,
             unfreezeCodeExpires: { $gt: Date.now() }
         });
+
         if (!user) {
-            return res.status(400).json({ success: false, message: 'الرمز غير صحيح أو منتهي الصلاحية' });
+            return res.status(400).json({ 
+                success: false, 
+                message: 'الرمز غير صحيح أو منتهي الصلاحية' 
+            });
         }
+
         user.isAccountFrozen = false;
         user.unfreezeCode = undefined;
         user.unfreezeCodeExpires = undefined;
+
+        // لو فيه إيميل قديم — ارجعه وامسح الجديد
+        if (user.previousEmail) {
+            user.email = user.previousEmail;
+            user.previousEmail = undefined;
+        }
+
         await user.save();
         res.json({ success: true, message: 'تم فك تجميد حسابك بنجاح' });
+
     } catch (err) {
         res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
     }

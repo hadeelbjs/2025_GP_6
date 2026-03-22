@@ -15,6 +15,7 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
   final _codeController = TextEditingController();
   final _api = ApiService();
   bool _loading = false;
+  String _freezeType = 'email';
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
   late Animation<Offset> _slideAnim;
@@ -28,7 +29,14 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
         .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
   }
-
+@override
+void didChangeDependencies() {
+  super.didChangeDependencies();
+  final args = ModalRoute.of(context)?.settings.arguments;
+  if (args != null && args is Map) {
+    _freezeType = args['type'] ?? 'email';
+  }
+}
   @override
   void dispose() {
     _animController.dispose();
@@ -88,10 +96,12 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
                       color: Colors.white,
                     )),
                 const SizedBox(height: 12),
-                const Text(
-                  'حسابك الآن آمن.\nيمكنك تسجيل الدخول.',
+                Text(
+                  _freezeType == 'password'
+                    ? 'تم فك التجميد بنجاح.\nيرجى الآن تغيير كلمة المرور\nلكي تتمكن من تسجيل الدخول واستخدام وصيد.'
+                    : 'حسابك الآن آمن.\nيمكنك تسجيل الدخول.',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontFamily: 'IBMPlexSansArabic',
                     fontSize: 13,
                     color: Colors.white60,
@@ -121,7 +131,17 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
           ),
         ),
       );
-      navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (r) => false);
+      if (_freezeType == 'password') {
+  navigatorKey.currentState?.pushNamedAndRemoveUntil(
+    '/forgot-password',
+    (r) => false,
+  );
+} else {
+  navigatorKey.currentState?.pushNamedAndRemoveUntil(
+    '/login',
+    (r) => false,
+  );
+}
     } else {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
         content: Text(result['message'] ?? 'حدث خطأ',
@@ -201,9 +221,11 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
                             children: [
                               Icon(Icons.warning_amber_rounded, color: Colors.red.shade400, size: 20),
                               const SizedBox(width: 10),
-                              const Expanded(
+                               Expanded(
                                 child: Text(
-                                  'تم رصد نشاط مشبوه على حسابك.\nأدخل بريدك القديم ورمز فك التجميد الذي أُرسل إليك.',
+                                _freezeType == 'password'
+                                  ? 'تم رصد تغيير في كلمة مرورك.\nأدخل بريدك الإلكتروني ورمز فك التجميد.'
+                                  : 'تم رصد نشاط مشبوه على حسابك.\nأدخل بريدك القديم ورمز فك التجميد.',
                                   style: TextStyle(
                                     fontFamily: 'IBMPlexSansArabic',
                                     fontSize: 13,
@@ -218,7 +240,7 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
                         const SizedBox(height: 36),
                         _buildField(
                           controller: _emailController,
-                          label: 'بريدك الإلكتروني القديم',
+                         label: _freezeType == 'password' ? 'بريدك الإلكتروني' : 'بريدك الإلكتروني القديم',
                           icon: Icons.email_outlined,
                           keyboardType: TextInputType.emailAddress,
                         ),

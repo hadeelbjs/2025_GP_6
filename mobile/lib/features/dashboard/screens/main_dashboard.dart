@@ -17,8 +17,8 @@ import 'notifications.dart';
 import '../services/notification_service.dart';
 import '../../../core/models/app_notifications.dart';
 import '../../../services/anomaly_detection_service.dart';
-
 import 'dart:convert';
+
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
 

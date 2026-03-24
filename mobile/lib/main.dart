@@ -25,10 +25,10 @@ import 'package:geolocator/geolocator.dart';
 import 'features/services_hub/screens/image_scanner_screen.dart';
 import 'features/services_hub/screens/chatbot.dart';
 import 'features/services_hub/screens/password_generator.dart';
+import 'features/services_hub/screens/breach_lookup.dart';
 import 'features/account/screens/frozen_account_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'features/authentication/screens/reset_password.dart';
-
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -95,6 +95,7 @@ class _MyAppState extends State<MyApp> {
         '/password_generator': (context) => const PasswordGeneratorScreen(),
         '/frozen': (context) => const FrozenAccountScreen(),
         '/forgot-password': (context) => const ResetPasswordScreen(),
+        '/breach-lookup' : (context) => BreachLookup(),
 
       },
     );

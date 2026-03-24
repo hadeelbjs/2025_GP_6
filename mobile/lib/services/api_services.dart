@@ -13,11 +13,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'local_db/database_helper.dart';
 import '../features/dashboard/services/notification_service.dart';
+
 class ApiService {
   // ============================
   // Base URL deployment
   // ============================
   static String? get baseUrl => AppConfig.apiBaseUrl;
+
+  // ─── HIBP Config ───────────────────────────────────────────
+  static String _hibpApiKey = AppConfig.hibpApikey;
+  static const String _hibpBaseUrl = 'https://haveibeenpwned.com/api/v3';
+
 
   // Base URL بحسب المنصة
   // ============================
@@ -1380,4 +1386,39 @@ Future<Map<String, dynamic>> freezeByToken(String token) async {
     return {'success': false};
   }
 }
+
+
+
+Future<List> checkEmailBreach(String email) async {
+ try {
+    print(email);
+    final url = Uri.parse(
+      '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
+    );
+
+    final response = await http.get(url, headers: {
+      'hibp-api-key': _hibpApiKey,
+      'user-agent': 'MyFlutterApp',
+    });
+
+    if (response.statusCode == 200) {
+      final List breaches = jsonDecode(response.body);
+     
+      return breaches;
+
+    } else if (response.statusCode == 404){
+      return [];
+    }
+    else {
+      throw new Exception('فشل البحث: ${response.statusCode} ');
+    }
+ } catch (e){
+  throw Exception('خطأ: $e');
+ }
+
+
+
+}
+
+
 }

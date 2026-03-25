@@ -187,7 +187,7 @@ void didChangeDependencies() {
                 opacity: _fadeAnim,
                 child: SlideTransition(
                   position: _slideAnim,
-                  child: Padding(
+                  child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,

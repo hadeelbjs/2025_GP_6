@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:waseed/features/authentication/screens/splash_screen.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../services/api_services.dart';
+
 class BreachLookup extends StatefulWidget {
   const BreachLookup({super.key});
 
@@ -11,11 +12,12 @@ class BreachLookup extends StatefulWidget {
 
 class _BreachLookupState extends State<BreachLookup> {
   final ApiService _apiService = new ApiService();
-  final TextEditingController _emailController = TextEditingController(); 
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
 
   @override
   void dispose() {
-    _emailController.dispose(); 
+    _emailController.dispose();
     super.dispose();
   }
 
@@ -32,119 +34,149 @@ class _BreachLookupState extends State<BreachLookup> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                
                 SizedBox(height: 5),
                 Text(
-                  "ادخل بريدك الالكتروني للتحقق من وجوده في تسريبات للبيانات",
-                  style: TextStyle(
+"أدخل عنوان بريدك الإلكتروني للبحث في تسريبات البيانات معروفة",                  style: TextStyle(
                     fontSize: 14,
                     color: AppColors.primaryLight,
-                    fontWeight: FontWeight.w600
-
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 SizedBox(height: 15),
                 TextField(
                   controller: _emailController,
-                decoration: InputDecoration(
-                  hintText: "example@email.com",
-                  hintTextDirection: TextDirection.ltr,
-                  labelText: "البريد الإلكتروني",
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-              ),
-
-              SizedBox(height:22),
-
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () async {
-                    final email = _emailController.text.trim(); 
-  
-                     if (email.isEmpty) return; 
-  
-                    List breaches = await _apiService.checkEmailBreach(email);
-
-                     if (breaches.isEmpty) {
-                        showDialog(
-                          context: context,
-                          builder: (_) => AlertDialog(
-                            title: const Text(" بريدك آمن", textAlign: TextAlign.center),
-                            content: const Text(
-                              "لم يتم العثور على أي تسريبات لهذا البريد الإلكتروني",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontFamily: "IBMPlexSansArabic"),
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context),
-                                child: const Text("حسناً"),
-                              ),
-                            ],
-                          ),
-                        );
-                        return;
-                      }
-
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => Container(
-                        height: MediaQuery.of(context).size.height * 0.85,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                "نتائج البحث (${breaches.length})",
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  fontFamily: "IBMPlexSansArabic",
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Expanded(
-                                child: ListView.builder(
-                                  itemCount: breaches.length,
-                                  itemBuilder: (_, index) => BreachCard(breach: breaches[index]),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
+                  decoration: InputDecoration(
+                    hintText: "example@email.com",
+                    hintTextDirection: TextDirection.ltr,
+                    labelText: "البريد الإلكتروني",
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text("ابحث الآن",
-                  style: TextStyle(
-                    color: Colors.white
-                  ),
+                ),
+
+                SizedBox(height: 22),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      final email = _emailController.text.trim();
+
+                      if (email.isEmpty) return;
+
+                      List breaches = await _apiService.checkEmailBreach(email);
+
+                      if (breaches.isEmpty) {
+                        showDialog(
+                          context: context,
+                          builder: (context) => Directionality(
+                            textDirection: TextDirection.rtl,
+                            child: AlertDialog(
+                              backgroundColor: const Color(0xFF2D1B69),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              title: Row(
+                                children: [
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "بريدك آمن",
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'IBMPlexSansArabic',
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              content: Text(
+                                "لم يتم العثور على أي تسريبات لهذا البريد الإلكتروني",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontFamily: 'IBMPlexSansArabic',
+                                  height: 1.8,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context),
+                                  child: const Text(
+                                    'حسناً',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontFamily: 'IBMPlexSansArabic',
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+
+                        return;
+                      }
+
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => Container(
+                          height: MediaQuery.of(context).size.height * 0.85,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.vertical(
+                              top: Radius.circular(24),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(20),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  "نتائج البحث (${breaches.length})",
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    fontFamily: "IBMPlexSansArabic",
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Expanded(
+                                  child: ListView.builder(
+                                    itemCount: breaches.length,
+                                    itemBuilder: (_, index) =>
+                                        BreachCard(breach: breaches[index]),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text(
+                      "ابحث الآن",
+                      style: TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
-              ),
-
+                
               ],
-            )
-            )
-        )
-
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -152,7 +184,7 @@ class _BreachLookupState extends State<BreachLookup> {
   AppBar appBar() {
     return AppBar(
       title: Text(
-        "البحث عن تسريبات",
+        "كشف تسريب بياناتك",
         style: TextStyle(
           color: AppColors.primary,
           fontFamily: "IBMPlexSansArabic",
@@ -167,6 +199,7 @@ class _BreachLookupState extends State<BreachLookup> {
     );
   }
 }
+
 class BreachCard extends StatelessWidget {
   final Map<String, dynamic> breach;
 
@@ -214,23 +247,45 @@ class BreachCard extends StatelessWidget {
     final advice = <Map<String, dynamic>>[];
 
     if (dataClasses.contains('Passwords')) {
-      advice.add({'icon': Icons.lock_reset_rounded, 'text': 'غيّر كلمة مرورك فوراً في هذا الموقع وأي موقع يشارك نفس الكلمة'});
+      advice.add({
+        'icon': Icons.lock_reset_rounded,
+        'text': 'غيّر كلمة مرورك فوراً في هذا الموقع وأي موقع يشارك نفس الكلمة',
+      });
     }
     if (dataClasses.contains('Email addresses')) {
-      advice.add({'icon': Icons.mark_email_unread_rounded, 'text': 'كن حذراً من رسائل التصيد الاحتيالي على بريدك الإلكتروني'});
+      advice.add({
+        'icon': Icons.mark_email_unread_rounded,
+        'text': 'كن حذراً من رسائل التصيد الاحتيالي على بريدك الإلكتروني',
+      });
     }
-    if (dataClasses.contains('Credit cards') || dataClasses.contains('Bank account numbers')) {
-      advice.add({'icon': Icons.credit_card_off_rounded, 'text': 'راجع كشف حسابك البنكي وأبلغ البنك عن أي معاملات مشبوهة'});
+    if (dataClasses.contains('Credit cards') ||
+        dataClasses.contains('Bank account numbers')) {
+      advice.add({
+        'icon': Icons.credit_card_off_rounded,
+        'text': 'راجع كشف حسابك البنكي وأبلغ البنك عن أي معاملات مشبوهة',
+      });
     }
     if (dataClasses.contains('Phone numbers')) {
-      advice.add({'icon': Icons.phone_locked_rounded, 'text': 'احذر من مكالمات أو رسائل SMS مجهولة المصدر'});
+      advice.add({
+        'icon': Icons.phone_locked_rounded,
+        'text': 'احذر من مكالمات أو رسائل SMS مجهولة المصدر',
+      });
     }
     if (dataClasses.contains('Security questions and answers')) {
-      advice.add({'icon': Icons.security_rounded, 'text': 'غيّر أسئلة الأمان في حساباتك المهمة فوراً'});
+      advice.add({
+        'icon': Icons.security_rounded,
+        'text': 'غيّر أسئلة الأمان في حساباتك المهمة فوراً',
+      });
     }
 
-    advice.add({'icon': Icons.verified_user_rounded, 'text': 'فعّل المصادقة الثنائية (2FA) على حساباتك'});
-    advice.add({'icon': Icons.manage_search_rounded, 'text': 'راقب حساباتك بانتظام للكشف عن أي نشاط غير معتاد'});
+    advice.add({
+      'icon': Icons.verified_user_rounded,
+      'text': 'فعّل المصادقة الثنائية (2FA) على حساباتك',
+    });
+    advice.add({
+      'icon': Icons.manage_search_rounded,
+      'text': 'راقب حساباتك بانتظام للكشف عن أي نشاط غير معتاد',
+    });
 
     return advice;
   }
@@ -267,7 +322,6 @@ class BreachCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-
             // ── الهيدر ──
             Container(
               padding: const EdgeInsets.all(16),
@@ -277,7 +331,9 @@ class BreachCard extends StatelessWidget {
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
                 ),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(20),
+                ),
               ),
               child: Row(
                 children: [
@@ -329,7 +385,10 @@ class BreachCard extends StatelessWidget {
                   ),
                   // عدد الحسابات المخترقة
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
                       borderRadius: BorderRadius.circular(10),
@@ -365,10 +424,12 @@ class BreachCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-
                   // ── تاريخ التسريب ──
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     decoration: BoxDecoration(
                       color: _greyLight,
                       borderRadius: BorderRadius.circular(10),
@@ -376,7 +437,11 @@ class BreachCard extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.calendar_today_rounded, size: 14, color: _grey),
+                        const Icon(
+                          Icons.calendar_today_rounded,
+                          size: 14,
+                          color: _grey,
+                        ),
                         const SizedBox(width: 6),
                         Text(
                           "تاريخ التسريب:  ${breach['BreachDate'] ?? 'غير معروف'}",
@@ -407,7 +472,10 @@ class BreachCard extends StatelessWidget {
                     runSpacing: 8,
                     children: dataClasses.map((item) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: _purpleLight,
                           borderRadius: BorderRadius.circular(20),
@@ -447,7 +515,11 @@ class BreachCard extends StatelessWidget {
                                 color: _purpleLight,
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(Icons.shield_rounded, size: 16, color: _purple),
+                              child: const Icon(
+                                Icons.shield_rounded,
+                                size: 16,
+                                color: _purple,
+                              ),
                             ),
                             const SizedBox(width: 8),
                             const Text(
@@ -461,38 +533,40 @@ class BreachCard extends StatelessWidget {
                           ],
                         ),
                         const SizedBox(height: 12),
-                        ...advice.map((tip) => Padding(
-                          padding: const EdgeInsets.only(bottom: 10),
-                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: _purpleLight,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Icon(
-                                  tip['icon'] as IconData,
-                                  size: 16,
-                                  color: _purple,
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              Expanded(
-                                child: Text(
-                                  tip['text']!,
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontFamily: _fontFamily,
-                                    color: _grey,
-                                    height: 1.5,
+                        ...advice.map(
+                          (tip) => Padding(
+                            padding: const EdgeInsets.only(bottom: 10),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: _purpleLight,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Icon(
+                                    tip['icon'] as IconData,
+                                    size: 16,
+                                    color: _purple,
                                   ),
                                 ),
-                              ),
-                            ],
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    tip['text']!,
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontFamily: _fontFamily,
+                                      color: _grey,
+                                      height: 1.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        )),
+                        ),
                       ],
                     ),
                   ),

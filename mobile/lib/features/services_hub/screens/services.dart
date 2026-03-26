@@ -5,6 +5,7 @@ import '/shared/widgets/search_bar.dart' as custom;
 import '../../../services/messaging_service.dart';
 import '../../../services/api_services.dart';
 import 'breach_lookup.dart';
+
 class ServicesScreen extends StatefulWidget {
   const ServicesScreen({Key? key}) : super(key: key);
 
@@ -47,10 +48,10 @@ class _ServicesScreenState extends State<ServicesScreen>
       'color': const Color.fromARGB(198, 40, 27, 103),
       'route': '/password_generator',
     },
-     {
-      'title': 'التحقق من تسريب البيانات',
-      'description': 'ابحث للتأكد',
-      'icons': [Icons.key_rounded],
+    {
+      'title': 'كشف تسريب بياناتك',
+      'description': 'تحقق إذا تم تسريب بريدك أو كلمة مرورك',
+      'icons': [Icons.manage_search_rounded],
       'color': const Color.fromARGB(198, 40, 27, 103),
       'route': '/breach-lookup',
     },

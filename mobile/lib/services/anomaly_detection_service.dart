@@ -8,23 +8,36 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import '../features/dashboard/services/notification_service.dart';
 import '../core/models/app_notifications.dart';
-
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'dart:convert';
 class AnomalyDetectionService {
 
   static const String _wifiSsidKey = 'last_checked_ssid';
   final ApiService _api = ApiService();
+  final Set<String> _shownThisSession = {};
   
 
   // ----------------------------------------------------------
   // الدالة الرئيسية — تُستدعى من main_dashboard.dart
   // ----------------------------------------------------------
   Future<void> runChecks() async {
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    print('🔍 Anomaly Detection: بدء الفحص...');
+    print('Anomaly Detection: بدء الفحص...');
 
     try {
-      final deviceName = await _getDeviceName();
-      print('📱 Device: ${deviceName ?? 'غير متاح'}');
+  final deviceName = await _getDeviceName();
+    print('📱 Device: ${deviceName ?? 'غير متاح'}');
+
+    // تحقق إذا هذا الجهاز هو جهاز التسجيل الأصلي
+      final storage = const FlutterSecureStorage();
+      final userDataStr = await storage.read(key: 'user_data');
+      if (userDataStr != null) {
+        final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
+        final registeredDevice = userData['registrationDevice'];
+        if (registeredDevice != null && registeredDevice != deviceName) {
+          print(' جهاز غير معروف — إيقاف runChecks');
+          return;
+        }
+      }
 
       final locationData = await _getLocationData();
       if (locationData != null) {
@@ -53,19 +66,27 @@ class AnomalyDetectionService {
       if (result['success'] == true && result['anomalies'] != null) {
         final List anomalies = result['anomalies'];
         print('🚨 Anomalies: ${anomalies.length}');
+
         final prefs = await SharedPreferences.getInstance();
         for (final a in anomalies) {
           print('   → type: ${a['type']} | detail: ${a['detail']}');
+for (final a in anomalies) {
+  final sessionKey = '${a['type']}_${a['detail']}';
+  if (_shownThisSession.contains(sessionKey)) {
+    print('   ⏭️ تم تخطي — نفس الإشعار في هذه الجلسة');
+    continue;
+  }
+  _shownThisSession.add(sessionKey);
 
-          if (a['type'] == 'new_wifi' || a['type'] == 'new_location') {
-            final key = 'last_shown_${a['type']}';
-            final lastShown = prefs.getString(key) ?? '';
-            if (lastShown == a['detail']) {
-              print('   ⏭️ تم تخطي — نفس الإشعار السابق');
-              continue;
-            }
-            await prefs.setString(key, a['detail']);
-          }
+  NotificationService().addNotification(AppNotification(
+    id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
+    type: _mapType(a['type']),
+    title: _getTitle(a['type']),
+    message: a['detail'] ?? '',
+    createdAt: DateTime.now(),
+    isRead: false,
+  ));
+}
 
   NotificationService().addNotification(AppNotification(
               id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',

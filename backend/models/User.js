@@ -49,6 +49,8 @@ pendingUnknownDeviceAlert: { type: String, default: null },
   newEmailVerificationCode: String,
   newEmailVerificationExpires: Date,
   pendingEmail: String,
+  verificationCode: String,
+  verificationCodeExpires: Date,
 
 // Anomaly part2 
   previousEmail: { type: String },

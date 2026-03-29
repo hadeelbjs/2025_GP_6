@@ -1362,9 +1362,48 @@ Future<Map<String, dynamic>> freezeByToken(String token) async {
 }
 
 
+Future<Map<String, dynamic>> sendOTPforIdentityVerification() async {
+  try {
+    final token = await getAccessToken();
+    if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/send-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
+Future<Map<String, dynamic>> verifyOTPforIdentityVerification(String code) async {
+  try {
+      final token = await getAccessToken();
+      if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
+
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/verify-otp'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token',},
+      body: jsonEncode({
+      'code' :code
+      }),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
+
+
+
 
 Future<List> checkEmailBreach(String email) async {
  try {
+   final token = await getAccessToken();
+    if (token == null) throw Exception('يجب تسجيل الدخول');
+
     final url = Uri.parse(
       '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
     );

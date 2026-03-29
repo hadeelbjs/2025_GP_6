@@ -233,7 +233,8 @@ module.exports = {
   sendVerificationEmail,
   sendBiometricVerificationEmail, 
    sendActivityAlertEmail, 
-    sendUnfreezeCodeEmail
+    sendUnfreezeCodeEmail,
+    sendVerificationOTP
 };
 
 /*

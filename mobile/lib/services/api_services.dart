@@ -1369,7 +1369,8 @@ Future<Map<String, dynamic>> sendOTPforIdentityVerification() async {
 
     final response = await http.post(
       Uri.parse('$baseUrl/auth/send-otp'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {'Content-Type': 'application/json',
+       'Authorization': 'Bearer $token',},
       body: jsonEncode({}),
     );
     return jsonDecode(response.body);
@@ -1395,9 +1396,6 @@ Future<Map<String, dynamic>> verifyOTPforIdentityVerification(String code) async
     return {'success': false, 'message': 'خطأ في الاتصال'};
   }
 }
-
-
-
 
 Future<List> checkEmailBreach(String email) async {
  try {

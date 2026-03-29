@@ -435,8 +435,6 @@ class ApiService {
     await _storage.delete(key: 'user_data');
     await _storage.delete(key: 'refresh_data');
     final prefs = await SharedPreferences.getInstance();
-
-   
     await prefs.remove('known_breach_names');
     NotificationService().resetSession();
 

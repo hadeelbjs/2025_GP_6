@@ -899,8 +899,7 @@ if (deviceName && user.registrationDevice && user.registrationDevice !== deviceN
         email: user.email,
         phone: user.phone,
         isEmailVerified: user.isEmailVerified,
-        isPhoneVerified: user.isPhoneVerified,
-        registrationDevice: user.registrationDevice ?? null
+        isPhoneVerified: user.isPhoneVerified
       }
     });
 
@@ -1306,8 +1305,7 @@ router.post('/biometric-login', async (req, res) => {
         memoji: user.memoji || '😊',
         isEmailVerified: user.isEmailVerified,
         isPhoneVerified: user.isPhoneVerified,
-        biometricEnabled: user.biometricEnabled,
-        registrationDevice: user.registrationDevice ?? null
+        biometricEnabled: user.biometricEnabled
       }
     });
 

@@ -89,9 +89,9 @@ class _PasswordGeneratorScreenState extends State<PasswordGeneratorScreen> {
     if (RegExp(r'[0-9]').hasMatch(_generatedPassword)) score++;
     if (RegExp(r'[!@#\$%^&*]').hasMatch(_generatedPassword)) score++;
 
-    if (score <= 3) return 'Weak';
-    if (score <= 5) return 'Medium';
-    return 'Strong';
+    if (score <= 3) return 'ضعيفة';
+    if (score <= 5) return 'متوسطة';
+    return 'قوية';
   }
 
   Color _getStrengthColor() {

@@ -97,9 +97,9 @@ class _PasswordGeneratorScreenState extends State<PasswordGeneratorScreen> {
   Color _getStrengthColor() {
     final strength = _getPasswordStrength();
 
-    if (strength == 'Weak') return Colors.red;
-    if (strength == 'Medium') return Colors.orange;
-    if (strength == 'Strong') return Colors.green;
+    if (strength == 'ضعيفة') return Colors.red;
+    if (strength == 'متوسطة') return Colors.orange;
+    if (strength == 'قوية') return Colors.green;
 
     return Colors.grey;
   }

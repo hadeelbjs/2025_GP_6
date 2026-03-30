@@ -45,25 +45,37 @@ class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
 }
-
+String? pendingDeepLinkRoute;
+Map<String, dynamic>? pendingDeepLinkArgs;
 class _MyAppState extends State<MyApp> {
   late AppLinks _appLinks;
+ @override
+void initState() {
+  super.initState();
+  _appLinks = AppLinks();
 
-  @override
-  void initState() {
-    super.initState();
-    _appLinks = AppLinks();
-    _appLinks.uriLinkStream.listen((uri) {
-      if (uri.scheme == 'waseed' && uri.host == 'frozen') {
-        final type = uri.queryParameters['type'] ?? 'email';
-        navigatorKey.currentState?.pushNamedAndRemoveUntil(
-          '/frozen',
-          (route) => false,
-          arguments: {'type': type},
-        );
-      }
-    });
-  }
+  // انتظر التطبيق يبني نفسه كامل
+  Future.delayed(const Duration(milliseconds: 300), () async {
+    final uri = await _appLinks.getInitialAppLink();
+    print('🔗 Initial after delay: $uri');
+    if (uri != null && uri.scheme == 'waseed' && uri.host == 'frozen') {
+      pendingDeepLinkRoute = '/frozen';
+      pendingDeepLinkArgs = {'type': uri.queryParameters['type'] ?? 'email'};
+    }
+  });
+
+  _appLinks.uriLinkStream.listen((uri) {
+    print('🔗 Stream: $uri');
+    if (uri.scheme == 'waseed' && uri.host == 'frozen') {
+      final type = uri.queryParameters['type'] ?? 'email';
+      navigatorKey.currentState?.pushNamedAndRemoveUntil(
+        '/frozen',
+        (route) => false,
+        arguments: {'type': type},
+      );
+    }
+  });
+}
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -143,8 +155,16 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkAuthStatus() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
+  if (pendingDeepLinkRoute != null) {
+    final route = pendingDeepLinkRoute!;
+    final args = pendingDeepLinkArgs;
+    pendingDeepLinkRoute = null;
+    pendingDeepLinkArgs = null;
+    Navigator.of(context).pushReplacementNamed(route, arguments: args);
+    return;
+  }
 
     try {
       print('Checking app state...');
@@ -194,9 +214,9 @@ class _SplashScreenState extends State<SplashScreen>
       final success = await MessagingService().initialize();
 
       if (success) {
-        print('✅ MessagingService initialized successfully');
+        print('MessagingService initialized successfully');
       } else {
-        print('❌ MessagingService initialization failed');
+        print('MessagingService initialization failed');
         // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
       }
     } catch (e) {
@@ -208,7 +228,6 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> clearOldKeys() async {
     final storage = FlutterSecureStorage();
 
-    print('🗑️ Clearing all old encryption keys...');
 
     // حذف جميع المفاتيح
     final allKeys = await storage.readAll();
@@ -225,7 +244,6 @@ class _SplashScreenState extends State<SplashScreen>
       }
     }
 
-    print('✅ All old keys cleared!');
   }
 
   /// تهيئة التشفير للمستخدم المسجل دخول

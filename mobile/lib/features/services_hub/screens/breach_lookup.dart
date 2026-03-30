@@ -22,63 +22,88 @@ class _BreachLookupState extends State<BreachLookup> {
   }
 
   Future<String?> _showOTPDialog() async {
-  final otpController = TextEditingController();
-  return showDialog<String>(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        backgroundColor: const Color(0xFF2D1B69),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'أدخل رمز التحقق',
-          style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic'),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
-              style: TextStyle(color: Colors.white70, fontFamily: 'IBMPlexSansArabic', fontSize: 13),
+    final otpController = TextEditingController();
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: const Text(
+            'أدخل رمز التحقق',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'IBMPlexSansArabic',
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: otpController,
-              keyboardType: TextInputType.number,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.white, fontSize: 24, letterSpacing: 8),
-              decoration: InputDecoration(
-                hintText: '------',
-                hintStyle: const TextStyle(color: Colors.white38),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.white38),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'تم إرسال رمز التحقق إلى بريدك الإلكتروني',
+                style: TextStyle(
+                  color: Colors.white70,
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 13,
                 ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: Colors.white),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: otpController,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  letterSpacing: 8,
+                ),
+                decoration: InputDecoration(
+                  hintText: '------',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.white38),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: const BorderSide(color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontFamily: 'IBMPlexSansArabic',
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () =>
+                  Navigator.pop(context, otpController.text.trim()),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
+              child: const Text(
+                'تحقق',
+                style: TextStyle(
+                  color: Color(0xFF2D1B69),
+                  fontFamily: 'IBMPlexSansArabic',
                 ),
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: const Text('إلغاء', style: TextStyle(color: Colors.white54, fontFamily: 'IBMPlexSansArabic')),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, otpController.text.trim()),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.white),
-            child: const Text('تحقق', style: TextStyle(color: Color(0xFF2D1B69), fontFamily: 'IBMPlexSansArabic')),
-          ),
-        ],
       ),
-    ),
-  );
-}
-
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -95,7 +120,8 @@ class _BreachLookupState extends State<BreachLookup> {
               children: [
                 SizedBox(height: 5),
                 Text(
-"أدخل عنوان بريدك الإلكتروني للبحث في تسريبات البيانات",                  style: TextStyle(
+                  "أدخل عنوان بريدك الإلكتروني للبحث في تسريبات البيانات",
+                  style: TextStyle(
                     fontSize: 14,
                     color: AppColors.primaryLight,
                     fontWeight: FontWeight.w600,
@@ -124,136 +150,146 @@ class _BreachLookupState extends State<BreachLookup> {
 
                       if (email.isEmpty) return;
 
-                     setState(() => _isLoading = true);
+                      setState(() => _isLoading = true);
 
-  try {
-    // 1- أرسل OTP
-    final sendRes = await _apiService.sendOTPforIdentityVerification();
-    if (sendRes['success'] != true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(sendRes['message'] ?? 'فشل إرسال الرمز')),
-      );
-      return;
-    }
-
-    // 2- اعرض Dialog لإدخال OTP
-    final code = await _showOTPDialog();
-    if (code == null || code.isEmpty) return;
-
-    // 3- تحقق من OTP
-    final verifyRes = await _apiService.verifyOTPforIdentityVerification(code);
-    if (verifyRes['success'] != true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('رمز التحقق خاطئ أو منتهي الصلاحية')),
-      );
-      return;
-    }
-
-    // 4- بعد نجاح التحقق فقط، روح للـ HIBP
-    final breaches = await _apiService.checkEmailBreach(email);
-
-
-
-                      if (breaches.isEmpty) {
-                        showDialog(
-                          context: context,
-                          builder: (context) => Directionality(
-                            textDirection: TextDirection.rtl,
-                            child: AlertDialog(
-                              backgroundColor: const Color(0xFF2D1B69),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(20),
+                      try {
+                        // 1- أرسل OTP
+                        final sendRes = await _apiService
+                            .sendOTPforIdentityVerification(email);
+                        if (sendRes['success'] != true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                sendRes['message'] ?? 'فشل إرسال الرمز',
                               ),
-                              title: Row(
-                                children: [
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    "بريدك آمن",
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontFamily: 'IBMPlexSansArabic',
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                            ),
+                          );
+                          return;
+                        }
+
+                        // 2- اعرض Dialog لإدخال OTP
+                        final code = await _showOTPDialog();
+                        if (code == null || code.isEmpty) return;
+
+                        // 3- تحقق من OTP
+                        final verifyRes = await _apiService
+                            .verifyOTPforIdentityVerification(code);
+                        if (verifyRes['success'] != true) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'رمز التحقق خاطئ أو منتهي الصلاحية',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+
+                        // 4- بعد نجاح التحقق فقط، روح للـ HIBP
+                        final breaches = await _apiService.checkEmailBreach(
+                          email,
+                        );
+
+                        if (breaches.isEmpty) {
+                          showDialog(
+                            context: context,
+                            builder: (context) => Directionality(
+                              textDirection: TextDirection.rtl,
+                              child: AlertDialog(
+                                backgroundColor: const Color(0xFF2D1B69),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                title: Row(
+                                  children: [
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      "بريدك آمن",
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontFamily: 'IBMPlexSansArabic',
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                content: Text(
+                                  "لم يتم العثور على أي تسريبات لهذا البريد الإلكتروني",
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontFamily: 'IBMPlexSansArabic',
+                                    height: 1.8,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text(
+                                      'حسناً',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontFamily: 'IBMPlexSansArabic',
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                 ],
                               ),
-                              content: Text(
-                                "لم يتم العثور على أي تسريبات لهذا البريد الإلكتروني",
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontFamily: 'IBMPlexSansArabic',
-                                  height: 1.8,
-                                  fontSize: 13,
-                                ),
+                            ),
+                          );
+
+                          return;
+                        }
+                        // 5- اعرض النتائج
+
+                        showModalBottomSheet(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) => Container(
+                            height: MediaQuery.of(context).size.height * 0.85,
+                            decoration: const BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.vertical(
+                                top: Radius.circular(24),
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(context),
-                                  child: const Text(
-                                    'حسناً',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontFamily: 'IBMPlexSansArabic',
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    "نتائج البحث (${breaches.length})",
+                                    style: const TextStyle(
+                                      fontSize: 18,
                                       fontWeight: FontWeight.bold,
+                                      fontFamily: "IBMPlexSansArabic",
                                     ),
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 16),
+                                  Expanded(
+                                    child: ListView.builder(
+                                      itemCount: breaches.length,
+                                      itemBuilder: (_, index) =>
+                                          BreachCard(breach: breaches[index]),
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         );
-
-                        return;
-                      }
-    // 5- اعرض النتائج
-
-                      showModalBottomSheet(
-                        context: context,
-                        isScrollControlled: true,
-                        backgroundColor: Colors.transparent,
-                        builder: (_) => Container(
-                          height: MediaQuery.of(context).size.height * 0.85,
-                          decoration: const BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.vertical(
-                              top: Radius.circular(24),
-                            ),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.all(20),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  "نتائج البحث (${breaches.length})",
-                                  style: const TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    fontFamily: "IBMPlexSansArabic",
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Expanded(
-                                  child: ListView.builder(
-                                    itemCount: breaches.length,
-                                    itemBuilder: (_, index) =>
-                                        BreachCard(breach: breaches[index]),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    
                       } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('حدث خطأ: $e')),
-    );
-  } finally {
-    setState(() => _isLoading = false);
-  }},
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text('حدث خطأ: $e')));
+                      } finally {
+                        setState(() => _isLoading = false);
+                      }
+                    },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -262,15 +298,20 @@ class _BreachLookupState extends State<BreachLookup> {
                       ),
                     ),
                     child: _isLoading
-      ? const SizedBox(
-          height: 20,
-          width: 20,
-          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-        )
-      : const Text('ابحث الآن', style: TextStyle(color: Colors.white)),
-  ),
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'ابحث الآن',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                  ),
                 ),
-                
               ],
             ),
           ),

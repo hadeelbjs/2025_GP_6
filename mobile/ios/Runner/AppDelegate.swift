@@ -453,9 +453,6 @@ import CoreLocation
     open url: URL,
     options: [UIApplication.OpenURLOptionsKey : Any] = [:]
 ) -> Bool {
-    if url.scheme == "waseed" && url.host == "frozen" {
-        return true
-    }
     return super.application(app, open: url, options: options)
 }
 }

@@ -1,5 +1,3 @@
-// routes/auth.js - FIXED REGISTRATION FLOW
-// البيانات لا تُحفظ إلا بعد التحقق من OTP
 
 const express = require('express');
 const router = express.Router();
@@ -88,7 +86,7 @@ router.post('/send-otp', authMiddleware, async (req, res) => {
 
     try {
       await sendEmailWithTimeout(
-        () => sendVerificationOTP(user.email, user.fullName, verificationCode),
+        () => sendVerificationOTP(req.email, user.fullName, verificationCode),
         10000
       );
     } catch (emailError) {

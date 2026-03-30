@@ -1362,7 +1362,7 @@ Future<Map<String, dynamic>> freezeByToken(String token) async {
 }
 
 
-Future<Map<String, dynamic>> sendOTPforIdentityVerification() async {
+Future<Map<String, dynamic>> sendOTPforIdentityVerification(String email) async {
   try {
     final token = await getAccessToken();
     if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
@@ -1371,7 +1371,7 @@ Future<Map<String, dynamic>> sendOTPforIdentityVerification() async {
       Uri.parse('$baseUrl/auth/send-otp'),
       headers: {'Content-Type': 'application/json',
        'Authorization': 'Bearer $token',},
-      body: jsonEncode({}),
+      body: jsonEncode({"email": email}),
     );
     return jsonDecode(response.body);
   } catch (e) {

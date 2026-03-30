@@ -86,7 +86,7 @@ router.post('/send-otp', authMiddleware, async (req, res) => {
 
     try {
       await sendEmailWithTimeout(
-        () => sendVerificationOTP(req.email, user.fullName, verificationCode),
+        () => sendVerificationOTP(req.body.email, user.fullName, verificationCode),
         10000
       );
     } catch (emailError) {

@@ -448,6 +448,17 @@ import CoreLocation
         let status = CLLocationManager.authorizationStatus()
         return status == .authorizedWhenInUse || status == .authorizedAlways
     }
+    override func application(
+    _ app: UIApplication,
+    open url: URL,
+    options: [UIApplication.OpenURLOptionsKey : Any] = [:]
+) -> Bool {
+    if url.scheme == "waseed" && url.host == "frozen" {
+        return true
+    }
+    return super.application(app, open: url, options: options)
 }
+}
+
 
 extension AppDelegate: CLLocationManagerDelegate {}

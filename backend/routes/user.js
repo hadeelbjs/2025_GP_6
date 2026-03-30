@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
-const { sendVerificationEmail } = require('../utils/emailService');
+const { sendVerificationEmail , sendActivityAlertEmail , sendUnfreezeCodeEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
@@ -23,6 +23,62 @@ const generateCode = () => {
   return crypto.randomInt(100000, 999999).toString();
 };
 
+
+async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
+
+  // تغيير الجوال — إشعار فقط بدون تجميد
+  if (changeType === 'phone') {
+    await sendActivityAlertEmail(
+      oldEmail,
+      fullName,
+      'تنبيه أمني — تم تغيير رقم جوالك',
+      `
+      <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
+        <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+          <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
+        </div>
+        <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
+          <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
+          <p style="font-size:15px">تم تغيير <strong>رقم جوالك</strong> في حسابك.</p>
+          <p style="font-size:15px;color:#555">إذا لم تكن أنت من قام بذلك، يُنصح بفتح التطبيق والذهاب إلى إعدادات الحساب وتغيير رقم الجوال فوراً.</p>
+          <p style="font-size:13px;color:#888">إذا كنت أنت من قام بهذا التغيير، تجاهل هذه الرسالة.</p>
+        </div>
+      </div>
+      `
+    );
+    return;
+  }
+
+  // تغيير الإيميل أو الباسورد — تجميد
+  const freezeLink = `${process.env.BASE_URL}/api/user/freeze-by-token?token=${freezeToken}&type=${changeType}`;
+  const changeLabel = changeType === 'email' ? 'بريدك الإلكتروني' : 'كلمة مرورك';
+
+  await sendActivityAlertEmail(
+    oldEmail,
+    fullName,
+    `تنبيه أمني — تم تغيير ${changeLabel}`,
+    `
+    <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
+      <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+        <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
+      </div>
+      <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
+        <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
+        <p style="font-size:15px">تم تغيير <strong>${changeLabel}</strong> في حسابك.</p>
+        <p style="font-size:15px;color:#555">إذا لم تكن أنت من قام بذلك، اضغط الزر أدناه لتجميد حسابك فوراً:</p>
+        <div style="text-align:center;margin:30px 0;">
+          <a href="${freezeLink}" 
+             style="background:#dc2626;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
+            تجميد حسابي فوراً
+          </a>
+        </div>
+        <p style="font-size:13px;color:#888">إذا كنت أنت من قام بهذا التغيير، تجاهل هذه الرسالة.</p>
+        <p style="font-size:13px;color:#888">هذا الرابط صالح لمدة 30 دقيقة.</p>
+      </div>
+    </div>
+    `
+  );
+}
 // ============================================
 // تحديث الصورة الرمزية (Memoji)
 // ============================================
@@ -226,12 +282,19 @@ router.post('/verify-email-change', auth, async (req, res) => {
       });
     }
 
+    const oldEmail = user.email;
+    const freezeToken = crypto.randomBytes(32).toString('hex');
+    user.previousEmail = oldEmail;
     user.email = newEmail.toLowerCase();
     user.isEmailVerified = true;
     user.newEmailVerificationCode = undefined;
     user.newEmailVerificationExpires = undefined;
     user.pendingEmail = undefined;
+    user.freezeToken = freezeToken;
+    user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); // ← أضيف
+
     await user.save();
+    await sendActivityAlert(oldEmail, user.fullName, 'email', freezeToken);
 
     res.json({
       success: true,
@@ -353,7 +416,9 @@ router.post('/verify-phone-change', auth, async (req, res) => {
       user.phone = normalizedPhone;
       user.isPhoneVerified = true;
       user.pendingPhone = undefined;
+      
       await user.save();
+      await sendActivityAlert(user.email, user.fullName, 'phone', null);
 
       return res.json({
         success: true,
@@ -427,8 +492,12 @@ router.post('/change-password', [
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(newPassword, salt);
 
+    const freezeToken = crypto.randomBytes(32).toString('hex');
     user.password = hashedPassword;
+    user.freezeToken = freezeToken;
+    user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); 
     await user.save();
+    await sendActivityAlert(user.email, user.fullName, 'password', freezeToken);
 
     res.json({
       success: true,
@@ -502,6 +571,130 @@ router.delete('/delete-account', auth, async (req, res) => {
       message: 'حدث خطأ في حذف الحساب'
     });
   }
+});
+
+
+// تجميد الحساب عبر رابط الإيميل
+router.get('/freeze-by-token', async (req, res) => {
+    const { token, type } = req.query;
+    try {
+const user = await User.findOne({ 
+  freezeToken: token,
+  freezeTokenExpires: { $gt: Date.now() } // ← أضيف
+});        if (!user) {
+            return res.send(`
+                <!DOCTYPE html>
+                <html dir="rtl">
+                <head>
+                    <meta charset="UTF-8">
+                    <style>
+                        * { margin: 0; padding: 0; box-sizing: border-box; }
+                        body { background: #0F0A1E; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial; }
+                        .box { background: #1A1035; border: 1px solid rgba(220,38,38,0.3); border-radius: 20px; padding: 40px 32px; max-width: 380px; width: 90%; text-align: center; }
+                        h2 { color: #ef4444; font-size: 20px; margin-bottom: 12px; }
+                        p { color: #9CA3AF; font-size: 14px; line-height: 1.7; }
+                    </style>
+                </head>
+                <body>
+                    <div class="box">
+                        <h2>الرابط غير صالح</h2>
+                        <p>هذا الرابط منتهي أو مستخدم مسبقاً</p>
+                    </div>
+                </body>
+                </html>
+            `);
+        }
+
+        const unfreezeCode = crypto.randomInt(100000, 999999).toString();
+        user.isAccountFrozen = true;
+        user.unfreezeCode = unfreezeCode;
+        user.unfreezeCodeExpires = new Date(Date.now() + 30 * 60 * 1000);
+        user.freezeToken = undefined;
+        await user.save();
+
+        const emailToSend = user.previousEmail || user.email;
+        await sendUnfreezeCodeEmail(emailToSend, user.fullName, unfreezeCode);
+
+        return res.send(`
+            <!DOCTYPE html>
+            <html dir="rtl">
+            <head>
+                <meta charset="UTF-8">
+                <style>
+                    * { margin: 0; padding: 0; box-sizing: border-box; }
+                    body { background: #0F0A1E; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial; }
+                    .box { background: #1A1035; border: 1px solid rgba(220,38,38,0.3); border-radius: 20px; padding: 40px 32px; max-width: 380px; width: 90%; text-align: center; }
+                    .icon { font-size: 48px; margin-bottom: 20px; }
+                    h2 { color: #ffffff; font-size: 22px; margin-bottom: 16px; }
+                    p { color: #9CA3AF; font-size: 15px; line-height: 1.8; }
+                    strong { color: #A78BFA; }
+                </style>
+            </head>
+            <body>
+                <div class="box">
+                    <div class="icon">🔒</div>
+                    <h2>تم تجميد حسابك</h2>
+                    <p>تم إرسال رمز فك التجميد إلى بريدك الإلكتروني</p>
+                    <br>
+                      <a href="waseed://frozen?type=${type || 'email'}"
+                       style="display:inline-block;background:#2D1B69;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:16px;font-weight:bold;margin-top:16px;">
+                        افتح تطبيق وصيد
+                    </a>
+                </div>
+            </body>
+            </html>
+        `);
+
+    } catch (err) {
+        console.error('Freeze by token error:', err);
+        return res.status(500).send(`
+            <!DOCTYPE html>
+            <html dir="rtl">
+            <head><meta charset="UTF-8">
+            <style>* {margin:0;padding:0} body{background:#0F0A1E;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Arial;} p{color:#ef4444;font-size:18px;}</style>
+            </head>
+            <body><p>حدث خطأ، حاول مرة أخرى</p></body>
+            </html>
+        `);
+    }
+});
+
+// فك التجميد
+router.post('/unfreeze-account', async (req, res) => {
+    const { email, code } = req.body;
+    try {
+        const user = await User.findOne({
+            $or: [
+                { previousEmail: { $exists: false }, email: email.toLowerCase() },
+                { previousEmail: email.toLowerCase() }
+            ],
+            unfreezeCode: code,
+            unfreezeCodeExpires: { $gt: Date.now() }
+        });
+
+        if (!user) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'الرمز غير صحيح أو منتهي الصلاحية' 
+            });
+        }
+
+        user.isAccountFrozen = false;
+        user.unfreezeCode = undefined;
+        user.unfreezeCodeExpires = undefined;
+
+        // لو فيه إيميل قديم — ارجعه وامسح الجديد
+        if (user.previousEmail) {
+            user.email = user.previousEmail;
+            user.previousEmail = undefined;
+        }
+
+        await user.save();
+        res.json({ success: true, message: 'تم فك تجميد حسابك بنجاح' });
+
+    } catch (err) {
+        res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
+    }
 });
 
 module.exports = router;

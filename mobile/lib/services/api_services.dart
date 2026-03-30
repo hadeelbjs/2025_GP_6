@@ -13,11 +13,18 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'local_db/database_helper.dart';
 import '../features/dashboard/services/notification_service.dart';
+import 'package:crypto/crypto.dart';
+
 class ApiService {
   // ============================
   // Base URL deployment
   // ============================
   static String? get baseUrl => AppConfig.apiBaseUrl;
+
+  // ─── HIBP Config ───────────────────────────────────────────
+  static String _hibpApiKey = AppConfig.hibpApikey;
+  static const String _hibpBaseUrl = 'https://haveibeenpwned.com/api/v3';
+
 
   // Base URL بحسب المنصة
   // ============================
@@ -69,7 +76,6 @@ class ApiService {
       final data = jsonDecode(response.body);
       return data;
     } catch (e) {
-      print('❌ Registration error: $e');
       return {'success': false, 'message': 'حدث خطأ في الاتصال'};
     }
   }
@@ -96,7 +102,6 @@ class ApiService {
       final data = jsonDecode(response.body);
       return data;
     } catch (e) {
-      print('❌ Verify email error: $e');
       return {'success': false, 'message': 'حدث خطأ في الاتصال'};
     }
   }
@@ -117,7 +122,6 @@ class ApiService {
       final data = jsonDecode(response.body);
       return data;
     } catch (e) {
-      print('❌ Resend registration code error: $e');
       return {'success': false, 'message': 'حدث خطأ في الاتصال'};
     }
   }
@@ -848,55 +852,46 @@ class ApiService {
   // طلب تفعيل البايومتركس
   Future<Map<String, dynamic>> requestBiometricEnable() async {
     try {
-      print('📱 Requesting biometric enable...');
 
       final headers = await _authHeaders();
 
-      // ✅ زيادة الـ timeout من 10 إلى 30 ثانية
       final response = await http
           .post(
             Uri.parse('$baseUrl/auth/request-biometric-enable'),
             headers: headers,
           )
           .timeout(
-            const Duration(seconds: 30), // كان 10 ثواني
+            const Duration(seconds: 30), 
             onTimeout: () {
               throw TimeoutException('انتهى وقت الانتظار، حاول مرة أخرى');
             },
           );
 
-      print('✅ Response received: ${response.statusCode}');
 
       final data = jsonDecode(response.body);
-      print('Response data: $data');
 
       return data;
     } on TimeoutException catch (e) {
-      print('⏱️ Timeout: $e');
       return {
         'success': false,
         'message':
             'انتهى وقت الانتظار، تأكد من اتصالك بالإنترنت وحاول مرة أخرى',
       };
     } catch (e) {
-      print('❌ Error: $e');
       return {'success': false, 'message': 'خطأ في الاتصال: ${e.toString()}'};
     }
   }
 
   Future<void> Logout() async {
-    print("Alert the server of the logout action");
     await logout();
   }
 
   // تأكيد تفعيل البايومتركس
   Future<Map<String, dynamic>> verifyBiometricEnable(String code) async {
     try {
-      print('🔐 Verifying biometric code: $code');
 
       final headers = await _authHeaders();
 
-      // ✅ timeout معقول (15 ثانية)
       final response = await http
           .post(
             Uri.parse('$baseUrl/auth/verify-biometric-enable'),
@@ -910,14 +905,11 @@ class ApiService {
             },
           );
 
-      print('✅ Verification response: ${response.statusCode}');
 
       return jsonDecode(response.body);
     } on TimeoutException catch (e) {
-      print('⏱️ Timeout: $e');
       return {'success': false, 'message': 'انتهى وقت الانتظار، حاول مرة أخرى'};
     } catch (e) {
-      print('❌ Error: $e');
       return {'success': false, 'message': 'خطأ في الاتصال: ${e.toString()}'};
     }
   }
@@ -925,11 +917,9 @@ class ApiService {
   // إلغاء البايومتركس
   Future<Map<String, dynamic>> disableBiometric() async {
     try {
-      print('🔓 Disabling biometric...');
 
       final headers = await _authHeaders();
 
-      // ✅ timeout معقول (15 ثانية)
       final response = await http
           .post(Uri.parse('$baseUrl/auth/disable-biometric'), headers: headers)
           .timeout(
@@ -939,14 +929,11 @@ class ApiService {
             },
           );
 
-      print('✅ Disable response: ${response.statusCode}');
 
       return jsonDecode(response.body);
     } on TimeoutException catch (e) {
-      print('⏱️ Timeout: $e');
       return {'success': false, 'message': 'انتهى وقت الانتظار، حاول مرة أخرى'};
     } catch (e) {
-      print('❌ Error: $e');
       return {'success': false, 'message': 'خطأ في الاتصال: ${e.toString()}'};
     }
   }
@@ -1083,13 +1070,35 @@ class ApiService {
 
       return {'success': false, 'message': 'Failed to get version'};
     } catch (e) {
-      print('❌ Error getting keys version: $e');
+      return {'success': false, 'message': e.toString()};
+    }
+  }
+
+  Future<Map<String, dynamic>> getPeerKeysVersion(String userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/prekeys/version/user/$userId'),
+        headers: await _getAuthHeaders(),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        return {
+          'success': true,
+          'version': data['version'],
+          'exists': data['exists'] == true,
+          'lastUpdate': data['lastUpdate'],
+        };
+      }
+
+      return {'success': false, 'message': 'Failed to get peer version'};
+    } catch (e) {
       return {'success': false, 'message': e.toString()};
     }
   }
 
   // ===================================
-  // 🔄 التحقق من حالة المزامنة
+  //  التحقق من حالة المزامنة
   // ===================================
   Future<Map<String, dynamic>> checkSyncStatus(int localVersion) async {
     try {
@@ -1121,7 +1130,6 @@ class ApiService {
         'message': needsSync ? 'Keys are out of sync' : 'Keys are synchronized',
       };
     } catch (e) {
-      print('❌ Error checking sync status: $e');
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -1153,7 +1161,6 @@ class ApiService {
 
       return {'success': false, 'message': data['message'] ?? 'Upload failed'};
     } catch (e) {
-      print('Error uploading bundle: $e');
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -1179,13 +1186,12 @@ class ApiService {
         'message': data['message'] ?? 'Failed to get bundle',
       };
     } catch (e) {
-      print('❌ Error getting bundle: $e');
       return {'success': false, 'message': e.toString()};
     }
   }
 
   // ===================================
-  // 📊 التحقق من عدد PreKeys
+  //  التحقق من عدد PreKeys
   // ===================================
   Future<Map<String, dynamic>> checkPreKeysCount() async {
     try {
@@ -1207,7 +1213,6 @@ class ApiService {
 
       return {'success': false, 'message': 'Failed to check count'};
     } catch (e) {
-      print('❌ Error checking PreKeys count: $e');
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -1232,7 +1237,6 @@ class ApiService {
         'message': data['message'] ?? 'Failed to delete bundle',
       };
     } catch (e) {
-      print('❌ Error deleting bundle: $e');
       return {'success': false, 'message': e.toString()};
     }
   }
@@ -1329,4 +1333,135 @@ class ApiService {
     return {'success': false, 'anomalies': []};
   }
 }
+Future<Map<String, dynamic>> unfreezeAccount({
+  required String email,
+  required String code,
+}) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/unfreeze-account'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'email': email, 'code': code}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
+Future<Map<String, dynamic>> freezeByToken(String token) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/user/freeze-by-token'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'token': token}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false};
+  }
+}
+
+
+Future<Map<String, dynamic>> sendOTPforIdentityVerification() async {
+  try {
+    final token = await getAccessToken();
+    if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/send-otp'),
+      headers: {'Content-Type': 'application/json',
+       'Authorization': 'Bearer $token',},
+      body: jsonEncode({}),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
+Future<Map<String, dynamic>> verifyOTPforIdentityVerification(String code) async {
+  try {
+      final token = await getAccessToken();
+      if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
+
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/auth/verify-otp'),
+      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token',},
+      body: jsonEncode({
+      'code' :code
+      }),
+    );
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
+
+Future<List> checkEmailBreach(String email) async {
+ try {
+   final token = await getAccessToken();
+    if (token == null) throw Exception('يجب تسجيل الدخول');
+
+    final url = Uri.parse(
+      '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
+    );
+
+    final response = await http.get(url, headers: {
+      'hibp-api-key': _hibpApiKey,
+      'user-agent': 'MyFlutterApp',
+    });
+
+    if (response.statusCode == 200) {
+      final List breaches = jsonDecode(response.body);
+     
+      return breaches;
+
+    } else if (response.statusCode == 404){
+      return [];
+    }
+    else {
+      throw new Exception('فشل البحث: ${response.statusCode} ');
+    }
+ } catch (e){
+  throw Exception('خطأ: $e');
+ }
+
+
+
+}
+
+Future<int> checkPasswordBreach(String password) async {
+  try {
+    // نحول الباسورد إلى SHA-1
+    final bytes = utf8.encode(password);
+    final sha1Hash = sha1.convert(bytes).toString().toUpperCase();
+
+    // نرسل أول 5 أحرف فقط (k-Anonymity)
+    final prefix = sha1Hash.substring(0, 5);
+    final suffix = sha1Hash.substring(5);
+
+    final url = Uri.parse('https://api.pwnedpasswords.com/range/$prefix');
+    final response = await http.get(url, headers: {
+      'user-agent': 'MyFlutterApp',
+    });
+
+    if (response.statusCode == 200) {
+      final lines = response.body.split('\n');
+
+      for (var line in lines) {
+        final parts = line.split(':');
+        if (parts[0].trim() == suffix) {
+          return int.parse(parts[1].trim()); // ← عدد مرات التسريب
+        }
+      }
+      return 0; 
+    } else {
+      throw Exception('فشل البحث: ${response.statusCode}');
+    }
+  } catch (e) {
+    throw Exception('خطأ: $e');
+  }
+}
+
+
 }

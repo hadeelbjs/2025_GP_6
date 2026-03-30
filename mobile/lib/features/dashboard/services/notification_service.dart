@@ -62,6 +62,7 @@ String _translateDataClass(String english) {
   // ─── HIBP: تحقق من تسريب الإيميل ──────────────────────────
  Future<void> checkEmailBreachAndNotify() async {
   if (_hasCheckedBreach) return;
+  print("not checked");
   _hasCheckedBreach = true;
 
   final email = await getUserData('email');

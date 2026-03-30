@@ -49,6 +49,18 @@ pendingUnknownDeviceAlert: { type: String, default: null },
   newEmailVerificationCode: String,
   newEmailVerificationExpires: Date,
   pendingEmail: String,
+  verificationCode: String,
+  verificationCodeExpires: Date,
+
+// Anomaly part2 
+  previousEmail: { type: String },
+  isAccountFrozen: { type: Boolean, default: false },
+  unfreezeCode: String,
+  unfreezeCodeExpires: Date,
+  freezeToken: String,
+  freezeTokenExpires: Date,
+  pendingPhone: String,
+
 
   // وضع الطوارئ
   emergencyModeActivated: { type: Boolean, default: false },

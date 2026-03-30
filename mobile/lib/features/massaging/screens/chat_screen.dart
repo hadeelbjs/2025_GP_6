@@ -19,6 +19,7 @@ import '../../../services/local_db/database_helper.dart';
 import 'package:screen_protector/screen_protector.dart';
 import 'package:screen_capture_event/screen_capture_event.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:waseed/features/massaging/widgets/unified_screenshot_protector.dart';
 import '../widgets/duration_picker_sheet.dart';
 import 'package:http/http.dart' as http;
@@ -83,6 +84,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   StreamSubscription? _userStatusSubscription;
   StreamSubscription? _connectionSubscription;
   bool _isOtherUserOnline = false;
+  bool _rekeyRequired = false;
+  Timer? _rekeyRetryTimer;
 
   //  للكشف عن Screenshot في iOS
   // StreamSubscription? _screenshotSubscription;
@@ -178,6 +181,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     _messagingService.setCurrentOpenChat(widget.userId);
     _listenToExpiredMessages();
     _listenToUploadProgress();
+    _restoreRekeyState();
   }
 
   void _listenToUploadProgress() {
@@ -201,6 +205,56 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         }
       }
     });
+  }
+
+  Future<void> _restoreRekeyState() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final required = prefs.getBool('rekey_required_${widget.userId}') ?? false;
+      if (!mounted) return;
+      if (required) {
+        _setRekeyRequired(true, showMessage: false);
+        _attemptRekeyRecovery();
+      }
+    } catch (_) {}
+  }
+
+  void _setRekeyRequired(bool value, {bool showMessage = true}) {
+    if (!mounted) return;
+    setState(() {
+      _rekeyRequired = value;
+    });
+
+    if (value) {
+      _startRekeyRetryTimer();
+      if (showMessage) {
+        _showMessage(
+          'تم تفعيل وضع الطوارئ للطرف الآخر. سيتم استئناف الإرسال بعد إعادة تهيئة التشفير.',
+          false,
+        );
+      }
+    } else {
+      _rekeyRetryTimer?.cancel();
+      _rekeyRetryTimer = null;
+    }
+  }
+
+  void _startRekeyRetryTimer() {
+    _rekeyRetryTimer?.cancel();
+    _rekeyRetryTimer = Timer.periodic(const Duration(seconds: 12), (_) {
+      _attemptRekeyRecovery();
+    });
+  }
+
+  Future<void> _attemptRekeyRecovery() async {
+    if (!mounted || !_rekeyRequired || _isSending) return;
+    final ok = await _messagingService.createNewSession(widget.userId);
+    if (!ok || !mounted) return;
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('rekey_required_${widget.userId}');
+    _setRekeyRequired(false, showMessage: false);
+    _showMessage('تمت إعادة تهيئة التشفير بنجاح. يمكنك المتابعة.', true);
   }
 
   /// تهيئة خدمة حماية الشاشة
@@ -659,6 +713,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     _statusSubscription?.cancel();
     _userStatusSubscription?.cancel();
     _connectionSubscription?.cancel();
+    _rekeyRetryTimer?.cancel();
     _messageExpiredSubscription?.cancel();
     _uploadProgressSubscription?.cancel();
     _socketService.socket?.off('screenshot:notification');
@@ -973,6 +1028,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
       data,
     ) {
       // التعامل مع فشل التحقق عند المستقبل
+      if (data['type'] == 'peer_emergency_mode') {
+        final peerId = data['userId'];
+        if (peerId == widget.userId && mounted) {
+          _setRekeyRequired(true);
+        }
+        return;
+      }
+
       if (data['type'] == 'recipient_failed_verification') {
         final recipientId = data['recipientId'];
         if (recipientId == widget.userId && mounted) {
@@ -1025,6 +1088,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
       isConnected,
     ) {
       if (isConnected && mounted) {
+        if (_rekeyRequired) {
+          _attemptRekeyRecovery();
+        }
         Future.delayed(Duration(milliseconds: 500), () {
           if (mounted) {
             _messagingService.requestUserStatus(widget.userId);
@@ -1197,9 +1263,15 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         setState(() {
           _pendingImageFile = null;
           _pendingFile = null;
+          _rekeyRequired = false;
         });
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('rekey_required_${widget.userId}');
         await _loadMessagesFromDatabase();
       } else {
+        if (result['code'] == 'REKEY_REQUIRED') {
+          _setRekeyRequired(true, showMessage: false);
+        }
         _showMessage(result['message'] ?? 'فشل الإرسال', false);
       }
     } catch (e) {
@@ -2055,11 +2127,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
   Widget _buildInputBar() {
   final canSend = currentDuration != null &&
+      !_rekeyRequired &&
       (_messageController.text.trim().isNotEmpty ||
           _pendingImageFile != null ||
           _pendingFile != null);
 
-  final isEnabled = currentDuration != null;
+  final isEnabled = currentDuration != null && !_rekeyRequired;
 
   return Container(
     padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
@@ -2261,7 +2334,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
                           decoration: InputDecoration(
                             hintText: isEnabled
                                 ? 'اكتب رسالتك هنا...'
-                                : 'اختر المدة أولاً',
+                                : (_rekeyRequired
+                                      ? 'جاري إعادة تهيئة التشفير...'
+                                      : 'اختر المدة أولاً'),
                             hintStyle: TextStyle(
                               color: AppColors.textHint,
                               fontSize: 17,

@@ -9,7 +9,8 @@ const crypto = require('crypto');
 const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const PreKeyBundle = require('../models/PreKeyBundle');
-const { sendVerificationEmail, sendBiometricVerificationEmail } = require('../utils/emailService');
+const Message = require('../models/Message');
+const { sendVerificationEmail, sendBiometricVerificationEmail,sendVerificationOTP } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
@@ -73,7 +74,62 @@ const validatePasswordMiddleware = (req, res, next) => {
   
   next();
 };
+router.post('/send-otp', authMiddleware, async (req, res) => {
+  try {
+     const user = req.user;
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
 
+    const verificationCode = generateCode();
+    user.verificationCode = verificationCode;
+    user.verificationCodeExpires = Date.now() + 10 * 60 * 1000;
+    await user.save();
+
+    try {
+      await sendEmailWithTimeout(
+        () => sendVerificationOTP(user.email, user.fullName, verificationCode),
+        10000
+      );
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError.message);
+      return res.status(500).json({ success: false, message: 'فشل إرسال الإيميل' });
+    }
+
+    res.json({ success: true, message: 'تم إرسال رمز التحقق' });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
+  }
+});
+
+router.post('/verify-otp', authMiddleware, async (req, res) => {
+  try {
+    const { code } = req.body; 
+
+    if (!code) {
+      return res.status(400).json({ success: false, message: 'أدخل رمز التحقق' });
+    }
+
+    const user = req.user;
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'المستخدم غير موجود' });
+    }
+
+    if (code !== user.verificationCode || user.verificationCodeExpires < Date.now()) {
+      return res.status(400).json({ success: false, message: 'رمز خاطئ أو منتهي الصلاحية' });
+    }
+
+    user.verificationCode = null;
+    user.verificationCodeExpires = null;
+    await user.save();
+
+    res.json({ success: true, message: 'تم التحقق بنجاح' });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
+  }
+});
 // ============================================
 // الخطوة 1: التسجيل - إرسال OTP (بدون حفظ البيانات)
 // ============================================
@@ -1329,6 +1385,22 @@ router.post('/emergency-mode', authMiddleware, async (req, res) => {
 
     // حذف مفاتيح التشفير الفعلية المعتمدة في النظام الحالي
     await PreKeyBundle.deleteOne({ userId: req.userId });
+
+    // إشعار الأطراف المرتبطين بمحادثات مع هذا المستخدم لبدء إعادة تهيئة session
+    const io = req.app.get('io');
+    if (io && io.sendToUser) {
+      const sentTo = await Message.distinct('recipientId', { senderId: user._id });
+      const receivedFrom = await Message.distinct('senderId', { recipientId: user._id });
+      const peerIds = [...new Set([...sentTo, ...receivedFrom].map((id) => id.toString()))]
+        .filter((id) => id !== user.id.toString());
+
+      for (const peerId of peerIds) {
+        io.sendToUser(peerId, 'contact:emergency_mode_activated', {
+          userId: user.id.toString(),
+          at: user.emergencyModeAt,
+        });
+      }
+    }
 
     res.json({ success: true, message: 'تم تفعيل وضع الطوارئ' });
   } catch (err) {

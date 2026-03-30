@@ -17,8 +17,8 @@ import 'notifications.dart';
 import '../services/notification_service.dart';
 import '../../../core/models/app_notifications.dart';
 import '../../../services/anomaly_detection_service.dart';
-
 import 'dart:convert';
+
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
 
@@ -46,31 +46,6 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
     // للواي فاي تاخير بسيط
     _loadNotificationCount();
     _loadLastLoginTime();
-    // ─── اشعار تجريبي - احذفه بعد ما تشوف الشكل ───
-Future.delayed(const Duration(seconds: 2), () {
-  NotificationService().addNotification(
-    AppNotification(
-      id: 'test_breach_1',
-      type: NotificationType.breachAlert,
-      title: 'تسريب: Adobe',
-      message: jsonEncode({
-        'hasPassword': true,
-        'dataClasses': [
-          'عناوين البريد الإلكتروني',
-          'كلمات المرور',
-          'أسماء المستخدمين',
-          'تلميحات كلمات المرور',
-        ],
-        'breachDate': '2013-10-04',
-        'domain': 'adobe.com',
-      }),
-      createdAt: DateTime.now(),
-      isRead: false,
-    ),
-  );
-    _showBreachAlert();
-
-});
 
     
    Future.delayed(const Duration(milliseconds: 500), () {

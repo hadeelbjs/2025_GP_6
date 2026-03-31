@@ -59,7 +59,7 @@ class SimpleNotificationsPage extends StatelessWidget {
                 if (n.actionTaken == true) return const SizedBox.shrink();
 
                 final isAnomaly = {
-                  NotificationType.unknownDevice,
+                  //NotificationType.unknownDevice,
                   NotificationType.newLocation,
                   NotificationType.newWifi,
                   NotificationType.failedAttempts,
@@ -822,12 +822,14 @@ class SimpleNotificationsPage extends StatelessWidget {
   // ─── Alert Data ──────────────────────────────────────────────
   Map<String, dynamic> _getAlertData(NotificationType type) {
     switch (type) {
+      /*
       case NotificationType.unknownDevice:
         return {
           'icon': Icons.devices,
           'title': 'جهاز غير معروف!',
           'content': '• غيّر كلمة المرور فوراً\n• راجع الأجهزة المرتبطة بحسابك\n• تواصل مع الدعم إذا لزم',
         };
+        */
       case NotificationType.newLocation:
         return {
           'icon': Icons.location_on,

@@ -15,9 +15,8 @@ class AnomalyDetectionService {
   final ApiService _api = ApiService();
   
 
-  // ----------------------------------------------------------
+  
   // الدالة الرئيسية — تُستدعى من main_dashboard.dart
-  // ----------------------------------------------------------
   Future<void> runChecks() async {
     print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     print('🔍 Anomaly Detection: بدء الفحص...');
@@ -57,11 +56,25 @@ class AnomalyDetectionService {
         for (final a in anomalies) {
           print('   → type: ${a['type']} | detail: ${a['detail']}');
 
+
+          
+
           if (a['type'] == 'new_wifi' || a['type'] == 'new_location') {
             final key = 'last_shown_${a['type']}';
             final lastShown = prefs.getString(key) ?? '';
             if (lastShown == a['detail']) {
               print('   ⏭️ تم تخطي — نفس الإشعار السابق');
+              continue;
+            }
+            await prefs.setString(key, a['detail']);
+          }
+
+
+           if (a['type'] == 'unknown_device') {
+            final key = 'last_shown_unknown_device';
+            final lastShown = prefs.getString(key) ?? '';
+            if (lastShown == a['detail']) {
+              print('   ⏭️ تم تخطي — نفس الجهاز السابق');
               continue;
             }
             await prefs.setString(key, a['detail']);
@@ -83,12 +96,10 @@ class AnomalyDetectionService {
       print('❌ Anomaly check failed: $e');
     }
 
-    print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   }
 
-  // ----------------------------------------------------------
   // جلب اسم الجهاز
-  // ----------------------------------------------------------
+  
   Future<String?> _getDeviceName() async {
     try {
       final deviceInfo = DeviceInfoPlugin();
@@ -106,9 +117,7 @@ class AnomalyDetectionService {
     }
   }
 
-  // ----------------------------------------------------------
   // جلب الموقع
-  // ----------------------------------------------------------
   Future<Map<String, dynamic>?> _getLocationData() async {
     try {
       final permission = await Geolocator.checkPermission();
@@ -169,9 +178,7 @@ class AnomalyDetectionService {
     }
   }
 
-  // ----------------------------------------------------------
-  // قراءة SSID
-  // ----------------------------------------------------------
+  // SSID
   Future<String?> _getCurrentSSID() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -183,12 +190,10 @@ class AnomalyDetectionService {
     }
   }
 
-  // ----------------------------------------------------------
   // Helpers
-  // ----------------------------------------------------------
   NotificationType _mapType(String type) {
     switch (type) {
-      case 'unknown_device':  return NotificationType.unknownDevice;
+      //case 'unknown_device':  return NotificationType.unknownDevice;
       case 'new_location':    return NotificationType.newLocation;
       case 'new_wifi':        return NotificationType.newWifi;
       case 'failed_attempts': return NotificationType.failedAttempts;
@@ -198,7 +203,7 @@ class AnomalyDetectionService {
 
   String _getTitle(String type) {
     switch (type) {
-      case 'unknown_device':  return 'تسجيل دخول من جهاز جديد';
+      //case 'unknown_device':  return 'تسجيل دخول من جهاز جديد';
       case 'new_location':    return 'تسجيل دخول من موقع جديد';
       case 'new_wifi':        return 'اتصال بشبكة جديدة';
       case 'failed_attempts': return 'محاولات تسجيل دخول غير ناجحة';

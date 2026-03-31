@@ -35,10 +35,12 @@ const UserSchema = new mongoose.Schema({
 
 registrationLocation: { lat: Number, lng: Number },
 registrationWifi: String,
-registrationDevice: String,
+registrationDevices: [{
+    deviceName: String,
+    lastAlertToken: String 
+}],
 pendingFailedAttemptsAlert: { type: Number, default: 0 },
-pendingUnknownDeviceAlert: { type: String, default: null },
-    
+registrationDevice: { type: String, default: null },    
   identityPublicKey: String,
   signedPreKey: {
     keyId: Number,

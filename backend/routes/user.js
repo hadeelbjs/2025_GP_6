@@ -578,10 +578,13 @@ router.delete('/delete-account', auth, async (req, res) => {
 router.get('/freeze-by-token', async (req, res) => {
     const { token, type } = req.query;
     try {
-const user = await User.findOne({ 
-  freezeToken: token,
-  freezeTokenExpires: { $gt: Date.now() } // ← أضيف
-});        if (!user) {
+        // البحث عن المستخدم باستخدام التوكن والتأكد من عدم انتهاء الصلاحية
+        const user = await User.findOne({ 
+            freezeToken: token,
+            freezeTokenExpires: { $gt: Date.now() } 
+        });
+
+        if (!user) {
             return res.send(`
                 <!DOCTYPE html>
                 <html dir="rtl">
@@ -598,23 +601,28 @@ const user = await User.findOne({
                 <body>
                     <div class="box">
                         <h2>الرابط غير صالح</h2>
-                        <p>هذا الرابط منتهي أو مستخدم مسبقاً</p>
+                        <p>هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً بنجاح.</p>
                     </div>
                 </body>
                 </html>
             `);
         }
 
-        const unfreezeCode = crypto.randomInt(100000, 999999).toString();
-        user.isAccountFrozen = true;
-        user.unfreezeCode = unfreezeCode;
-        user.unfreezeCodeExpires = new Date(Date.now() + 30 * 60 * 1000);
-        user.freezeToken = undefined;
-        await user.save();
+        // إذا لم يكن الحساب مجمداً بالفعل، نقوم بتجميده وتوليد الرمز
+        if (!user.isAccountFrozen) {
+            const unfreezeCode = crypto.randomInt(100000, 999999).toString();
+            user.isAccountFrozen = true;
+            user.unfreezeCode = unfreezeCode;
+            user.unfreezeCodeExpires = new Date(Date.now() + 60 * 60 * 1000); // جعل رمز فك التجميد صالح لساعة
+            
+            // ملاحظة: لم نمسح freezeToken هنا ليبقى الرابط صالحاً لمدة 30 دقيقة
+            await user.save();
 
-        const emailToSend = user.previousEmail || user.email;
-        await sendUnfreezeCodeEmail(emailToSend, user.fullName, unfreezeCode);
+            const emailToSend = user.previousEmail || user.email;
+            await sendUnfreezeCodeEmail(emailToSend, user.fullName, unfreezeCode);
+        }
 
+        // عرض صفحة التجميد بنجاح (ستظهر في كل مرة يفتح الرابط خلال الـ 30 دقيقة)
         return res.send(`
             <!DOCTYPE html>
             <html dir="rtl">
@@ -627,18 +635,17 @@ const user = await User.findOne({
                     .icon { font-size: 48px; margin-bottom: 20px; }
                     h2 { color: #ffffff; font-size: 22px; margin-bottom: 16px; }
                     p { color: #9CA3AF; font-size: 15px; line-height: 1.8; }
-                    strong { color: #A78BFA; }
                 </style>
             </head>
             <body>
                 <div class="box">
                     <div class="icon">🔒</div>
                     <h2>تم تجميد حسابك</h2>
-                    <p>تم إرسال رمز فك التجميد إلى بريدك الإلكتروني</p>
+                    <p>حسابك الآن مجمّد لحمايتك. تم إرسال رمز فك التجميد إلى بريدك الإلكتروني.</p>
                     <br>
-                      <a href="waseed://frozen?type=${type || 'email'}"
+                    <a href="waseed://frozen?type=${type || 'email'}"
                        style="display:inline-block;background:#2D1B69;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:16px;font-weight:bold;margin-top:16px;">
-                        افتح تطبيق وصيد
+                        افتح تطبيق وصيد لفك التجميد
                     </a>
                 </div>
             </body>
@@ -647,15 +654,7 @@ const user = await User.findOne({
 
     } catch (err) {
         console.error('Freeze by token error:', err);
-        return res.status(500).send(`
-            <!DOCTYPE html>
-            <html dir="rtl">
-            <head><meta charset="UTF-8">
-            <style>* {margin:0;padding:0} body{background:#0F0A1E;display:flex;align-items:center;justify-content:center;min-height:100vh;font-family:Arial;} p{color:#ef4444;font-size:18px;}</style>
-            </head>
-            <body><p>حدث خطأ، حاول مرة أخرى</p></body>
-            </html>
-        `);
+        return res.status(500).send("حدث خطأ في السيرفر");
     }
 });
 
@@ -682,6 +681,7 @@ router.post('/unfreeze-account', async (req, res) => {
         user.isAccountFrozen = false;
         user.unfreezeCode = undefined;
         user.unfreezeCodeExpires = undefined;
+        user.freezeToken = undefined;
 
         // لو فيه إيميل قديم — ارجعه وامسح الجديد
         if (user.previousEmail) {

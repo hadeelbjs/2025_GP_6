@@ -5,7 +5,12 @@ import '../../../services/api_services.dart';
 import 'verify_reset_code.dart';
 import 'login_screen.dart';
 class ResetPasswordScreen extends StatefulWidget {
-  const ResetPasswordScreen({super.key});
+final bool isFromFrozen;
+
+  const ResetPasswordScreen({
+    super.key,
+    this.isFromFrozen = false,
+  });
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -105,8 +110,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       ),
                       const SizedBox(height: 24),
                       
-                      const Text(
-                        'نسيت كلمة المرور؟',
+                       Text(
+                        widget.isFromFrozen ? 'إعادة ضبط كلمة المرور' : 'نسيت كلمة المرور؟',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 31.44,
@@ -118,7 +123,9 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                       const SizedBox(height: 16),
                       
                       Text(
-                        'أدخل بريدك الإلكتروني وسنرسل لك رمز التحقق',
+                        widget.isFromFrozen 
+                        ? 'يرجى إدخال بريدك الإلكتروني لتعيين كلمة مرور جديدة وتأمين حسابك بعد فك التجميد'
+                        : 'أدخل بريدك الإلكتروني وسنرسل لك رمز التحقق',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,

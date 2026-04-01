@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../services/api_services.dart';
 import 'package:waseed/main.dart';
+import 'package:waseed/features/authentication/screens/reset_password.dart';
 
 class FrozenAccountScreen extends StatefulWidget {
   const FrozenAccountScreen({super.key});
@@ -131,12 +132,17 @@ void didChangeDependencies() {
           ),
         ),
       );
-      if (_freezeType == 'password') {
-  navigatorKey.currentState?.pushNamedAndRemoveUntil(
-    '/forgot-password',
-    (r) => false,
+     if (_freezeType == 'password') {
+  // ننتقل لصفحة إعادة الضبط ونخبرها أننا قادمون من "تجميد"
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(
+      builder: (_) => const ResetPasswordScreen(isFromFrozen: true),
+    ),
+    (route) => false,
   );
 } else {
+  // الحالة العادية (تجميد إيميل مثلاً) يروح للوجن
   navigatorKey.currentState?.pushNamedAndRemoveUntil(
     '/login',
     (r) => false,

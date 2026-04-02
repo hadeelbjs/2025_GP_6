@@ -14,6 +14,7 @@ import 'package:path_provider/path_provider.dart';
 import 'local_db/database_helper.dart';
 import '../features/dashboard/services/notification_service.dart';
 import 'package:crypto/crypto.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 
 class ApiService {
   // ============================
@@ -86,11 +87,23 @@ class ApiService {
   Future<Map<String, dynamic>> verifyEmailAndCreate({
     required String code,
     required String newRegistrationId,
+    String? deviceName
   }) async {
     try {
+      String detectedDevice = "Unknown Device";
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      detectedDevice = "${androidInfo.manufacturer} ${androidInfo.model}"; 
+    } else if (Platform.isIOS) {
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+      detectedDevice = iosInfo.name;
+    }
       final requestBody = {
         'code': code,
         'newRegistrationId': newRegistrationId,
+        'deviceName': detectedDevice,
       };
 
       final response = await http.post(

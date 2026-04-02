@@ -22,9 +22,10 @@ class AnomalyDetectionService {
     print('🔍 Anomaly Detection: بدء الفحص...');
 
     try {
+      /*
       final deviceName = await _getDeviceName();
       print('📱 Device: ${deviceName ?? 'غير متاح'}');
-
+*/
       final locationData = await _getLocationData();
       if (locationData != null) {
         print('✅ Location: ${locationData['locationName']}');
@@ -41,7 +42,7 @@ class AnomalyDetectionService {
         lng: locationData?['lng'],
         locationName: locationData?['locationName'],
         ssid: ssid,
-        deviceName: deviceName,
+        //deviceName: deviceName,
       ).timeout(
         const Duration(seconds: 15),
         onTimeout: () => {'success': false, 'message': 'timeout'},
@@ -70,15 +71,7 @@ class AnomalyDetectionService {
           }
 
 
-           if (a['type'] == 'unknown_device') {
-            final key = 'last_shown_unknown_device';
-            final lastShown = prefs.getString(key) ?? '';
-            if (lastShown == a['detail']) {
-              print('   ⏭️ تم تخطي — نفس الجهاز السابق');
-              continue;
-            }
-            await prefs.setString(key, a['detail']);
-          }
+           
 
   NotificationService().addNotification(AppNotification(
               id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
@@ -99,7 +92,7 @@ class AnomalyDetectionService {
   }
 
   // جلب اسم الجهاز
-  
+  /*
   Future<String?> _getDeviceName() async {
     try {
       final deviceInfo = DeviceInfoPlugin();
@@ -116,7 +109,7 @@ class AnomalyDetectionService {
       return null;
     }
   }
-
+*/
   // جلب الموقع
   Future<Map<String, dynamic>?> _getLocationData() async {
     try {

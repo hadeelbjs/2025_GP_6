@@ -35,10 +35,7 @@ const UserSchema = new mongoose.Schema({
 
 registrationLocation: { lat: Number, lng: Number },
 registrationWifi: String,
-registrationDevices: [{
-    deviceName: String,
-    lastAlertToken: String 
-}],
+
 pendingFailedAttemptsAlert: { type: Number, default: 0 },
 registrationDevice: { type: String, default: null },    
   identityPublicKey: String,

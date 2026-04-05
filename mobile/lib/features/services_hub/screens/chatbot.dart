@@ -490,8 +490,8 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
       alignment: isUser ? Alignment.centerLeft : Alignment.centerRight,
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        constraints: const BoxConstraints(maxWidth: 320),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        constraints: const BoxConstraints(maxWidth: 340),
         decoration: BoxDecoration(
           color: isUser
               ? AppColors.primary.withOpacity(0.12)
@@ -503,7 +503,7 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
                 : Colors.grey.shade200,
           ),
         ),
-        child: Text(
+        /*child: Text(
           msg.text,
           style: TextStyle(
             fontFamily: 'IBMPlexSansArabic',
@@ -511,9 +511,69 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
             height: 1.35,
             color: Colors.black.withOpacity(0.78),
           ),
-        ),
+        ),*/
+        child: RichText(text: TextSpan(children: _formatMessage(msg.text))),
       ),
     );
+  }
+
+  List<TextSpan> _formatMessage(String text) {
+    final List<TextSpan> spans = [];
+
+    final RegExp boldRegex = RegExp(r'\*\*(.*?)\*\*');
+    final matches = boldRegex.allMatches(text);
+
+    int lastIndex = 0;
+
+    for (final match in matches) {
+      // النص العادي قبل الـ bold
+      if (match.start > lastIndex) {
+        spans.add(
+          TextSpan(
+            text: text.substring(lastIndex, match.start),
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 15, // 🔥 كبرنا الخط
+              height: 1.6,
+              color: Colors.black.withOpacity(0.85),
+            ),
+          ),
+        );
+      }
+
+      // النص داخل **
+      spans.add(
+        TextSpan(
+          text: match.group(1),
+          style: const TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 16, // 🔥 أكبر شوي
+            fontWeight: FontWeight.bold,
+            height: 1.6,
+            color: Colors.black,
+          ),
+        ),
+      );
+
+      lastIndex = match.end;
+    }
+
+    // النص الأخير بعد آخر bold
+    if (lastIndex < text.length) {
+      spans.add(
+        TextSpan(
+          text: text.substring(lastIndex),
+          style: TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 15,
+            height: 1.6,
+            color: Colors.black.withOpacity(0.85),
+          ),
+        ),
+      );
+    }
+
+    return spans;
   }
 }
 

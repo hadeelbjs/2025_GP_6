@@ -8,7 +8,7 @@ const { body, validationResult } = require('express-validator');
 const User = require('../models/User');
 const PreKeyBundle = require('../models/PreKeyBundle');
 const Message = require('../models/Message');
-const { sendVerificationEmail, sendBiometricVerificationEmail,sendVerificationOTP } = require('../utils/emailService');
+const { sendVerificationEmail, sendBiometricVerificationEmail,sendVerificationOTP , sendNewDeviceAlertEmail } = require('../utils/emailService');
 const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
@@ -241,7 +241,7 @@ router.post('/verify-email-and-create', async (req, res) => {
   console.log('   - code:', req.body.code);
   console.log('   - Pending registrations count:', pendingRegistrations.size);
 
-  const { newRegistrationId, code } = req.body;
+const { newRegistrationId, code, deviceName } = req.body;
 
   // التحقق من وجود الرمز
   if (!code) {
@@ -320,6 +320,7 @@ router.post('/verify-email-and-create', async (req, res) => {
       password: pendingData.password,
       passwordChangedAt: new Date(),
       passwordHistory: [{ hash: pendingData.password}],
+      registrationDevice: deviceName || null,
     });
 
     await user.save();
@@ -866,10 +867,24 @@ router.post('/verify-2fa', async (req, res) => {
       user.emergencyModeActivated = false;
     }
 
-    await user.save();
-    const { deviceName } = req.body;
-if (deviceName && user.registrationDevice && user.registrationDevice !== deviceName) {
-  await User.findByIdAndUpdate(user._id, { pendingUnknownDeviceAlert: deviceName });
+    await user.save();const { deviceName, locationName, latitude, longitude } = req.body;
+
+if (deviceName) {
+    if (!user.registrationDevice) {
+        await User.findByIdAndUpdate(user._id, {
+            registrationDevice: deviceName
+        });
+        console.log(`تم تثبيت الجهاز الأساسي: ${deviceName}`);
+    }
+    else if (user.registrationDevice !== deviceName) {
+        console.log(`🚨 دخول من جهاز غير أساسي (${deviceName}) — إرسال إيميل...`);
+        try {
+            await sendNewDeviceAlertEmail(user.email, user.fullName, deviceName);
+            console.log(` إيميل التنبيه أُرسل: ${user.email}`);
+        } catch (emailErr) {
+            console.error('⚠️ فشل إرسال الإيميل:', emailErr.message);
+        }
+    }
 }
 
     const accessToken = jwt.sign(

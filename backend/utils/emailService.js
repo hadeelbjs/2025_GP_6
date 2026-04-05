@@ -228,13 +228,54 @@ const sendVerificationOTP = async (email, fullName, verificationCode) => {
   }
 };
 
+const sendNewDeviceAlertEmail = async (email, fullName, deviceName) => {
+  const html = `
+    <!DOCTYPE html><html dir="rtl">
+    <head><meta charset="UTF-8"><style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 40px 20px; }
+      .container { max-width: 560px; margin: 0 auto; background: white; border-radius: 16px; overflow: hidden; }
+      .header { background: #2D1B69; padding: 32px 24px; text-align: center; }
+      .header h2 { color: white; font-size: 22px; font-weight: bold; }
+      .body { padding: 32px 24px; }
+      .greeting { font-size: 15px; color: #333; margin-bottom: 24px; line-height: 1.6; }
+      .info-box { background: #f9f9f9; border: 1px solid #ebebeb; border-radius: 10px; padding: 20px 24px; margin-bottom: 24px; }
+      .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; direction: rtl; }
+      .info-row:last-child { border-bottom: none; }
+      .info-label { font-size: 14px; color: #333; font-weight: bold; }
+      .info-value { font-size: 14px; color: #555; direction: ltr; }
+      .warning { font-size: 13px; color: #c0392b; text-align: center; font-weight: bold; line-height: 1.8; margin-top: 16px; }
+      .note { font-size: 13px; color: #888; text-align: center; line-height: 1.8; margin-bottom: 8px; }
+      .footer { background: #fafafa; border-top: 1px solid #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #aaa; }
+
+    </style></head>
+    <body>
+      <div class="container">
+        <div class="header"><h2>تنبيه أمني</h2></div>
+        <div class="body">
+          <p class="greeting">مرحباً <strong>${fullName}</strong>،<br>تم تسجيل دخول إلى حسابك من جهاز جديد</p>
+          <div class="info-box">
+            <div class="info-row">
+              <span class="info-label">الجهاز</span>
+              <span class="info-value">${deviceName}</span>
+            </div>
+          </div>
+          <p class="note">إذا كنت أنت من قام بذلك، يمكنك تجاهل هذا الإيميل</p>
+          <p class="warning">إذا لم تكن أنت، يُنصح بتغيير كلمة المرور فوراً من إعدادات الحساب</p>        </div>
+        <div class="footer">فريق وصيد</div>
+      </div>
+    </body></html>
+  `;
+  await sendActivityAlertEmail(email, fullName, 'تنبيه: تسجيل دخول من جهاز جديد', html);
+};
 
 module.exports = { 
   sendVerificationEmail,
   sendBiometricVerificationEmail, 
    sendActivityAlertEmail, 
     sendUnfreezeCodeEmail,
-    sendVerificationOTP
+    sendVerificationOTP,
+    sendNewDeviceAlertEmail
 };
 
 /*

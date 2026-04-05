@@ -16,7 +16,7 @@ class SimpleNotificationsPage extends StatelessWidget {
     return Directionality(
       textDirection: TextDirection.rtl,
       child: Scaffold(
-        backgroundColor: const Color(0xFFF5F5F5),
+        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
         appBar: AppBar(
           iconTheme: const IconThemeData(color: AppColors.primary),
           title: const Text(
@@ -31,6 +31,7 @@ class SimpleNotificationsPage extends StatelessWidget {
           elevation: 0,
         ),
         body: StreamBuilder<List<AppNotification>>(
+          
           stream: NotificationService().notificationsStream,
           initialData: NotificationService().notifications,
           builder: (context, snapshot) {
@@ -39,7 +40,7 @@ class SimpleNotificationsPage extends StatelessWidget {
             if (notifications.isEmpty) {
               return const Center(
                 child: Text(
-                  'لا توجد إشعارات حالياً',
+                  'لا توجد إشعارات حاليًا',
                   style: TextStyle(
                     fontFamily: 'IBMPlexSansArabic',
                     fontSize: 15,

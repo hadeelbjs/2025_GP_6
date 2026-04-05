@@ -67,6 +67,7 @@ dependencies:
   flutter_zxing: ^1.5.2
   qr_code_tools: ^0.2.0
   google_mlkit_text_recognition: ^0.15.0
+  flutter_heic_to_jpg: ^1.0.0
 
   geolocator: ^14.0.2
 

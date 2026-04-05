@@ -279,48 +279,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
           
           SizedBox(height: 25),
           
-          // الإحصائيات
-          if (!_isSafe) ...[
-            Container(
-              width: double.infinity,
-              padding: EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(15),
-                border: Border.all(
-                  color: Colors.blue[200]!,
-                  width: 1.5,
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(Icons.analytics_outlined, color: Colors.blue[700], size: 22),
-                      SizedBox(width: 10),
-                      Text(
-                        'الإحصائيات:',
-                        style: TextStyle(
-                          fontFamily: 'IBMPlexSansArabic',
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue[700],
-                        ),
-                      ),
-                    ],
-                  ),
-                  SizedBox(height: 15),
-                  _buildStatItem('كلمات مستخرجة', '${summary['total_words']}'),
-                  _buildStatItem('أسماء أشخاص', '${summary['total_names']}'),
-                  _buildStatItem(' باركود/QR', '${summary['total_barcodes']}'),
-                  _buildStatItem('وجوه مكتشفة', '${summary['total_faces']}'),
-                ],
-              ),
-            ),
-            SizedBox(height: 25),
-          ],
-          
+           
           // البيانات المكتشفة
           if (!_isSafe && detectedItems.isNotEmpty) ...[
             Container(
@@ -470,21 +429,22 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
     );
   }
 
-  IconData _getIconData(String iconName) {
-    Map<String, IconData> icons = {
-      'badge': Icons.badge,
-      'card_membership': Icons.card_membership,
-      'flight': Icons.flight,
-      'email': Icons.email,
-      'phone': Icons.phone,
-      'account_balance': Icons.account_balance,
-      'person': Icons.person,
-      'qr_code': Icons.qr_code,
-      'face': Icons.face,
-      'info': Icons.info,
-    };
-    return icons[iconName] ?? Icons.info;
-  }
+IconData _getIconData(String iconName) {
+  Map<String, IconData> icons = {
+    'badge': Icons.badge,
+    'card_membership': Icons.card_membership,
+    'flight': Icons.flight,
+    'email': Icons.email,
+    'phone': Icons.phone,
+    'account_balance': Icons.account_balance,
+    'person': Icons.person,
+    'qr_code': Icons.qr_code,
+    'face': Icons.face,
+    'directions_car': Icons.directions_car, 
+    'info': Icons.info,
+  };
+  return icons[iconName] ?? Icons.info;
+}
 
   String _getTitle() {
     switch (_currentState) {

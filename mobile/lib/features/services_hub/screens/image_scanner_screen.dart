@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
-import 'dart:typed_data';
+import 'dart:ui' as ui;
 import '../../../core/constants/colors.dart';
 import '../services/api_contentScanning.dart';
+import '../widgets/spotlight_image_painter.dart';
 
 class ImageScannerScreen extends StatefulWidget {
   const ImageScannerScreen({Key? key}) : super(key: key);
@@ -20,7 +21,8 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isSafe = true;
   ApiContentService _apiService = ApiContentService();
-  bool _showAnnotatedImage = false; // للتبديل بين الصورة الأصلية والمعالجة
+  bool _showAnnotatedImage = false; // للتبديل بين الصورة الأصلية والـ Spotlight
+  ui.Image? _uiImage; // الصورة بصيغة ui.Image للـ CustomPainter
 
   Future<void> _pickFromGallery() async {
     try {
@@ -50,25 +52,98 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
     }
   }
 
+  // تحميل الصورة كـ ui.Image للـ CustomPainter
+  Future<ui.Image> _loadUiImage(File file) async {
+    final bytes = await file.readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    return frame.image;
+  }
+
+  // بناء قائمة العناصر الحساسة من نتيجة API
+  List<SensitiveItem> _buildSensitiveItems() {
+    final boxes = _apiService.getBoxes();
+    final items = <SensitiveItem>[];
+
+    // وجوه
+    for (final face in boxes['faces'] ?? []) {
+      final rect = extractRect(face);
+      if (rect != null) {
+        items.add(SensitiveItem(rect: rect, label: 'وجه', color: const Color(0xFF9B8EC4)));
+      }
+    }
+
+    // وثائق وأشياء حساسة
+    const sensitiveDocTypes = [
+      'id_card', 'national_id', 'passport', 'driver_license',
+      'residence_permit', 'iqama', 'birth_certificate',
+      'health_card', 'insurance_card', 'credit_card', 'bank_card', 'car_plate',
+    ];
+    const docLabels = {
+      'id_card': 'بطاقة هوية',
+      'national_id': 'هوية وطنية',
+      'passport': 'جواز سفر',
+      'driver_license': 'رخصة قيادة',
+      'residence_permit': 'إقامة',
+      'iqama': 'إقامة',
+      'birth_certificate': 'شهادة ميلاد',
+      'health_card': 'بطاقة صحية',
+      'insurance_card': 'بطاقة تأمين',
+      'credit_card': 'بطاقة ائتمانية',
+      'bank_card': 'بطاقة بنكية',
+      'car_plate': 'لوحة سيارة',
+    };
+
+    for (final doc in boxes['documents'] ?? []) {
+      final normalized = (doc['class'] ?? '').toString().toLowerCase().replaceAll(' ', '_');
+      if (!sensitiveDocTypes.contains(normalized)) continue;
+      final rect = extractRect(doc);
+      if (rect != null) {
+        items.add(SensitiveItem(
+          rect: rect,
+          label: docLabels[normalized] ?? normalized,
+          color: Colors.white,
+        ));
+      }
+    }
+
+    // باركود
+    for (final bc in boxes['barcodes'] ?? []) {
+      final isSensitive = bc['analysis']?['sensitive'] == true;
+      if (!isSensitive) continue;
+      final rect = extractRect(bc);
+      if (rect != null) {
+        items.add(SensitiveItem(rect: rect, label: 'QR/باركود', color: const Color(0xFF1A73E8)));
+      }
+    }
+
+    return items;
+  }
+
   Future<void> _startScan() async {
     setState(() {
       _currentState = _ScanState.scanning;
     });
 
     if (_selectedImage != null) {
-      var result = await _apiService.scanImage(_selectedImage);
-      
+      // تحميل الـ ui.Image بالتوازي مع الفحص
+      final scanFuture = _apiService.scanImage(_selectedImage);
+      final imageFuture = _loadUiImage(_selectedImage!);
+      final result = await scanFuture;
+      final loadedImage = await imageFuture;
+
       if (result != null) {
         setState(() {
           _isSafe = _apiService.isSafe();
           _currentState = _ScanState.result;
-          _showAnnotatedImage = false; // ابدأ بالصورة الأصلية
+          _showAnnotatedImage = false;
+          _uiImage = loadedImage;
         });
       } else {
         setState(() {
           _currentState = _ScanState.preview;
         });
-        
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
@@ -88,6 +163,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
       _selectedImage = null;
       _currentState = _ScanState.initial;
       _showAnnotatedImage = false;
+      _uiImage = null;
     });
   }
 
@@ -119,15 +195,14 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   Widget _buildResultState() {
     var detectedItems = _apiService.getDetectedItems();
     var summary = _apiService.getSummary();
-    var annotatedImage = _apiService.getAnnotatedImage();
-    
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(30),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Toggle للتبديل بين الصورة الأصلية والمعالجة
-          if (!_isSafe && annotatedImage != null) ...[
+          // Toggle للتبديل بين الصورة الأصلية والـ Spotlight
+          if (!_isSafe && _uiImage != null) ...[
             Container(
               padding: EdgeInsets.symmetric(horizontal: 15, vertical: 10),
               decoration: BoxDecoration(
@@ -138,7 +213,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _showAnnotatedImage ?  'الصورة مع تحديد العناصر الحساسة' : 'الصورة مع تحديد العناصر الحساسة',
+                    'الصورة مع تحديد العناصر الحساسة',
                     style: TextStyle(
                       fontFamily: 'IBMPlexSansArabic',
                       fontSize: 14,
@@ -160,7 +235,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
             ),
             SizedBox(height: 15),
           ],
-          
+
           Text(
             _showAnnotatedImage ? "الصورة مع تحديد العناصر الحساسة:" : "الصورة المفحوصة:",
             style: TextStyle(
@@ -170,18 +245,18 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
               fontWeight: FontWeight.w500,
             ),
           ),
-          
+
           SizedBox(height: 15),
-          
-          // عرض الصورة (إما الأصلية أو المعالجة)
+
+          // عرض الصورة (أصلية أو Spotlight)
           Container(
             width: double.infinity,
             height: 300,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(20),
               border: Border.all(
-                color: _showAnnotatedImage 
-                    ? Colors.red.withOpacity(0.3)
+                color: _showAnnotatedImage
+                    ? AppColors.secondary.withOpacity(0.8)
                     : AppColors.primary.withOpacity(0.2),
                 width: 2,
               ),
@@ -195,30 +270,34 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
             ),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),
-              child: _showAnnotatedImage && annotatedImage != null
-                  ? InteractiveViewer(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  if (_showAnnotatedImage && _uiImage != null) {
+                    return InteractiveViewer(
                       minScale: 0.5,
-                      maxScale: 4.0,
-                      child: Image.memory(
-                        annotatedImage,
-                        fit: BoxFit.contain,
+                      maxScale: 5.0,
+                      boundaryMargin: const EdgeInsets.all(80),
+                      child: CustomPaint(
+                        size: Size(constraints.maxWidth, constraints.maxHeight),
+                        painter: SpotlightImagePainter(
+                          image: _uiImage!,
+                          items: _buildSensitiveItems(),
+                        ),
                       ),
-                    )
-                  : InteractiveViewer(
-                      minScale: 0.5,
-                      maxScale: 4.0,
-                      child: Image.file(
-                        _selectedImage!,
-                        fit: BoxFit.contain,
-                      ),
-                    ),
+                    );
+                  }
+                  return InteractiveViewer(
+                    minScale: 0.5,
+                    maxScale: 5.0,
+                    child: Image.file(_selectedImage!, fit: BoxFit.contain),
+                  );
+                },
+              ),
             ),
           ),
-          
-          // مؤشر لتوضيح ألوان البوكسات
-                 
+
           SizedBox(height: 30),
-          
+
           // نتيجة الفحص
           Container(
             width: double.infinity,
@@ -276,10 +355,9 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
               ],
             ),
           ),
-          
+
           SizedBox(height: 25),
-          
-           
+
           // البيانات المكتشفة
           if (!_isSafe && detectedItems.isNotEmpty) ...[
             Container(
@@ -321,7 +399,7 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
             ),
             SizedBox(height: 25),
           ],
-          
+
           ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primary,

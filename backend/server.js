@@ -124,7 +124,7 @@ app.use('/api/prekeys', require('./routes/prekeys'));
 app.use('/api/messages', require('./routes/messages'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', chatbotRoutes);
-
+app.use('/api/content-scanning-stats',require('./routes/contentScanning') )
 
 app.get('/', (req, res) => {
   res.json({ 

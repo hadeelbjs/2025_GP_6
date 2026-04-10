@@ -13,7 +13,7 @@ const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 const authMiddleware = require('../middleware/auth');
-
+const ContentScanning = requires('../model/ContentScanning');
 // ============================================
 // تخزين مؤقت للبيانات قبل التحقق (في الذاكرة)
 // ============================================
@@ -200,11 +200,6 @@ router.post(
         createdAt: Date.now()
       });
 
-      console.log(`✅ Registration pending for: ${email.toLowerCase()}`);
-      console.log(`   - ID: ${newRegistrationId}`);
-      console.log(`   - Code: ${verificationCode}`);
-      console.log(`   - Pending registrations count: ${pendingRegistrations.size}`);
-
       // إرسال رمز التحقق
       try {
         await sendEmailWithTimeout(
@@ -236,10 +231,6 @@ router.post(
 // الخطوة 2: التحقق من OTP وحفظ المستخدم
 // ============================================
 router.post('/verify-email-and-create', async (req, res) => {
-  console.log('📥 Received verify-email-and-create request:');
-  console.log('   - newRegistrationId:', req.body.newRegistrationId);
-  console.log('   - code:', req.body.code);
-  console.log('   - Pending registrations count:', pendingRegistrations.size);
 
 const { newRegistrationId, code, deviceName } = req.body;
 
@@ -253,7 +244,6 @@ const { newRegistrationId, code, deviceName } = req.body;
 
   // التحقق من وجود معرف التسجيل
   if (!newRegistrationId) {
-    console.error('❌ Missing newRegistrationId in request');
     return res.status(400).json({
       success: false,
       message: 'معرف التسجيل مطلوب - الرجاء إعادة التسجيل'
@@ -265,20 +255,13 @@ const { newRegistrationId, code, deviceName } = req.body;
     const pendingData = pendingRegistrations.get(newRegistrationId);
 
     if (!pendingData) {
-      console.error(`❌ No pending data found for ID: ${newRegistrationId}`);
       return res.status(400).json({
         success: false,
         message: 'انتهت صلاحية الجلسة، الرجاء إعادة التسجيل'
       });
     }
-
-    console.log(`✅ Found pending data for: ${pendingData.email}`);
-    console.log(`   - Expected code: ${pendingData.verificationCode}`);
-    console.log(`   - Received code: ${code}`);
-
-    // التحقق من الرمز
     if (pendingData.verificationCode !== code) {
-      console.log(`❌ Invalid code`);
+ 
       return res.status(400).json({
         success: false,
         message: 'الرمز غير صحيح'
@@ -322,13 +305,19 @@ const { newRegistrationId, code, deviceName } = req.body;
       passwordHistory: [{ hash: pendingData.password}],
       registrationDevice: deviceName || null,
     });
-
+  
     await user.save();
+
+    const contentScanning = new ContentScanning({
+       userId: user._id,
+    });
+
+    await contentScanning.save();
+
+
 
     // حذف البيانات المؤقتة
     pendingRegistrations.delete(newRegistrationId);
-
-    console.log(`✅ User created successfully: ${user.email}`);
 
     res.json({
       success: true,
@@ -352,9 +341,6 @@ const { newRegistrationId, code, deviceName } = req.body;
 router.post('/resend-registration-code', async (req, res) => {
   const { newRegistrationId } = req.body;
 
-  console.log('📥 Received resend-registration-code request:');
-  console.log('   - newRegistrationId:', newRegistrationId);
-
   if (!newRegistrationId) {
     return res.status(400).json({
       success: false,
@@ -366,7 +352,6 @@ router.post('/resend-registration-code', async (req, res) => {
     const pendingData = pendingRegistrations.get(newRegistrationId);
 
     if (!pendingData) {
-      console.error(`❌ No pending data found for ID: ${newRegistrationId}`);
       return res.status(400).json({
         success: false,
         message: 'انتهت صلاحية الجلسة، الرجاء إعادة التسجيل'
@@ -499,67 +484,6 @@ router.post('/verify-phone', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'حدث خطأ أثناء التحقق من الرمز'
-    });
-  }
-});
-
-// ============================================
-// تخطي التحقق من الجوال (بعد التحقق من الإيميل)
-// ============================================
-router.post('/skip-phone-verification', async (req, res) => {
-  const { email } = req.body;
-
-  try {
-    const user = await User.findOne({ email: email.toLowerCase() });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'المستخدم غير موجود'
-      });
-    }
-
-    if (!user.isEmailVerified) {
-      return res.status(400).json({
-        success: false,
-        message: 'الرجاء تأكيد البريد الإلكتروني أولاً'
-      });
-    }
-
-    const accessToken = jwt.sign(
-      { user: { id: user.id, username: user.username } },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
-
-    const refreshToken = jwt.sign(
-      { user: { id: user.id } },
-      process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET,
-      { expiresIn: '30d' }
-    );
-
-    res.json({
-      success: true,
-      message: 'تم تسجيل الدخول بنجاح',
-      accessToken: accessToken,
-      refreshToken: refreshToken,
-      user: {
-        id: user.id,
-        fullName: user.fullName,
-        username: user.username,
-        email: user.email,
-        phone: user.phone,
-        memoji: user.memoji || '😊',
-        isPhoneVerified: user.isPhoneVerified,
-        isEmailVerified: user.isEmailVerified
-      }
-    });
-
-  } catch (err) {
-    console.error('Skip Phone Verification Error:', err);
-    res.status(500).json({
-      success: false,
-      message: 'حدث خطأ في السيرفر'
     });
   }
 });

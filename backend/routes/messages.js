@@ -4,7 +4,6 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const Message = require('../models/Message');
 
-// ✅ إرسال رسالة مع Base64
 router.post('/send', auth, async (req, res) => {
   try {
     const { 

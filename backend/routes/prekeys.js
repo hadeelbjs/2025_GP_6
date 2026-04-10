@@ -23,18 +23,12 @@ router.post('/upload', auth, async (req, res) => {
     let bundle = await PreKeyBundle.findOne({ userId: req.user.id });
 
     if (bundle) {
-      // ✅ تحديد نوع التحديث
+      //  تحديد نوع التحديث
       const isFullBundleUpdate = registrationId && identityKey && signedPreKey;
       
       if (isFullBundleUpdate) {
-        // ⚠️ تحديث كامل - استبدال كل شيء
-        console.log(`🔄 FULL BUNDLE UPDATE for user ${req.user.id}`);
-        console.log(`  Old version: ${bundle.version}`);
-        console.log(`  New version: ${version || Date.now()}`);
-        console.log(`  Old registrationId: ${bundle.registrationId}`);
-        console.log(`  New registrationId: ${registrationId}`);
-        
-        // ✅ تحذير إذا كان registrationId مختلف
+
+        //  تحذير إذا كان registrationId مختلف
         if (bundle.registrationId !== registrationId) {
           console.warn('⚠️ WARNING: RegistrationId changed! Complete key rotation.');
         }
@@ -50,14 +44,13 @@ router.post('/upload', auth, async (req, res) => {
           usedAt: null,
         }));
         
-        // ✅ تحديث النسخة
+        //  تحديث النسخة
         bundle.version = version || Date.now();
         bundle.lastKeyRotation = Date.now();
         bundle.updatedAt = Date.now();
         
         await bundle.save();
         
-        console.log(`✅ Bundle updated completely. New version: ${bundle.version}`);
         
         return res.json({
           success: true,
@@ -68,12 +61,7 @@ router.post('/upload', auth, async (req, res) => {
           availableKeys: bundle.getAvailablePreKeysCount()
         });
       } else {
-        // ✅ إضافة PreKeys فقط (بدون تغيير IdentityKey أو SignedPreKey)
-        console.log(`➕ ADDING PreKeys ONLY for user ${req.user.id}`);
-        console.log(`  Current version: ${bundle.version}`);
-        console.log(`  Current PreKeys count: ${bundle.preKeys.length}`);
-        console.log(`  Adding ${preKeys.length} new PreKeys`);
-        
+
         const newPreKeys = preKeys.map(pk => ({
           keyId: pk.keyId,
           publicKey: pk.publicKey,
@@ -88,9 +76,6 @@ router.post('/upload', auth, async (req, res) => {
 
         await bundle.save();
 
-        console.log(`✅ PreKeys added. Total: ${bundle.preKeys.length}`);
-        console.log(`  Version unchanged: ${bundle.version}`);
-
         return res.json({
           success: true,
           message: `تم إضافة ${newPreKeys.length} مفتاح جديد`,
@@ -101,9 +86,6 @@ router.post('/upload', auth, async (req, res) => {
       }
     }
 
-    // ✅ إنشاء Bundle جديد (أول مرة)
-    console.log(`🆕 Creating NEW bundle for user ${req.user.id}`);
-    
     if (!registrationId || !identityKey || !signedPreKey) {
       return res.status(400).json({
         success: false,
@@ -128,9 +110,6 @@ router.post('/upload', auth, async (req, res) => {
 
     await bundle.save();
 
-    console.log(`Bundle created with ${bundle.preKeys.length} PreKeys`);
-    console.log(`  Version: ${bundle.version}`);
-
     res.json({
       success: true,
       message: 'تم رفع المفاتيح بنجاح',
@@ -140,7 +119,6 @@ router.post('/upload', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Upload PreKey Bundle Error:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في رفع المفاتيح',

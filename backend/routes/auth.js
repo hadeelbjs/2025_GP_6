@@ -13,7 +13,7 @@ const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 const authMiddleware = require('../middleware/auth');
-const ContentScanning = requires('../model/ContentScanning');
+const ContentScanning = require('../model/ContentScanning');
 // ============================================
 // تخزين مؤقت للبيانات قبل التحقق (في الذاكرة)
 // ============================================

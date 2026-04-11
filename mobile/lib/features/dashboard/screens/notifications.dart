@@ -64,6 +64,7 @@ class SimpleNotificationsPage extends StatelessWidget {
                   NotificationType.newLocation,
                   NotificationType.newWifi,
                   NotificationType.failedAttempts,
+                  NotificationType.unusualChatActivity,
                 }.contains(n.type);
 
                 return Padding(
@@ -823,14 +824,7 @@ class SimpleNotificationsPage extends StatelessWidget {
   // ─── Alert Data ──────────────────────────────────────────────
   Map<String, dynamic> _getAlertData(NotificationType type) {
     switch (type) {
-      /*
-      case NotificationType.unknownDevice:
-        return {
-          'icon': Icons.devices,
-          'title': 'جهاز غير معروف!',
-          'content': '• غيّر كلمة المرور فوراً\n• راجع الأجهزة المرتبطة بحسابك\n• تواصل مع الدعم إذا لزم',
-        };
-        */
+  
       case NotificationType.newLocation:
         return {
           'icon': Icons.location_on,
@@ -849,6 +843,11 @@ class SimpleNotificationsPage extends StatelessWidget {
           'title': 'محاولات دخول مشبوهة!',
           'content': '• غيّر كلمة المرور فوراً\n• لا تشارك بياناتك مع أحد\n• تواصل مع الدعم إذا استمر الأمر',
         };
+        case NotificationType.unusualChatActivity:
+      return {
+        'icon': Icons.security_update_warning,
+        'title': 'تنبيه أمان المحادثات',
+        'content': 'تم رصد نشاط غير معتاد في استخدام المحادثات المشفرة.\n• تم تفعيل هذا الإجراء الاحترازي لضمان أمان رسائلك وخصوصيتك.\n• يرجى تحديث كلمة المرور الآن لإعادة تأمين حسابك بالكامل.',      };
       default:
         return {
           'icon': Icons.warning_amber,
@@ -868,6 +867,7 @@ class SimpleNotificationsPage extends StatelessWidget {
       case NotificationType.newLocation:    return Icons.location_on;
       case NotificationType.newWifi:        return Icons.wifi;
       case NotificationType.failedAttempts: return Icons.lock_outline;
+      case NotificationType.unusualChatActivity: return Icons.history_toggle_off_rounded;
     }
   }
 
@@ -880,6 +880,7 @@ class SimpleNotificationsPage extends StatelessWidget {
       case NotificationType.newLocation:    return Colors.red;
       case NotificationType.newWifi:        return Colors.orange;
       case NotificationType.failedAttempts: return Colors.red;
+      case NotificationType.unusualChatActivity: return Colors.red;
     }
   }
 

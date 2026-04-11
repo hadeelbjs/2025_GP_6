@@ -1327,6 +1327,7 @@ class ApiService {
   String? locationName,
   String? ssid,
   String? deviceName,
+  String? customType,
 }) async {
   try {
     final headers = await _authHeaders();
@@ -1339,6 +1340,7 @@ class ApiService {
         if (locationName != null) 'locationName': locationName,
         if (ssid != null) 'ssid': ssid,
         if (deviceName != null) 'deviceName': deviceName,
+        if (customType != null) 'customType': customType,
       }),
     ).timeout(const Duration(seconds: 15));
     return jsonDecode(response.body);

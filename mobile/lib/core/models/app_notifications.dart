@@ -7,6 +7,7 @@ enum NotificationType {
   newLocation,
   newWifi,
   failedAttempts,
+  unusualChatActivity,
 }
 
 class AppNotification {

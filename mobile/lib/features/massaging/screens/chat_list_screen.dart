@@ -12,6 +12,7 @@ import '../../../services/biometric_service.dart';
 import 'chat_screen.dart';
 import '../../../services/local_db/database_helper.dart';
 import '../../../services/socket_service.dart';
+import '../../../services/anomaly_detection_service.dart';
 
 
 class ChatListScreen extends StatefulWidget {
@@ -25,6 +26,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
   final _apiService = ApiService();
   final _messagingService = MessagingService();
   final _signalProtocolManager = SignalProtocolManager();
+  final _anomalyService = AnomalyDetectionService();
   
   List<Map<String, dynamic>> _chats = [];
   List<Map<String, dynamic>> _conversations = [];
@@ -52,6 +54,8 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       _ensureSocketConnection();
     }
   }
+
+
   
   // التأكد من الاتصال بالـ Socket عند العودة للتطبيق
   Future<void> _ensureSocketConnection() async {
@@ -633,6 +637,7 @@ class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObse
       _showMessage('فشل التحقق. المحاولات المتبقية: $remaining', false);
       return;
     }
+    await _anomalyService.trackChatOpening();
 
     _verificationAttempts[userId] = 0;
     

@@ -7,11 +7,16 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:flutter_heic_to_jpg/flutter_heic_to_jpg.dart';
+import '../../../services/api_services.dart';
 class ApiContentService {
   static String virustotalURL = 'https://www.virustotal.com/api/v3/files';
   Map<String, dynamic>? lastResult;
-  Uint8List? annotatedImageBytes; // الصورة مع البوكسات
-  final String baseUrl = AppConfig.imageModelUrl;
+  Uint8List? annotatedImageBytes;
+  final String imageBaseUrl = AppConfig.imageModelUrl;
+  final String? apiBaseUrl = AppConfig.apiBaseUrl;
+  static ScanStats linkStats = ScanStats();
+  static ScanStats fileStats = ScanStats();
+  ApiService _apiService = ApiService();
 
   Future<ScanResult> scanURL(String url) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/urls');
@@ -47,11 +52,63 @@ class ApiContentService {
       }
 
       final analysisData = json.decode(analysisResponse.body);
-      return ScanResult.fromJson(analysisData);
+      ScanResult scanResult = ScanResult.fromJson(analysisData);
+      if(scanResult.isSafe){linkStats.recordSafe();
+      await updateScanStats('link', false);
+      }
+        
+      else {linkStats.recordVuln();
+        await updateScanStats('link', true);}
+        
+      return scanResult;
+
     } catch (e) {
       throw Exception('Error scanning URL: $e');
     }
   }
+  Future<void> updateScanStats(String type, bool isVulnerable) async {
+  try {
+    final response = await http.post(
+      Uri.parse('$apiBaseUrl/content-scanning-stats/update-$type-stats'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${await _apiService.getAccessToken()}',
+      },
+      body: jsonEncode({ 'isVulnerable': isVulnerable }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to update $type stats');
+      
+    }
+
+  } catch (e) {
+    debugPrint('updateScanStats error: $e');
+    rethrow;
+  }
+}
+
+Future<Map<String, dynamic>> getAllStats() async {
+  try {
+    final response = await http.get(
+      Uri.parse('$apiBaseUrl/content-scanning-stats/all-stats'),
+      headers: {
+        'Authorization': 'Bearer ${await _apiService.getAccessToken()}',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      print(response.body);
+      return jsonDecode(response.body);
+    }
+
+    throw Exception('Failed to fetch stats');
+
+  } catch (e) {
+    debugPrint('getAllStats error: $e');
+    rethrow;
+  }
+}
 
   Future<ScanResult> scanFile(String hash) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/files/$hash');
@@ -62,7 +119,17 @@ class ApiContentService {
 
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
-        return ScanResult.fromJson(jsonResponse);
+
+          ScanResult scanResult = ScanResult.fromJson(jsonResponse);
+          if(scanResult.isSafe){fileStats.recordSafe();
+            await updateScanStats('file', false);
+          }
+            
+          else {fileStats.recordVuln();
+          await updateScanStats('file', true);}
+            
+        return scanResult;
+
       } else if (response.statusCode == 404) {
         return ScanResult(
           isSafe: true,
@@ -79,110 +146,99 @@ class ApiContentService {
     }
   }
 
-Future<File> _compressImage(File imageFile) async {
-  final bytes = await imageFile.readAsBytes();
-  final extension = imageFile.path.split('.').last.toLowerCase();
-  
-  print('📸 نوع الصورة: $extension | حجم: ${(bytes.length / 1024).toStringAsFixed(0)}KB');
+  Future<File> _compressImage(File imageFile) async {
+    final bytes = await imageFile.readAsBytes();
+    final extension = imageFile.path.split('.').last.toLowerCase();
 
-  // أنواع تحتاج تحويل لـ JPG أولاً
-  const needsConversion = ['heic', 'heif', 'webp', 'bmp', 'tiff', 'tif', 'png'];
-  if (extension == 'heic' || extension == 'heif') {
-  final jpgPath = await FlutterHeicToJpg.convert(imageFile.path);
-  if (jpgPath != null) {
-    imageFile = File(jpgPath);
+ 
+    const needsConversion = [
+      'heic',
+      'heif',
+      'webp',
+      'bmp',
+      'tiff',
+      'tif',
+      'png',
+    ];
+    if (extension == 'heic' || extension == 'heif') {
+      final jpgPath = await FlutterHeicToJpg.convert(imageFile.path);
+      if (jpgPath != null) {
+        imageFile = File(jpgPath);
+      }
+    }
+    final image = img.decodeImage(bytes);
+
+    if (image == null) {
+      return imageFile;
+    }
+
+    img.Image processed = image;
+    if (image.width > 1280 || image.height > 1280) {
+      processed = img.copyResize(
+        image,
+        width: image.width > image.height ? 1280 : null,
+        height: image.height >= image.width ? 1280 : null,
+      );
+     
+    }
+
+    final fileSizeKB = bytes.length / 1024;
+    if (fileSizeKB < 500 && !needsConversion.contains(extension)) {
+      return imageFile;
+    }
+
+    final converted = img.encodeJpg(processed, quality: 85);
+
+    final tempDir = await Directory.systemTemp.createTemp();
+    final tempFile = File('${tempDir.path}/processed.jpg');
+    await tempFile.writeAsBytes(converted);
+
+    return tempFile;
   }
-}
-  final image = img.decodeImage(bytes);
-
-  if (image == null) {
-    print('❌ فشل قراءة الصورة');
-    return imageFile;
-  }
-
-  // تصغير الأبعاد إذا كبيرة
-  img.Image processed = image;
-  if (image.width > 1280 || image.height > 1280) {
-    processed = img.copyResize(
-      image,
-      width: image.width > image.height ? 1280 : null,
-      height: image.height >= image.width ? 1280 : null,
-    );
-    print('📐 تصغير: ${image.width}x${image.height} → ${processed.width}x${processed.height}');
-  }
-
-  // تحويل لـ JPG دائماً عشان السيرفر يقراها صح
-  final fileSizeKB = bytes.length / 1024;
-  if (fileSizeKB < 500 && !needsConversion.contains(extension)) {
-    return imageFile;
-  }
-
-  final converted = img.encodeJpg(processed, quality: 85);
-
-  final tempDir = await Directory.systemTemp.createTemp();
-  final tempFile = File('${tempDir.path}/processed.jpg');
-  await tempFile.writeAsBytes(converted);
-
-  return tempFile;
-}
 
   Future<Map<String, dynamic>?> scanImage(File? imageFile) async {
-    if (imageFile == null) {
-      print('❌ لا توجد صورة');
-      return null;
-    }
+  if (imageFile == null) return null;
 
-    try {
-      final compressedFile = await _compressImage(imageFile);
+  try {
+    final compressedFile = await _compressImage(imageFile);
 
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/analyze'),
-      );
+    var request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$apiBaseUrl/content-scanning/scan-image'),
+    );
 
-      request.headers['ngrok-skip-browser-warning'] = 'true';
+    request.headers['Authorization'] =
+        'Bearer ${await _apiService.getAccessToken()}';
 
-      request.files.add(
-        await http.MultipartFile.fromPath('file', compressedFile.path),
-      );
+    request.files.add(
+      await http.MultipartFile.fromPath('file', compressedFile.path),
+    );
 
-      var streamedResponse = await request.send();
-      var response = await http.Response.fromStream(streamedResponse);
+    var streamedResponse = await request.send();
+    var response = await http.Response.fromStream(streamedResponse);
 
-      print('📥 رمز الاستجابة: ${response.statusCode}');
+    if (response.statusCode == 200) {
+      var jsonData = json.decode(response.body);
+      lastResult = jsonData;
 
-      if (response.statusCode == 200) {
-        var jsonData = json.decode(response.body);
-
-        print('✅ نجح التحليل!');
-        print('النتيجة: ${jsonData['status']}');
-
-        // حفظ النتيجة
-        lastResult = jsonData;
-
-        // استخراج الصورة المعالجة من base64
-        if (jsonData['annotated_image_base64'] != null) {
-          try {
-            annotatedImageBytes = base64Decode(
-              jsonData['annotated_image_base64'],
-            );
-          } catch (e) {
-            print('= فشل فك تشفير الصورة: $e');
-          }
+      if (jsonData['annotated_image_base64'] != null) {
+        try {
+          annotatedImageBytes = base64Decode(jsonData['annotated_image_base64']);
+        } catch (e) {
+          print('فشل فك تشفير الصورة: $e');
         }
-
-        return jsonData;
-      } else {
-        print(' خطأ: ${response.statusCode}');
-        print('الاستجابة: ${response.body}');
-        return null;
       }
-    } catch (e) {
-      print('❌ خطأ في الاتصال: $e');
+
+      return jsonData;
+    } else {
+      print('خطأ: ${response.statusCode} — ${response.body}');
       return null;
     }
+  } catch (e) {
+    print('scan error: $e');
+    return null;
   }
-
+}
   // الحصول على الصورة مع البوكسات
   Uint8List? getAnnotatedImage() {
     return annotatedImageBytes;
@@ -511,5 +567,24 @@ class ScanResult {
       harmlessCount: harmless,
       status: status,
     );
+  }
+}
+
+class ScanStats {
+  int safe;
+  int vuln;
+  int total;
+
+  ScanStats({this.safe = 0, this.vuln = 0, this.total = 0});
+
+  recordSafe(){
+    safe++;
+    total++;
+
+  }
+
+  recordVuln(){
+    vuln++;
+    total++;
   }
 }

@@ -104,32 +104,24 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-     // print('🔄 App resumed - reconnecting socket...');
       _ensureSocketConnection();
-    } else if (state == AppLifecycleState.paused) {
-      print('⏸️ App paused');
-    }
+    } 
   }
   
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
-        print('🔌 Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
-          print('✅ Socket connected after resume');
           // طلب الحالة لجميع جهات الاتصال بعد الاتصال
           await _requestAllContactsStatus();
-        } else {
-          print('❌ Failed to connect socket after resume');
-        }
+        } 
       } else {
-        print('✅ Socket already connected');
         // حتى لو كان متصل، نطلب الحالة عند العودة للتطبيق
         await _requestAllContactsStatus();
       }
     } catch (e) {
-      print('❌ Error ensuring socket connection: $e');
+      print(e);
     }
   }
 
@@ -140,7 +132,6 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
       await Future.delayed(const Duration(milliseconds: 500));
       
       if (!_messagingService.isConnected) {
-        print('⚠️ Socket not connected, skipping status requests');
         return;
       }
 
@@ -149,7 +140,6 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
       
       if (result['success'] == true && result['contacts'] != null) {
         final contacts = result['contacts'] as List;
-        print('📡 Requesting status for ${contacts.length} contacts...');
         
         // طلب الحالة لكل جهة اتصال
         for (var contact in contacts) {
@@ -159,7 +149,6 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
           }
         }
         
-        print('✅ Status requests sent for all contacts');
       }
     } catch (e) {
       print('❌ Error requesting contacts status: $e');
@@ -277,8 +266,6 @@ Future<void> _initializeSocket() async {
         });
       }
     } catch (e) {
-      print('Error loading last login time: $e');
-      // في حالة الخطأ، نعرض رسالة افتراضية بالوقت الحالي
       final now = DateTime.now();
       final hour = now.hour;
       final minute = now.minute.toString().padLeft(2, '0');
@@ -319,7 +306,6 @@ Future<void> _initializeSocket() async {
  /// فحص الشبكة عند فتح Dashboard - مرة واحدة فقط
   Future<void> _checkWifiOnDashboardOpen() async {
     if (_hasCheckedWifiThisSession) {
-      print('ℹ️ WiFi already checked in this dashboard session');
       return;
     }
 
@@ -341,8 +327,6 @@ Future<void> _initializeSocket() async {
           _showPermissionDeniedDialog();
           break;
           case WifiCheckResultType.userDeclined:
-          // المستخدم رفض نهائياً - لا نزعجه
-          print('ℹ️ User declined WiFi check - respecting choice');
           break;
           
         case WifiCheckResultType.success:
@@ -357,21 +341,18 @@ Future<void> _initializeSocket() async {
           break;
           
         case WifiCheckResultType.notConnected:
-          print('ℹ️ User is not connected to WiFi');
           break;
           
         case WifiCheckResultType.alreadyChecked:
-          print('ℹ️ Already checked in this app session');
           break;
           
         case WifiCheckResultType.error:
-          print('❌ Error: ${result.errorMessage}');
           break;
       }
       
     } catch (e) {
       if (kDebugMode) {
-        print('❌ WiFi check error: $e');
+        print('WiFi check error: $e');
       }
     }
   }
@@ -487,7 +468,6 @@ Future<void> _handlePermissionGranted() async {
     ),
   );
   
-  // ✨ استخدام الدالة الجديدة
   final result = await _wifiService.requestPermissionsAndCheck();
   
   // إغلاق Loading
@@ -606,8 +586,6 @@ Future<void> _handlePermissionGranted() async {
       ),
     );
   }
-  // رسالة: التحذير الأمني
-  
  void _showSecurityAlert(WifiSecurityStatus status) {
   NotificationService().addNotification(
   AppNotification(
@@ -842,7 +820,7 @@ Widget _buildBellButton() {
     },
   );
 }
-// رسالة للشبكة الآمنة (جديدة)
+
 void _showSecureNetworkAlert(WifiSecurityStatus status) {
   showDialog(
     context: context,
@@ -931,7 +909,7 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
 
       Padding(
         padding: EdgeInsets.only(
-          top: height * 0.12, // 👈 نتحكم بالموقع هنا
+          top: height * 0.12, 
           left: width * 0.06,
           right: width * 0.06,
         ),
@@ -1086,7 +1064,7 @@ class _Bell extends StatelessWidget {
 
     return Transform.translate(
       offset: const Offset(0, -20), 
-      child: Stack(  // ← شلنا GestureDetector من هنا
+      child: Stack(  
         clipBehavior: Clip.none,
         children: [
           Container(

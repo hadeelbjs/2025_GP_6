@@ -62,7 +62,6 @@ String _translateDataClass(String english) {
   // ─── HIBP: تحقق من تسريب الإيميل ──────────────────────────
  Future<void> checkEmailBreachAndNotify() async {
   if (_hasCheckedBreach) return;
-  print("not checked");
   _hasCheckedBreach = true;
 
   final email = await getUserData('email');
@@ -85,8 +84,6 @@ String _translateDataClass(String english) {
       final List breaches = jsonDecode(response.body);
       final prefs = await SharedPreferences.getInstance();
 
-      // ─── جيب القديمة ──────────────────────────────────────
-      // الصيغة: {"Adobe": "2013-10-04", "LinkedIn": "2012-05-05"}
       final savedJson = prefs.getString('known_breaches') ?? '{}';
       final Map<String, dynamic> savedBreaches = jsonDecode(savedJson);
 
@@ -94,7 +91,6 @@ String _translateDataClass(String english) {
         final name = breach['Name'] as String;
         final date = breach['BreachDate'] as String;
 
-        // جديد إذا: ما موجود قبل، أو نفس الاسم لكن التاريخ تغير
         if (!savedBreaches.containsKey(name)) return true;
         if (savedBreaches[name] != date) return true;
         return false;
@@ -113,7 +109,7 @@ String _translateDataClass(String english) {
           final messageData = jsonEncode({
             'hasPassword': hasPassword,
             'dataClasses': dataClassesList,
-            'breachDate': breach['BreachDate'] as String, // ✅
+            'breachDate': breach['BreachDate'] as String, 
           });
 
           addNotification(AppNotification(
@@ -133,20 +129,15 @@ String _translateDataClass(String english) {
         };
         await prefs.setString('known_breaches', jsonEncode(allBreaches));
 
-        print('تسريبات جديدة: ${newBreaches.length}');
       } else {
-        print('لا يوجد تسريبات جديدة');
       }
 
     } else if (response.statusCode == 404) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove('known_breaches');
-      print('الإيميل آمن');
     } else if (response.statusCode == 401) {
-      print('API Key غير صحيح');
       _hasCheckedBreach = false;
     } else if (response.statusCode == 429) {
-      print('تجاوزت الحد المسموح');
       _hasCheckedBreach = false;
     } else {
       throw Exception('HIBP Error: ${response.statusCode}');
@@ -175,13 +166,11 @@ String _translateDataClass(String english) {
     final userDataStr = await storage.read(key: 'user_data');
 
     if (userDataStr == null) {
-      print('❌ لا توجد بيانات مستخدم');
       return 'No data';
     }
 
     final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
     final userId = userData['id'] as String;
-    print('👤 User ID: $userId');
 
     final userEmail = userData['email'] as String;
 

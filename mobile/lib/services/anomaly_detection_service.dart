@@ -14,7 +14,34 @@ class AnomalyDetectionService {
   static const String _wifiSsidKey = 'last_checked_ssid';
   final ApiService _api = ApiService();
   
+  static final List<DateTime> _chatOpenHistory = [];
+  static const int _maxChatsThreshold = 3; 
+  static const Duration _windowDuration = Duration(minutes: 1); 
 
+Future<void> trackChatOpening() async {
+  final now = DateTime.now();
+  _chatOpenHistory.removeWhere((time) => now.difference(time) > _windowDuration);
+  _chatOpenHistory.add(now);
+
+  if (_chatOpenHistory.length >= _maxChatsThreshold) {
+
+    NotificationService().addNotification(AppNotification(
+      id: 'unusual_chat_activity_${DateTime.now().millisecondsSinceEpoch}',
+      type: NotificationType.unusualChatActivity,
+      title: 'فتح متكرر وسريع للمحادثات',
+      message: 'تم رصد فتح متكرر للمحادثات في وقت قصير',
+      createdAt: DateTime.now(),
+      isRead: false,
+    ));
+
+    _api.checkAnomalies(
+      customType: 'unusual_chat_activity',
+      locationName: 'سلوك مستخدم غير معتاد',
+    ).ignore();
+
+    _chatOpenHistory.clear();
+  }
+}
   
   // الدالة الرئيسية — تُستدعى من main_dashboard.dart
   Future<void> runChecks() async {
@@ -163,6 +190,7 @@ if (result['success'] == true && result['anomalies'] != null) {
       case 'new_location':    return NotificationType.newLocation;
       case 'new_wifi':        return NotificationType.newWifi;
       case 'failed_attempts': return NotificationType.failedAttempts;
+      case 'unusual_chat_activity': return NotificationType.unusualChatActivity;
       default:                return NotificationType.breachAlert;
     }
   }
@@ -172,6 +200,7 @@ if (result['success'] == true && result['anomalies'] != null) {
       case 'new_location':    return 'تسجيل دخول من موقع جديد';
       case 'new_wifi':        return 'اتصال بشبكة جديدة';
       case 'failed_attempts': return 'محاولات تسجيل دخول غير ناجحة';
+      case 'unusual_chat_activity': return 'نشاط محادثات مشبوه';
       default:                return 'نشاط مشبوه';
     }
   }

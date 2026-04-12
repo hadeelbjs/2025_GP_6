@@ -751,6 +751,7 @@ Widget _buildBellButton() {
 
   return StreamBuilder<List<AppNotification>>(
     stream: NotificationService().notificationsStream,
+    initialData: NotificationService().notifications,
     builder: (context, snapshot) {
       final notifications = snapshot.data ?? [];
       final unreadCount =

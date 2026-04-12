@@ -14,8 +14,9 @@ const ContentScanningSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
-  linkStats: { type: scanStatsSchema, default: () => ({}) },
-  fileStats: { type: scanStatsSchema, default: () => ({}) },
+  linkStats:  { type: scanStatsSchema, default: () => ({}) },
+  fileStats:  { type: scanStatsSchema, default: () => ({}) },
+  imageStats: { type: scanStatsSchema, default: () => ({}) },
 }, { timestamps: true });
 
 ContentScanningSchema.statics.findByUserId = function(userId) {

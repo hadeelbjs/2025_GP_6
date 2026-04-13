@@ -446,7 +446,7 @@ router.post('/verify-phone', async (req, res) => {
         await user.save();
 
         const accessToken = jwt.sign(
-          { user: { id: user.id, username: user.username } },
+          { user: { id: user.id, username: user.username , tokenVersion: user.tokenVersion } },
           process.env.JWT_SECRET,
           { expiresIn: '7d' }
         );
@@ -515,7 +515,7 @@ router.post('/refresh-token', async (req, res) => {
     }
 
     const accessToken = jwt.sign(
-      { user: { id: user.id, username: user.username } },
+      { user: { id: user.id, username: user.username , tokenVersion: user.tokenVersion } },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -566,7 +566,7 @@ router.post('/skip-phone-verification', async (req, res) => {
     }
 
     const token = jwt.sign(
-      { user: { id: user.id, username: user.username } },
+      { user: { id: user.id, username: user.username , tokenVersion: user.tokenVersion } },
       process.env.JWT_SECRET,
       { expiresIn: '30d' }
     );
@@ -812,7 +812,7 @@ if (deviceName) {
 }
 
     const accessToken = jwt.sign(
-      { user: { id: user.id, username: user.username } },
+      { user: { id: user.id, username: user.username ,tokenVersion: user.tokenVersion } },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -1013,7 +1013,9 @@ router.post('/change-password', authMiddleware, validatePasswordMiddleware, asyn
     user.addToPasswordHistory(hashedPassword);
     
     user.password = hashedPassword;
-    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+   if (req.body.invalidateSession === true) {
+  user.tokenVersion = (user.tokenVersion || 1) + 1;
+}
     await user.save();
 
     res.json({
@@ -1217,7 +1219,7 @@ router.post('/biometric-login', async (req, res) => {
     }
 
     const accessToken = jwt.sign(
-      { user: { id: user.id, username: user.username } },
+      { user: { id: user.id, username: user.username , tokenVersion: user.tokenVersion} },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );

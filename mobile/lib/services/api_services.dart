@@ -180,6 +180,7 @@ class ApiService {
 
       if (response.statusCode == 200 && data['success']) {
         await _storage.write(key: 'access_token', value: data['accessToken']);
+
         await _storage.write(key: 'refresh_token', value: data['refreshToken']);
         await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
       }
@@ -333,6 +334,7 @@ class ApiService {
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success']) {
+
         await _storage.write(key: 'access_token', value: data['accessToken']);
         await _storage.write(key: 'refresh_token', value: data['refreshToken']);
         await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
@@ -840,8 +842,9 @@ class ApiService {
   // تغيير كلمة المرور
   Future<Map<String, dynamic>> changePassword(
     String currentPassword,
-    String newPassword,
-  ) async {
+     String newPassword, {
+  bool invalidateSession = false, // ← أضيفيها
+}) async {
     try {
       final headers = await _authHeaders();
       final response = await http
@@ -851,6 +854,7 @@ class ApiService {
             body: jsonEncode({
               'currentPassword': currentPassword,
               'newPassword': newPassword,
+              if (invalidateSession) 'invalidateSession': true,
             }),
           )
           .timeout(const Duration(seconds: 10));

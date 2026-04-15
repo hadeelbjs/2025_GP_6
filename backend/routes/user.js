@@ -345,8 +345,7 @@ router.post('/verify-email-change', auth, async (req, res) => {
     user.newEmailVerificationExpires = undefined;
     user.pendingEmail = undefined;
     user.freezeToken = freezeToken;
-    user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); // ← أضيف
-
+    user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); 
     await user.save();
     await sendActivityAlert(oldEmail, user.fullName, 'email', freezeToken);
 
@@ -552,6 +551,9 @@ router.post('/change-password', [
     user.password = hashedPassword;
     user.freezeToken = freezeToken;
     user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000); 
+if (req.body.invalidateSession === true) {
+  user.tokenVersion = (user.tokenVersion || 1) + 1;
+}
     await user.save();
     await sendActivityAlert(user.email, user.fullName, 'password', freezeToken);
 

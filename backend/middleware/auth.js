@@ -28,6 +28,16 @@ const authMiddleware = async (req, res, next) => {
         code: 'USER_NOT_FOUND'
       });
     }
+
+    if (decoded.user.tokenVersion !== undefined && 
+    user.tokenVersion !== decoded.user.tokenVersion) {
+      return res.status(401).json({
+        success: false,
+        message: 'انتهت الجلسة، يرجى تسجيل الدخول مجدداً',
+        code: 'SESSION_INVALIDATED'
+      });
+    }
+
     if (user.isAccountFrozen) {
         return res.status(403).json({
             success: false,

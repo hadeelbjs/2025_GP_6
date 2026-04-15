@@ -59,11 +59,15 @@ registrationDevice: { type: String, default: null },
   freezeToken: String,
   freezeTokenExpires: Date,
   pendingPhone: String,
+  
 
 
   // وضع الطوارئ
   emergencyModeActivated: { type: Boolean, default: false },
   emergencyModeAt: { type: Date },
+  
+  tokenVersion: { type: Number, default: 1 }
+
 });
 
 // دالة للتحقق من قوة الباسورد

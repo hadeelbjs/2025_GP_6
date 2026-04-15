@@ -10,6 +10,7 @@ const twilio = require('twilio');
 const client = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 const { parsePhoneNumberFromString } = require('libphonenumber-js');
 const auth = require('../middleware/auth'); // middleware للتحقق من التوكن
+const authMiddleware = require('../middleware/auth');
 
 function normalizePhone(rawPhone) {
   const phoneNumber = parsePhoneNumberFromString(rawPhone);
@@ -21,6 +22,28 @@ function normalizePhone(rawPhone) {
 
 const generateCode = () => {
   return crypto.randomInt(100000, 999999).toString();
+};
+
+const validatePasswordMiddleware = (req, res, next) => {
+  const { newPassword } = req.body;
+  
+  if (!newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: 'الرجاء إدخال كلمة المرور'
+    });
+  }
+  
+  const errors = User.validatePasswordStrength(newPassword);
+  
+  if (errors.length > 0) {
+    return res.status(400).json({
+      success: false,
+      message: errors[0]
+    });
+  }
+  
+  next();
 };
 
 
@@ -79,6 +102,37 @@ async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
     `
   );
 }
+
+function addDays(date, days) {
+  const result = new Date(date.valueOf());
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
+router.get('/password-exp-date', authMiddleware, async (req, res) => {
+  try {
+    const lastChangedAt = req.user.passwordChangedAt;
+
+    if (!lastChangedAt) {
+      return res.status(400).json({
+        success: false,
+        message: 'لا يوجد تاريخ لتغيير كلمة المرور'
+      });
+    }
+
+    const daysTillExp = req.user.isPasswordExpired();
+
+    res.json({
+      success: true,
+      message: 'Exp date retrieved',
+      expDate: addDays(lastChangedAt, daysTillExp),
+      daysTillExp
+    });
+
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
+  }
+});
 // ============================================
 // تحديث الصورة الرمزية (Memoji)
 // ============================================
@@ -456,7 +510,8 @@ router.post('/verify-phone-change', auth, async (req, res) => {
 router.post('/change-password', [
   auth,
   body('currentPassword').notEmpty().withMessage('الرجاء إدخال كلمة المرور الحالية'),
-  body('newPassword').isLength({ min: 6 }).withMessage('يجب أن تكون كلمة المرور الجديدة 6 أحرف على الأقل')
+  validatePasswordMiddleware,
+
 ], async (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
@@ -487,6 +542,7 @@ router.post('/change-password', [
         message: 'كلمة المرور الحالية غير صحيحة'
       });
     }
+    
 
     // تشفير كلمة المرور الجديدة
     const salt = await bcrypt.genSalt(10);
@@ -530,7 +586,6 @@ router.delete('/delete-account', auth, async (req, res) => {
       });
     }
 
-    const bcrypt = require('bcryptjs');
     const isPasswordValid = await bcrypt.compare(password, user.password);
     if (!isPasswordValid) {
       return res.status(401).json({

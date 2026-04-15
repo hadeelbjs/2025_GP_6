@@ -115,7 +115,17 @@ app.use((req, res, next) => {
 });
 
 const chatbotRoutes = require('./routes/chatbot');
+const sensitiveLimit = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { success: false, message: 'محاولات كثيرة، حاول بعد قليل' },
+  skipSuccessfulRequests: true
+});
 
+app.use('/api/user/change-password', sensitiveLimit);
+app.use('/api/user/unfreeze-account', sensitiveLimit);
+app.use('/api/user/request-email-change', sensitiveLimit);
+app.use('/api/user/request-phone-change', sensitiveLimit);
 // Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/contacts', require('./routes/contacts'));

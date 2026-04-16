@@ -120,12 +120,21 @@ router.get('/password-exp-date', authMiddleware, async (req, res) => {
       });
     }
 
-    const daysTillExp = req.user.isPasswordExpired();
+    const daysSinceChange = Math.ceil((Date.now() - lastChangedAt.getTime()) / (1000 * 60 * 60 * 24));
+
+    const daysTillExp = 90 - daysSinceChange;
+
+     if (daysTillExp <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password has already expired'
+      });
+    }
 
     res.json({
       success: true,
       message: 'Exp date retrieved',
-      expDate: addDays(lastChangedAt, daysTillExp),
+      expDate: addDays(lastChangedAt, 90),
       daysTillExp
     });
 

@@ -26,7 +26,6 @@ class ApiService {
   static String _hibpApiKey = AppConfig.hibpApikey;
   static const String _hibpBaseUrl = 'https://haveibeenpwned.com/api/v3';
 
-
   // Base URL بحسب المنصة
   // ============================
 
@@ -87,19 +86,19 @@ class ApiService {
   Future<Map<String, dynamic>> verifyEmailAndCreate({
     required String code,
     required String newRegistrationId,
-    String? deviceName
+    String? deviceName,
   }) async {
     try {
       String detectedDevice = "Unknown Device";
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
 
-    if (Platform.isAndroid) {
-      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-      detectedDevice = "${androidInfo.manufacturer} ${androidInfo.model}"; 
-    } else if (Platform.isIOS) {
-      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-      detectedDevice = iosInfo.name;
-    }
+      if (Platform.isAndroid) {
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        detectedDevice = "${androidInfo.manufacturer} ${androidInfo.model}";
+      } else if (Platform.isIOS) {
+        IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+        detectedDevice = iosInfo.name;
+      }
       final requestBody = {
         'code': code,
         'newRegistrationId': newRegistrationId,
@@ -327,14 +326,17 @@ class ApiService {
               'Content-Type': 'application/json',
               'Accept': 'application/json',
             },
-            body: jsonEncode({'email': email, 'code': code, if (deviceName != null) 'deviceName': deviceName,}),
+            body: jsonEncode({
+              'email': email,
+              'code': code,
+              if (deviceName != null) 'deviceName': deviceName,
+            }),
           )
           .timeout(const Duration(seconds: 10));
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200 && data['success']) {
-
         await _storage.write(key: 'access_token', value: data['accessToken']);
         await _storage.write(key: 'refresh_token', value: data['refreshToken']);
         await _storage.write(key: 'user_data', value: jsonEncode(data['user']));
@@ -466,13 +468,15 @@ class ApiService {
       final token = await _storage.read(key: 'access_token');
       if (token == null) return false;
 
-      final response = await http.post(
-        Uri.parse('$baseUrl/auth/emergency-mode'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer $token',
-        },
-      ).timeout(const Duration(seconds: 3));
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/auth/emergency-mode'),
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer $token',
+            },
+          )
+          .timeout(const Duration(seconds: 3));
 
       final data = jsonDecode(response.body);
       return data['success'] == true;
@@ -842,9 +846,9 @@ class ApiService {
   // تغيير كلمة المرور
   Future<Map<String, dynamic>> changePassword(
     String currentPassword,
-     String newPassword, {
-  bool invalidateSession = false, // ← أضيفيها
-}) async {
+    String newPassword, {
+    bool invalidateSession = false, // ← أضيفيها
+  }) async {
     try {
       final headers = await _authHeaders();
       final response = await http
@@ -869,7 +873,6 @@ class ApiService {
   // طلب تفعيل البايومتركس
   Future<Map<String, dynamic>> requestBiometricEnable() async {
     try {
-
       final headers = await _authHeaders();
 
       final response = await http
@@ -878,12 +881,11 @@ class ApiService {
             headers: headers,
           )
           .timeout(
-            const Duration(seconds: 30), 
+            const Duration(seconds: 30),
             onTimeout: () {
               throw TimeoutException('انتهى وقت الانتظار، حاول مرة أخرى');
             },
           );
-
 
       final data = jsonDecode(response.body);
 
@@ -906,7 +908,6 @@ class ApiService {
   // تأكيد تفعيل البايومتركس
   Future<Map<String, dynamic>> verifyBiometricEnable(String code) async {
     try {
-
       final headers = await _authHeaders();
 
       final response = await http
@@ -922,7 +923,6 @@ class ApiService {
             },
           );
 
-
       return jsonDecode(response.body);
     } on TimeoutException catch (e) {
       return {'success': false, 'message': 'انتهى وقت الانتظار، حاول مرة أخرى'};
@@ -934,7 +934,6 @@ class ApiService {
   // إلغاء البايومتركس
   Future<Map<String, dynamic>> disableBiometric() async {
     try {
-
       final headers = await _authHeaders();
 
       final response = await http
@@ -945,7 +944,6 @@ class ApiService {
               throw TimeoutException('انتهى وقت الانتظار');
             },
           );
-
 
       return jsonDecode(response.body);
     } on TimeoutException catch (e) {
@@ -1345,162 +1343,182 @@ class ApiService {
       };
     }
   }
+
   Future<Map<String, dynamic>> checkAnomalies({
-  double? lat,
-  double? lng,
-  String? locationName,
-  String? ssid,
-  String? deviceName,
-  String? customType,
-}) async {
-  try {
-    final headers = await _authHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/anomaly/check'),
-      headers: headers,
-      body: jsonEncode({
-        if (lat != null) 'latitude': lat,
-        if (lng != null) 'longitude': lng,
-        if (locationName != null) 'locationName': locationName,
-        if (ssid != null) 'ssid': ssid,
-        if (deviceName != null) 'deviceName': deviceName,
-        if (customType != null) 'customType': customType,
-      }),
-    ).timeout(const Duration(seconds: 15));
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {'success': false, 'anomalies': []};
+    double? lat,
+    double? lng,
+    String? locationName,
+    String? ssid,
+    String? deviceName,
+    String? customType,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/anomaly/check'),
+            headers: headers,
+            body: jsonEncode({
+              if (lat != null) 'latitude': lat,
+              if (lng != null) 'longitude': lng,
+              if (locationName != null) 'locationName': locationName,
+              if (ssid != null) 'ssid': ssid,
+              if (deviceName != null) 'deviceName': deviceName,
+              if (customType != null) 'customType': customType,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'anomalies': []};
+    }
   }
-}
-Future<Map<String, dynamic>> unfreezeAccount({
-  required String email,
-  required String code,
-}) async {
-  try {
-    final response = await http.post(
-      Uri.parse('$baseUrl/user/unfreeze-account'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'email': email, 'code': code}),
-    );
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال'};
-  }
-}
-Future<Map<String, dynamic>> freezeByToken(String token) async {
-  try {
-    final response = await http.post(
-      Uri.parse('$baseUrl/user/freeze-by-token'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'token': token}),
-    );
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {'success': false};
-  }
-}
 
-
-Future<Map<String, dynamic>> sendOTPforIdentityVerification(String email) async {
-  try {
-    final token = await getAccessToken();
-    if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
-
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/send-otp'),
-      headers: {'Content-Type': 'application/json',
-       'Authorization': 'Bearer $token',},
-      body: jsonEncode({"email": email}),
-    );
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال'};
+  Future<Map<String, dynamic>> unfreezeAccount({
+    required String email,
+    required String code,
+  }) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/unfreeze-account'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'email': email, 'code': code}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال'};
+    }
   }
-}
-Future<Map<String, dynamic>> verifyOTPforIdentityVerification(String code) async {
-  try {
+
+  Future<Map<String, dynamic>> freezeByToken(String token) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/user/freeze-by-token'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'token': token}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false};
+    }
+  }
+
+  Future<Map<String, dynamic>> sendOTPforIdentityVerification(
+    String email,
+  ) async {
+    try {
       final token = await getAccessToken();
-      if (token == null) return {'success': false, 'message': 'يجب تسجيل الدخول'};
+      if (token == null)
+        return {'success': false, 'message': 'يجب تسجيل الدخول'};
 
-
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/verify-otp'),
-      headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $token',},
-      body: jsonEncode({
-      'code' :code
-      }),
-    );
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال'};
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/send-otp'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({"email": email}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال'};
+    }
   }
-}
 
-Future<List> checkEmailBreach(String email) async {
- try {
-   final token = await getAccessToken();
-    if (token == null) throw Exception('يجب تسجيل الدخول');
+  Future<Map<String, dynamic>> verifyOTPforIdentityVerification(
+    String code,
+  ) async {
+    try {
+      final token = await getAccessToken();
+      if (token == null)
+        return {'success': false, 'message': 'يجب تسجيل الدخول'};
 
-    final url = Uri.parse(
-      '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
-    );
-
-    final response = await http.get(url, headers: {
-      'hibp-api-key': _hibpApiKey,
-      'user-agent': 'MyFlutterApp',
-    });
-
-    if (response.statusCode == 200) {
-      final List breaches = jsonDecode(response.body);
-     
-      return breaches;
-
-    } else if (response.statusCode == 404){
-      return [];
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/verify-otp'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({'code': code}),
+      );
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال'};
     }
-    else {
-      throw new Exception('فشل البحث: ${response.statusCode} ');
-    }
- } catch (e){
-  throw Exception('خطأ: $e');
- }
+  }
 
+  Future<List> checkEmailBreach(String email) async {
+    try {
+      final token = await getAccessToken();
+      if (token == null) throw Exception('يجب تسجيل الدخول');
 
+      final url = Uri.parse(
+        '$_hibpBaseUrl/breachedaccount/${Uri.encodeComponent(email)}?truncateResponse=false',
+      );
 
-}
+      final response = await http.get(
+        url,
+        headers: {'hibp-api-key': _hibpApiKey, 'user-agent': 'MyFlutterApp'},
+      );
 
-Future<int> checkPasswordBreach(String password) async {
-  try {
-    // نحول الباسورد إلى SHA-1
-    final bytes = utf8.encode(password);
-    final sha1Hash = sha1.convert(bytes).toString().toUpperCase();
+      if (response.statusCode == 200) {
+        final List breaches = jsonDecode(response.body);
 
-    // نرسل أول 5 أحرف فقط (k-Anonymity)
-    final prefix = sha1Hash.substring(0, 5);
-    final suffix = sha1Hash.substring(5);
-
-    final url = Uri.parse('https://api.pwnedpasswords.com/range/$prefix');
-    final response = await http.get(url, headers: {
-      'user-agent': 'MyFlutterApp',
-    });
-
-    if (response.statusCode == 200) {
-      final lines = response.body.split('\n');
-
-      for (var line in lines) {
-        final parts = line.split(':');
-        if (parts[0].trim() == suffix) {
-          return int.parse(parts[1].trim()); // ← عدد مرات التسريب
-        }
+        return breaches;
+      } else if (response.statusCode == 404) {
+        return [];
+      } else {
+        throw new Exception('فشل البحث: ${response.statusCode} ');
       }
-      return 0; 
-    } else {
-      throw Exception('فشل البحث: ${response.statusCode}');
+    } catch (e) {
+      throw Exception('خطأ: $e');
     }
-  } catch (e) {
-    throw Exception('خطأ: $e');
   }
-}
 
+  Future<int> checkPasswordBreach(String password) async {
+    try {
+      // نحول الباسورد إلى SHA-1
+      final bytes = utf8.encode(password);
+      final sha1Hash = sha1.convert(bytes).toString().toUpperCase();
 
+      // نرسل أول 5 أحرف فقط (k-Anonymity)
+      final prefix = sha1Hash.substring(0, 5);
+      final suffix = sha1Hash.substring(5);
+
+      final url = Uri.parse('https://api.pwnedpasswords.com/range/$prefix');
+      final response = await http.get(
+        url,
+        headers: {'user-agent': 'MyFlutterApp'},
+      );
+
+      if (response.statusCode == 200) {
+        final lines = response.body.split('\n');
+
+        for (var line in lines) {
+          final parts = line.split(':');
+          if (parts[0].trim() == suffix) {
+            return int.parse(parts[1].trim()); // ← عدد مرات التسريب
+          }
+        }
+        return 0;
+      } else {
+        throw Exception('فشل البحث: ${response.statusCode}');
+      }
+    } catch (e) {
+      throw Exception('خطأ: $e');
+    }
+  }
+
+  Future<Map<String, dynamic>> getTodaySecurityTip() async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http
+          .get(Uri.parse('$baseUrl/securitytips/today'), headers: headers)
+          .timeout(const Duration(seconds: 10));
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'فشل جلب نصيحة اليوم: $e'};
+    }
+  }
 }

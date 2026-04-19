@@ -135,6 +135,7 @@ app.use('/api/messages', require('./routes/messages'));
 app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/content-scanning-stats',require('./routes/contentScanning') )
+app.use('/api/securitytips', require('./routes/securitytips'));
 
 app.get('/', (req, res) => {
   res.json({ 

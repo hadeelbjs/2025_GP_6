@@ -56,6 +56,8 @@ class NotificationService {
   'Chat logs': 'سجلات المحادثات',
 };
 
+
+
 String _translateDataClass(String english) {
   return _dataClassTranslations[english] ?? english;
 }
@@ -82,6 +84,7 @@ String _translateDataClass(String english) {
 
     if (response.statusCode == 200) {
       final List breaches = jsonDecode(response.body);
+      await saveAllBreaches(breaches);
       final prefs = await SharedPreferences.getInstance();
 
       final savedJson = prefs.getString('known_breaches') ?? '{}';
@@ -219,4 +222,59 @@ void resetSession() {
   );
   _controller.add(_notifications);
 }
+
+// ─── Breach Storage (مستقل عن الإشعارات) ──────────────────
+static const String _breachesStorageKey = 'all_breaches_data';
+static const String _fixedBreachesKey = 'fixed_breaches';
+
+Future<void> saveAllBreaches(List breaches) async {
+  final prefs = await SharedPreferences.getInstance();
+  final List<Map<String, dynamic>> breachList = breaches.map((b) {
+    final List<String> dataClassesList = (b['DataClasses'] as List)
+        .map((d) => _translateDataClass(d as String))
+        .toList();
+    final bool hasPassword = (b['DataClasses'] as List)
+        .any((d) => (d as String).toLowerCase().contains('password'));
+    return {
+      'name': b['Name'] as String,
+      'title': b['Title'] as String,
+      'breachDate': b['BreachDate'] as String,
+      'domain': b['Domain'] as String? ?? '',
+      'dataClasses': dataClassesList,
+      'hasPassword': hasPassword,
+    };
+  }).toList();
+
+  await prefs.setString(_breachesStorageKey, jsonEncode(breachList));
+}
+
+Future<List<Map<String, dynamic>>> getAllBreaches() async {
+  final prefs = await SharedPreferences.getInstance();
+  final json = prefs.getString(_breachesStorageKey);
+  if (json == null) return [];
+  return (jsonDecode(json) as List).cast<Map<String, dynamic>>();
+}
+
+Future<Set<String>> getFixedBreaches() async {
+  final prefs = await SharedPreferences.getInstance();
+  final list = prefs.getStringList(_fixedBreachesKey) ?? [];
+  return list.toSet();
+}
+
+Future<void> markBreachAsFixed(String name) async {
+  final prefs = await SharedPreferences.getInstance();
+  final list = prefs.getStringList(_fixedBreachesKey) ?? [];
+  if (!list.contains(name)) {
+    list.add(name);
+    await prefs.setStringList(_fixedBreachesKey, list);
+  }
+}
+
+Future<void> unmarkBreachAsFixed(String name) async {
+  final prefs = await SharedPreferences.getInstance();
+  final list = prefs.getStringList(_fixedBreachesKey) ?? [];
+  list.remove(name);
+  await prefs.setStringList(_fixedBreachesKey, list);
+}
+
 }

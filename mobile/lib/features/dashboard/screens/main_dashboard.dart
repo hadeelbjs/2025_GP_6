@@ -18,6 +18,8 @@ import '../services/notification_service.dart';
 import '../../../core/models/app_notifications.dart';
 import '../../../services/anomaly_detection_service.dart';
 import 'dart:convert';
+import '../../services_hub/services/api_contentScanning.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -29,6 +31,7 @@ class MainDashboard extends StatefulWidget {
 
 class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserver {
   final _apiService = ApiService();
+  final _apiContentScanning = ApiContentService();
     final _wifiService = WifiSecurityService();
   final _messagingService = MessagingService();
   StreamSubscription<WifiSecurityStatus>? _wifiSubscription;
@@ -46,6 +49,7 @@ class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserv
     // للواي فاي تاخير بسيط
     _loadNotificationCount();
     _loadLastLoginTime();
+    _apiService.getPasswordExpDate();
 
     
    Future.delayed(const Duration(milliseconds: 500), () {
@@ -923,16 +927,10 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
             ),
 
             const SizedBox(height: 6),
+            Expanded (
+            child: _buildUserDashboard(size, width)),
 
-            _buildTitle('مرحبًا بك', width * 0.085, context),
-            const SizedBox(height: 10),
-            _buildTitle('لوحة المعلومات', width * 0.05, context),
-            const SizedBox(height: 8),
-            _buildInfoCard(context),
-            const SizedBox(height: 12),
-            _buildTipHeader(context),
-            const SizedBox(height: 8),
-            _buildTipText(context),
+            
           ],
         ),
       ),
@@ -941,6 +939,639 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
 ),
     ));
   }
+
+Widget _buildUserDashboard(Size size, double width) {
+  return Directionality(
+    textDirection: TextDirection.rtl,
+    child: SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTitle('مرحبًا بك', width * 0.085, context),
+          const SizedBox(height: 10),
+          _buildTipHeader(context),
+          const SizedBox(height: 8),
+          _buildTipText(context),
+          const SizedBox(height: 12),
+          _buildTitle('لوحة المعلومات', width * 0.05, context),
+          const SizedBox(height: 8),
+          _buildPasswordLine(),
+          const SizedBox(height: 8),
+          _buildContentScanningStats(),
+          const SizedBox(height: 8),
+          _buildBreachStats(),
+          const SizedBox(height: 16),
+
+        ],
+      ),
+    ),
+  );
+}
+
+Future<Map<String, dynamic>> getPassExp() async {
+  Map<String, dynamic> result = await _apiService.getPasswordExpDate();
+  return result;
+}
+
+Widget _buildPasswordLine() {
+  return FutureBuilder<Map<String, dynamic>>(
+    future: getPassExp(),
+    builder: (context, snapshot) {
+      final width = MediaQuery.of(context).size.width;
+
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      if (snapshot.hasError || snapshot.data?['success'] == false) {
+        return const SizedBox();
+      }
+
+      final data = snapshot.data!;
+      final daysTillExp = data['daysTillExp'] as int;
+      final expDate = DateTime.parse(data['expDate']);
+      final formattedDate =
+          '${expDate.day.toString().padLeft(2, '0')}/${expDate.month.toString().padLeft(2, '0')}/${expDate.year}';
+
+      final Color expColor = daysTillExp <= 14
+          ? const Color(0xFFC62828)
+          : daysTillExp <= 30
+              ? const Color(0xFFE65100)
+              : const Color(0xFF2E7D32);
+
+      final IconData expIcon = daysTillExp <= 14
+          ? Icons.warning
+          : daysTillExp <= 30
+              ? Icons.info
+              : Icons.check_circle;
+
+      return Container(
+        padding: EdgeInsets.all(width * 0.04),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(width * 0.04),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: width * 0.01,
+              height: width * 0.12,
+              decoration: BoxDecoration(
+                color: expColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            SizedBox(width: width * 0.03),
+            Icon(expIcon, color: expColor, size: width * 0.055),
+            SizedBox(width: width * 0.03),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'صلاحية كلمة المرور',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontSize: width * 0.035,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: width * 0.01),
+                  Text(
+                    'تنتهي خلال $daysTillExp يوم — $formattedDate',
+                    style: AppTextStyles.bodyMedium.copyWith(
+                      fontSize: width * 0.033,
+                      color: expColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+
+Widget _buildContentScanningStats() {
+  return FutureBuilder<Map<String, dynamic>>(
+    future: _apiContentScanning.getAllStats(),
+    builder: (context, snapshot) {
+      final width = MediaQuery.of(context).size.width;
+
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      if (snapshot.hasError || snapshot.data == null) {
+        return const SizedBox();
+      }
+
+      final data = snapshot.data!;
+      final linkStats  = data['linkStats']  as Map<String, dynamic>? ?? {};
+      final fileStats  = data['fileStats']  as Map<String, dynamic>? ?? {};
+      final imageStats = data['imageStats'] as Map<String, dynamic>? ?? {};
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _buildTitle('إحصائيات الفحص', width * 0.05, context),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _buildStatCard('الروابط', linkStats, Icons.link, width)),
+              SizedBox(width: width * 0.03),
+              Expanded(child: _buildStatCard('الملفات', fileStats, Icons.folder, width)),
+              SizedBox(width: width * 0.03),
+              Expanded(child: _buildStatCard(
+  'الصور', 
+  imageStats, 
+  Icons.image, 
+  width,
+  safeLabel: 'غير حساسة',
+  vulnerableLabel: 'حساسة',
+)),
+
+            ],
+          ),
+        ],
+      );
+    },
+  );
+}
+
+Widget _buildStatCard(String title, Map<String, dynamic> stats, IconData icon, double width, {String safeLabel = 'آمن', String vulnerableLabel = 'خطر'}) {
+  final total      = stats['total']      ?? 0;
+  final safe       = stats['safe']       ?? 0;
+  final vulnerable = stats['vulnerable'] ?? 0;
+
+  return Container(
+    padding: EdgeInsets.all(width * 0.035),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(width * 0.04),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.05),
+          blurRadius: 15,
+          offset: const Offset(0, 3),
+        ),
+      ],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: AppColors.secondary, size: width * 0.055),
+        SizedBox(height: width * 0.02),
+        Text(title,
+          style: AppTextStyles.bodyMedium.copyWith(
+            fontSize: width * 0.035,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        SizedBox(height: width * 0.02),
+        _buildStatRow('الكل', total, Colors.grey, Icons.circle_outlined, width),
+        _buildStatRow(safeLabel, safe, const Color(0xFF2E7D32), Icons.check_circle, width),
+        _buildStatRow(vulnerableLabel, vulnerable, const Color(0xFFC62828), Icons.warning, width),
+
+      ],
+    ),
+  );
+}
+
+Widget _buildStatRow(String label, int value, Color color, IconData icon, double width) {
+  return Padding(
+    padding: EdgeInsets.only(bottom: width * 0.01),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: color, size: width * 0.03),
+            SizedBox(width: width * 0.01),
+            Text(label,
+              style: TextStyle(
+                fontSize: width * 0.03,
+                color: AppColors.textPrimary.withOpacity(0.7),
+                fontFamily: 'IBMPlexSansArabic',
+              ),
+            ),
+          ],
+        ),
+        Text('$value',
+          style: TextStyle(
+            fontSize: width * 0.03,
+            color: color,
+            fontWeight: FontWeight.bold,
+            fontFamily: 'IBMPlexSansArabic',
+          ),
+        ),
+      ],
+    ),
+  );
+}
+Widget _buildBreachStats() {
+  final width = MediaQuery.of(context).size.width;
+
+  return FutureBuilder<List<Map<String, dynamic>>>(
+    future: NotificationService().getAllBreaches(),
+    builder: (context, snapshot) {
+      if (snapshot.connectionState == ConnectionState.waiting) {
+        return const Center(child: CircularProgressIndicator());
+      }
+
+      final breaches = snapshot.data ?? [];
+
+      return FutureBuilder<Set<String>>(
+        future: NotificationService().getFixedBreaches(),
+        builder: (context, fixedSnapshot) {
+          final fixedBreaches = fixedSnapshot.data ?? {};
+          final activeBreaches = breaches
+              .where((b) => !fixedBreaches.contains(b['name']))
+              .toList();
+          final latestBreach = activeBreaches.isNotEmpty ? activeBreaches.first : null;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTitle('تسريبات البيانات', width * 0.05, context),
+              const SizedBox(height: 8),
+
+              // كرت العدد
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(width * 0.04),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(width * 0.04),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 15,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
+                ),
+                child: activeBreaches.isEmpty
+                    ? Row(
+                        children: [
+                          Icon(Icons.check_circle,
+                              color: const Color(0xFF2E7D32),
+                              size: width * 0.055),
+                          SizedBox(width: width * 0.03),
+                          Text(
+                            'لا توجد تسريبات نشطة',
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              fontSize: width * 0.035,
+                              color: const Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        children: [
+                          Icon(Icons.warning,
+                              color: const Color(0xFFC62828),
+                              size: width * 0.055),
+                          SizedBox(width: width * 0.03),
+                          Expanded(
+                            child: Text(
+                              'عدد التسريبات المرتبطة ببريدك: ${activeBreaches.length}',
+                              style: AppTextStyles.bodyMedium.copyWith(
+                                fontSize: width * 0.035,
+                                color: AppColors.textPrimary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+
+              // أحدث تسريب
+              if (latestBreach != null) ...[
+                const SizedBox(height: 8),
+                _buildTitle('أحدث التسريبات', width * 0.045, context),
+                const SizedBox(height: 8),
+                _buildBreachCard(latestBreach, fixedBreaches, width),
+              ],
+
+              // زر عرض الكل
+              if (activeBreaches.length > 1) ...[
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () => _showAllBreaches(breaches, fixedBreaches, width),
+                  child: Center(
+                    child: Text(
+                      '+ عرض ${activeBreaches.length - 1} تسريب آخر',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: width * 0.035,
+                        color: AppColors.accent,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          );
+        },
+      );
+    },
+  );
+}
+Widget _buildBreachCard(
+    Map<String, dynamic> breach, Set<String> fixedBreaches, double width) {
+  final isFixed = fixedBreaches.contains(breach['name']);
+  final dataClasses = (breach['dataClasses'] as List).cast<String>();
+  final hasPassword = breach['hasPassword'] as bool;
+
+  return StatefulBuilder(
+    builder: (context, setState) {
+      return Container(
+        padding: EdgeInsets.all(width * 0.04),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(width * 0.04),
+          border: Border.all(
+            color: isFixed
+                ? const Color(0xFF2E7D32).withOpacity(0.3)
+                : AppColors.primary.withOpacity(0.15),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // العنوان والتاريخ
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: EdgeInsets.all(width * 0.02),
+                      decoration: BoxDecoration(
+                        color: AppColors.primary.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(width * 0.02),
+                      ),
+                      child: Icon(Icons.language,
+                          color: AppColors.primary, size: width * 0.045),
+                    ),
+                    SizedBox(width: width * 0.02),
+                    Text(
+                      breach['title'] as String,
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: width * 0.04,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  breach['breachDate'] as String,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: width * 0.028,
+                    color: AppColors.textHint,
+                  ),
+                ),
+              ],
+            ),
+            SizedBox(height: width * 0.025),
+
+            // البيانات المسربة
+            Text(
+              'تسريب بيانات يشمل: ${dataClasses.take(3).join('، ')}${dataClasses.length > 3 ? '...' : ''}',
+              style: AppTextStyles.bodyMedium.copyWith(
+                fontSize: width * 0.033,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            SizedBox(height: width * 0.03),
+
+            // الإجراء المطلوب
+            if (hasPassword && !isFixed)
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(width * 0.03),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFFEBEE),
+                  borderRadius: BorderRadius.circular(width * 0.03),
+                  border: Border.all(
+                    color: const Color(0xFFC62828).withOpacity(0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.warning,
+                            color: const Color(0xFFC62828),
+                            size: width * 0.04),
+                        SizedBox(width: width * 0.02),
+                        Text(
+                          'الإجراء المطلوب',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            fontSize: width * 0.033,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFFC62828),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: width * 0.015),
+                    Text(
+                      'غيّر كلمة مرور ${breach['title']} فوراً، وفعّل المصادقة الثنائية، وتحقق من الجلسات النشطة.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: width * 0.032,
+                        color: const Color(0xFFC62828),
+                        height: 1.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (isFixed)
+              Container(
+                width: double.infinity,
+                padding: EdgeInsets.all(width * 0.03),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(width * 0.03),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle,
+                        color: const Color(0xFF2E7D32), size: width * 0.04),
+                    SizedBox(width: width * 0.02),
+                    Text(
+                      'تم الإصلاح',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        fontSize: width * 0.033,
+                        color: const Color(0xFF2E7D32),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            SizedBox(height: width * 0.03),
+
+            // أزرار
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // زر تم الإصلاح
+                GestureDetector(
+                  onTap: () async {
+                    if (isFixed) {
+                      await NotificationService()
+                          .unmarkBreachAsFixed(breach['name'] as String);
+                    } else {
+                      await NotificationService()
+                          .markBreachAsFixed(breach['name'] as String);
+                    }
+                    setState(() {});
+                    if (mounted) this.setState(() {});
+                  },
+                  child: Container(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: width * 0.04,
+                      vertical: width * 0.022,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isFixed
+                          ? const Color(0xFF2E7D32)
+                          : AppColors.primary,
+                      borderRadius: BorderRadius.circular(width * 0.025),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isFixed ? Icons.check_circle : Icons.shield,
+                          color: Colors.white,
+                          size: width * 0.04,
+                        ),
+                        SizedBox(width: width * 0.015),
+                        Text(
+                          isFixed ? 'تم الإصلاح ✓' : 'علّم كمُصلح',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: width * 0.032,
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // زر زيارة الموقع
+                if (breach['domain'] != null &&
+                    (breach['domain'] as String).isNotEmpty)
+                  GestureDetector(
+                    onTap: () async {
+                      final url = 'https://${breach['domain']}';
+                      if (await canLaunchUrl(Uri.parse(url))) {
+                        await launchUrl(Uri.parse(url),
+                            mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    child: Row(
+                      children: [
+                        Icon(Icons.open_in_new,
+                            color: AppColors.accent, size: width * 0.04),
+                        SizedBox(width: width * 0.01),
+                        Text(
+                          'زيارة الموقع',
+                          style: TextStyle(
+                            color: AppColors.accent,
+                            fontSize: width * 0.032,
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      );
+    },
+  );
+}
+
+void _showAllBreaches(List<Map<String, dynamic>> breaches,
+    Set<String> fixedBreaches, double width) {
+  showModalBottomSheet(
+    context: context,
+    backgroundColor: Colors.transparent,
+    isScrollControlled: true,
+    builder: (context) => DraggableScrollableSheet(
+      initialChildSize: 0.7,
+      maxChildSize: 0.95,
+      minChildSize: 0.4,
+      builder: (_, controller) => Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Colors.grey.shade300,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'جميع التسريبات',
+              style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView.separated(
+                controller: controller,
+                padding: EdgeInsets.symmetric(horizontal: width * 0.05),
+                itemCount: breaches.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 8),
+                itemBuilder: (_, i) =>
+                    _buildBreachCard(breaches[i], fixedBreaches, width),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
 
 
 
@@ -961,18 +1592,7 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
     return Container(
       padding: EdgeInsets.all(width * 0.055),
       constraints: BoxConstraints(
-        minHeight: size.height * 0.16,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(width * 0.04),
-        boxShadow: [
-          BoxShadow(
-            blurRadius: 15,
-            offset: const Offset(0, 3),
-            color: Colors.black.withOpacity(0.05),
-          ),
-        ],
+        minHeight: size.height * 0.05,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -985,7 +1605,7 @@ void _showSecureNetworkAlert(WifiSecurityStatus status) {
               _lastLoginTime ?? '',
               textAlign: TextAlign.right,
               style: AppTextStyles.bodyLarge.copyWith(
-                fontSize: width * 0.042,
+                fontSize: width * 0.039,
                 color: AppColors.textPrimary.withOpacity(0.75),
               ),
             ),

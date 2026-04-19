@@ -1207,6 +1207,26 @@ class ApiService {
     }
   }
 
+   Future<Map<String, dynamic>> getPasswordExpDate() async {
+  try {
+    final response = await http.get(
+      Uri.parse('$baseUrl/user/password-exp-date'),
+      headers: await _getAuthHeaders(),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode == 200) {
+      return data;
+    } else {
+      return {'success': false, 'message': data['message'] ?? 'خطأ في السيرفر'};
+    }
+  } catch (e) {
+    return {'success': false, 'message': 'تعذر الاتصال بالسيرفر'};
+  }
+}
+
+
   // ===================================
   //  التحقق من عدد PreKeys
   // ===================================

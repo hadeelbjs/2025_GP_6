@@ -204,7 +204,7 @@ Future<Map<String, dynamic>> getAllStats() async {
 
     var request = http.MultipartRequest(
       'POST',
-      Uri.parse('$apiBaseUrl/content-scanning/scan-image'),
+      Uri.parse('$apiBaseUrl/content-scanning-stats/scan-image'),
     );
 
     request.headers['Authorization'] =

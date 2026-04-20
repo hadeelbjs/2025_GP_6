@@ -38,13 +38,23 @@ const authMiddleware = async (req, res, next) => {
       });
     }
 
-    if (user.isAccountFrozen) {
+  if (user.isAccountFrozen) {
+    const currentDevice = req.headers['x-device-name'];
+    
+    if (currentDevice && user.registrationDevice && currentDevice !== user.registrationDevice) {
         return res.status(403).json({
             success: false,
-            frozen: true,
-            message: 'تم تجميد حسابك — تحقق من بريدك الإلكتروني'
+            action: 'FORCE_LOGOUT',
+            message: 'تم إنهاء الجلسة لأسباب أمنية'
         });
     }
+    
+    return res.status(403).json({
+        success: false,
+        frozen: true,
+        message: 'تم تجميد حسابك — تحقق من بريدك الإلكتروني'
+    });
+}
 
     // إضافة بيانات المستخدم إلى الـ request
     req.user = user;

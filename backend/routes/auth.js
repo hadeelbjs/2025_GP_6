@@ -803,7 +803,12 @@ if (deviceName) {
     else if (user.registrationDevice !== deviceName) {
         console.log(`🚨 دخول من جهاز غير أساسي (${deviceName}) — إرسال إيميل...`);
         try {
-            await sendNewDeviceAlertEmail(user.email, user.fullName, deviceName);
+        const freezeToken = crypto.randomBytes(32).toString('hex');
+        user.freezeToken = freezeToken;
+        user.freezeTokenExpires = new Date(Date.now() + 30 * 60 * 1000);
+        await user.save();
+
+            await sendNewDeviceAlertEmail(user.email, user.fullName, deviceName, freezeToken);
             console.log(` إيميل التنبيه أُرسل: ${user.email}`);
         } catch (emailErr) {
             console.error('⚠️ فشل إرسال الإيميل:', emailErr.message);

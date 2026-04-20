@@ -29,6 +29,7 @@ import 'features/services_hub/screens/breach_lookup.dart';
 import 'features/account/screens/frozen_account_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'features/authentication/screens/reset_password.dart';
+import 'features/laws/screens/laws_screen.dart';
 
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -107,8 +108,8 @@ void initState() {
         '/password_generator': (context) => const PasswordGeneratorScreen(),
         '/frozen': (context) => const FrozenAccountScreen(),
         '/forgot-password': (context) => const ResetPasswordScreen(),
-        '/breach-lookup' : (context) => BreachLookup(),
-
+        '/breach-lookup': (context) => BreachLookup(),
+        '/laws': (context) => const LawsScreen(),
       },
     );
   }

@@ -55,6 +55,13 @@ class _ServicesScreenState extends State<ServicesScreen>
       'color': const Color.fromARGB(198, 40, 27, 103),
       'route': '/breach-lookup',
     },
+    {
+      'title': 'قوانين الجرائم الإلكترونية',
+      'description': 'تعرّف على حقوقك وما يُعدّ جريمة إلكترونية في النظام السعودي',
+      'icons': [Icons.gavel_rounded],
+      'color': const Color.fromARGB(198, 40, 27, 103),
+      'route': '/laws',
+    },
   ];
 
   List<Map<String, dynamic>> _filteredServices = [];

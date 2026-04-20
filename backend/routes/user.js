@@ -73,7 +73,7 @@ async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
   }
 
   // تغيير الإيميل أو الباسورد — تجميد
-  const freezeLink = `${process.env.BASE_URL}/api/user/freeze-by-token?token=${freezeToken}&type=${changeType}`;
+  const freezeLink = `${process.env.BASE_URL}/api/user/freeze-confirmation?token=${freezeToken}&type=${changeType}`;
   const changeLabel = changeType === 'email' ? 'بريدك الإلكتروني' : 'كلمة مرورك';
 
   await sendActivityAlertEmail(
@@ -640,87 +640,106 @@ router.delete('/delete-account', auth, async (req, res) => {
 });
 
 
-// تجميد الحساب عبر رابط الإيميل
-router.get('/freeze-by-token', async (req, res) => {
+router.get('/freeze-confirmation', (req, res) => {
     const { token, type } = req.query;
+    res.send(`
+        <!DOCTYPE html><html dir="rtl">
+        <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            *{margin:0;padding:0;box-sizing:border-box}
+            body{background:#0F0A1E;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:Arial;padding:20px}
+            .box{background:#1A1035;border:1px solid rgba(220,38,38,0.35);border-radius:20px;padding:36px 28px;max-width:360px;width:100%;text-align:center}
+            .icon{width:64px;height:64px;border-radius:50%;background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}
+            h2{color:white;font-size:20px;font-weight:600;margin:0 0 10px}
+            p{color:#9CA3AF;font-size:14px;line-height:1.7;margin:0 0 8px}
+            .btn{width:100%;background:#dc2626;color:white;border:none;padding:14px;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:20px}
+            .btn:hover{background:#b91c1c}
+            .hint{color:#6B7280;font-size:12px;margin-top:16px}
+        </style></head>
+        <body><div class="box">
+            <div class="icon">🔒</div>
+            <h2>تأكيد تجميد الحساب</h2>
+            <p>تم رصد نشاط مشبوه على حسابك.</p>
+            <p>هل أنت متأكد من رغبتك في <strong style="color:#f87171">تجميد حسابك فوراً</strong>؟</p>
+            <form action="/api/user/freeze-by-token" method="POST">
+                <input type="hidden" name="token" value="${token}">
+                <input type="hidden" name="type" value="${type}">
+                <button type="submit" class="btn">تأكيد التجميد فوراً</button>
+            </form>
+            <p class="hint">سيصلك رمز فك التجميد على بريدك الإلكتروني</p>
+        </div></body></html>
+    `);
+});
+
+// تجميد الحساب عبر رابط الإيميل
+router.post('/freeze-by-token', async (req, res) => {
+    const { token, type } = req.body; 
     try {
-        // البحث عن المستخدم باستخدام التوكن والتأكد من عدم انتهاء الصلاحية
         const user = await User.findOne({ 
             freezeToken: token,
             freezeTokenExpires: { $gt: Date.now() } 
         });
 
         if (!user) {
-            return res.send(`
-                <!DOCTYPE html>
-                <html dir="rtl">
-                <head>
-                    <meta charset="UTF-8">
-                    <style>
-                        * { margin: 0; padding: 0; box-sizing: border-box; }
-                        body { background: #0F0A1E; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial; }
-                        .box { background: #1A1035; border: 1px solid rgba(220,38,38,0.3); border-radius: 20px; padding: 40px 32px; max-width: 380px; width: 90%; text-align: center; }
-                        h2 { color: #ef4444; font-size: 20px; margin-bottom: 12px; }
-                        p { color: #9CA3AF; font-size: 14px; line-height: 1.7; }
-                    </style>
-                </head>
-                <body>
-                    <div class="box">
-                        <h2>الرابط غير صالح</h2>
-                        <p>هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً بنجاح.</p>
-                    </div>
-                </body>
-                </html>
-            `);
+           return res.send(`
+        <!DOCTYPE html><html dir="rtl">
+        <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            *{margin:0;padding:0;box-sizing:border-box}
+            body{background:#0F0A1E;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:Arial;padding:20px}
+            .box{background:#1A1035;border:1px solid rgba(220,38,38,0.2);border-radius:20px;padding:36px 28px;max-width:360px;width:100%;text-align:center}
+            .icon{width:64px;height:64px;border-radius:50%;background:rgba(107,114,128,0.15);border:1px solid rgba(107,114,128,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}
+            h2{color:#ef4444;font-size:20px;font-weight:600;margin:0 0 10px}
+            p{color:#9CA3AF;font-size:14px;line-height:1.8;margin:0}
+        </style></head>
+        <body><div class="box">
+            <div class="icon">⚠️</div>
+            <h2>الرابط غير صالح</h2>
+            <p>هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً.</p>
+            <p style="margin-top:8px">إذا كنت بحاجة لتجميد حسابك، افتح التطبيق وتواصل معنا.</p>
+        </div></body></html>
+    `);
         }
 
-        // إذا لم يكن الحساب مجمداً بالفعل، نقوم بتجميده وتوليد الرمز
         if (!user.isAccountFrozen) {
             const unfreezeCode = crypto.randomInt(100000, 999999).toString();
             user.isAccountFrozen = true;
             user.unfreezeCode = unfreezeCode;
-            user.unfreezeCodeExpires = new Date(Date.now() + 60 * 60 * 1000); // جعل رمز فك التجميد صالح لساعة
-            
-            // ملاحظة: لم نمسح freezeToken هنا ليبقى الرابط صالحاً لمدة 30 دقيقة
+           user.unfreezeCodeExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 دقيقة
+
             await user.save();
 
             const emailToSend = user.previousEmail || user.email;
             await sendUnfreezeCodeEmail(emailToSend, user.fullName, unfreezeCode);
         }
 
-        // عرض صفحة التجميد بنجاح (ستظهر في كل مرة يفتح الرابط خلال الـ 30 دقيقة)
         return res.send(`
-            <!DOCTYPE html>
-            <html dir="rtl">
-            <head>
-                <meta charset="UTF-8">
-                <style>
-                    * { margin: 0; padding: 0; box-sizing: border-box; }
-                    body { background: #0F0A1E; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-family: Arial; }
-                    .box { background: #1A1035; border: 1px solid rgba(220,38,38,0.3); border-radius: 20px; padding: 40px 32px; max-width: 380px; width: 90%; text-align: center; }
-                    .icon { font-size: 48px; margin-bottom: 20px; }
-                    h2 { color: #ffffff; font-size: 22px; margin-bottom: 16px; }
-                    p { color: #9CA3AF; font-size: 15px; line-height: 1.8; }
-                </style>
-            </head>
-            <body>
-                <div class="box">
-                    <div class="icon">🔒</div>
-                    <h2>تم تجميد حسابك</h2>
-                    <p>حسابك الآن مجمّد لحمايتك. تم إرسال رمز فك التجميد إلى بريدك الإلكتروني.</p>
-                    <br>
-                    <a href="waseed://frozen?type=${type || 'email'}"
-                       style="display:inline-block;background:#2D1B69;color:white;padding:14px 32px;border-radius:10px;text-decoration:none;font-size:16px;font-weight:bold;margin-top:16px;">
-                        افتح تطبيق وصيد لفك التجميد
-                    </a>
-                </div>
-            </body>
-            </html>
-        `);
-
+            <!DOCTYPE html><html dir="rtl">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{background:#0F0A1E;min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:Arial;padding:20px}
+        .box{background:#1A1035;border:1px solid rgba(220,38,38,0.25);border-radius:20px;padding:36px 28px;max-width:360px;width:100%;text-align:center}
+        .icon{width:64px;height:64px;border-radius:50%;background:rgba(220,38,38,0.1);border:1px solid rgba(220,38,38,0.3);display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:28px}
+        h2{color:white;font-size:20px;font-weight:600;margin:0 0 10px}
+        p{color:#9CA3AF;font-size:14px;line-height:1.8;margin:0 0 6px}
+        .info{background:rgba(45,27,105,0.4);border:1px solid rgba(45,27,105,0.6);border-radius:10px;padding:12px 16px;margin:20px 0;display:flex;align-items:center;gap:10px;direction:rtl}
+        .info p{color:#C4B5FD;font-size:13px;margin:0}
+        .btn{display:block;background:#2D1B69;color:white;padding:14px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600;margin-top:8px}
+        .hint{color:#6B7280;font-size:12px;margin-top:16px}
+    </style></head>
+    <body><div class="box">
+        <div class="icon">🔐</div>
+        <h2>تم تجميد حسابك</h2>
+        <p>حسابك الآن مجمّد لحمايتك.</p>
+        <p>تم إرسال <strong style="color:#e5e7eb">رمز فك التجميد</strong> إلى بريدك الإلكتروني.</p>
+        <div class="info"><span style="font-size:18px">📧</span><p>افتح تطبيق وصيد وأدخل الرمز الذي وصلك لفك التجميد</p></div>
+        <a href="waseed://frozen?type=${type || 'password'}" class="btn">افتح تطبيق وصيد</a>
+        <p class="hint">تحقق من مجلد البريد غير المرغوب فيه إذا لم يصلك الرمز</p>
+    </div></body></html>
+`);
     } catch (err) {
-        console.error('Freeze by token error:', err);
-        return res.status(500).send("حدث خطأ في السيرفر");
+        res.status(500).send("حدث خطأ في السيرفر");
     }
 });
 
@@ -730,7 +749,7 @@ router.post('/unfreeze-account', async (req, res) => {
     try {
         const user = await User.findOne({
             $or: [
-                { previousEmail: { $exists: false }, email: email.toLowerCase() },
+                { email: email.toLowerCase() },
                 { previousEmail: email.toLowerCase() }
             ],
             unfreezeCode: code,

@@ -228,8 +228,9 @@ const sendVerificationOTP = async (email, fullName, verificationCode) => {
   }
 };
 
-const sendNewDeviceAlertEmail = async (email, fullName, deviceName) => {
-  const html = `
+const sendNewDeviceAlertEmail = async (email, fullName, deviceName, freezeToken) => {
+const confirmationLink = `${process.env.BASE_URL}/api/user/freeze-confirmation?token=${freezeToken}&type=password`;
+ const html = `
     <!DOCTYPE html><html dir="rtl">
     <head><meta charset="UTF-8"><style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -247,7 +248,6 @@ const sendNewDeviceAlertEmail = async (email, fullName, deviceName) => {
       .warning { font-size: 13px; color: #c0392b; text-align: center; font-weight: bold; line-height: 1.8; margin-top: 16px; }
       .note { font-size: 13px; color: #888; text-align: center; line-height: 1.8; margin-bottom: 8px; }
       .footer { background: #fafafa; border-top: 1px solid #f0f0f0; padding: 20px; text-align: center; font-size: 12px; color: #aaa; }
-
     </style></head>
     <body>
       <div class="container">
@@ -261,7 +261,15 @@ const sendNewDeviceAlertEmail = async (email, fullName, deviceName) => {
             </div>
           </div>
           <p class="note">إذا كنت أنت من قام بذلك، يمكنك تجاهل هذا الإيميل</p>
-          <p class="warning">إذا لم تكن أنت، يُنصح بتغيير كلمة المرور فوراً من إعدادات الحساب</p>        </div>
+          <p class="warning">إذا لم تكن أنت، اضغط الزر أدناه لتجميد حسابك فوراً</p>
+          <div style="text-align:center;margin:24px 0 8px;">
+            <a href="${confirmationLink}"
+               style="background:#dc2626;color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-size:16px;font-weight:bold;">
+              تجميد حسابي فوراً
+            </a>
+          </div>
+          <p style="font-size:13px;color:#888;text-align:center;margin-top:12px;">هذا الرابط صالح لمدة 30 دقيقة.</p>
+        </div>
         <div class="footer">فريق وصيد</div>
       </div>
     </body></html>

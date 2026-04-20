@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../../../services/api_services.dart';
 import 'package:waseed/main.dart';
 import 'package:waseed/features/authentication/screens/reset_password.dart';
+import 'dart:async';
 
 class FrozenAccountScreen extends StatefulWidget {
   const FrozenAccountScreen({super.key});
@@ -77,6 +78,7 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
       _snack('الرجاء إدخال البريد والرمز كاملاً', isError: false);
       return;
     }
+    
     setState(() => _loading = true);
     final result = await _api.unfreezeAccount(
       email: _emailController.text.trim(),

@@ -531,12 +531,25 @@ class ApiService {
 
   Future<Map<String, String>> _authHeaders() async {
     final token = await _storage.read(key: 'access_token');
-    return {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
-    };
-  }
+ String deviceName = '';
+  try {
+    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+    if (Platform.isAndroid) {
+      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+      deviceName = "${androidInfo.manufacturer} ${androidInfo.model}";
+    } else if (Platform.isIOS) {
+      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+      deviceName = iosInfo.name;
+    }
+  } catch (_) {}
+
+  return {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
+    if (token != null) 'Authorization': 'Bearer $token',
+    if (deviceName.isNotEmpty) 'x-device-name': deviceName,
+  };
+}
 
   // البحث عن مستخدم (username أو phone)
   Future<Map<String, dynamic>> searchContact(String searchQuery) async {

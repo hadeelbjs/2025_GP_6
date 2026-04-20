@@ -733,7 +733,7 @@ router.post('/freeze-by-token', async (req, res) => {
         <h2>تم تجميد حسابك</h2>
         <p>حسابك الآن مجمّد لحمايتك.</p>
         <p>تم إرسال <strong style="color:#e5e7eb">رمز فك التجميد</strong> إلى بريدك الإلكتروني.</p>
-        <div class="info"><span style="font-size:18px">📧</span><p>افتح تطبيق وصيد وأدخل الرمز الذي وصلك لفك التجميد</p></div>
+        <div class="info"><p>افتح تطبيق وصيد وأدخل رمز فك التجميد الذي وصلك على بريدك الإلكتروني</p></div>
         <a href="waseed://frozen?type=${type || 'password'}" class="btn">افتح تطبيق وصيد</a>
         <p class="hint">تحقق من مجلد البريد غير المرغوب فيه إذا لم يصلك الرمز</p>
     </div></body></html>

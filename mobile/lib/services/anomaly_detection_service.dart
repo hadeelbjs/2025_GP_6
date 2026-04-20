@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import '../features/dashboard/services/notification_service.dart';
 import '../core/models/app_notifications.dart';
+import 'package:waseed/main.dart'; 
 
 class AnomalyDetectionService {
 
@@ -71,6 +72,17 @@ Future<void> trackChatOpening() async {
       );
 
       print('📥 Backend Response: $result');
+
+      if (result['action'] == 'FORCE_LOGOUT') {
+      print(' FORCE_LOGOUT — جاري طرد الجهاز...');
+      await _api.logout();
+      final context = navigatorKey.currentContext;
+      if (context != null) {
+    navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (r) => false);
+      }
+      return;
+    }
+
 
 if (result['success'] == true && result['anomalies'] != null) {
         final List anomalies = result['anomalies'];

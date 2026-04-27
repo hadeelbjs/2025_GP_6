@@ -1394,7 +1394,7 @@ class _PasswordGeneratorScreenState extends State<PasswordGeneratorScreen> {
                           fontSize: 14,
                         ),
                         decoration: InputDecoration(
-                          hintText: 'مثال: Maha أو Waseed أو رقم يسهل حفظه',
+                          hintText: 'مثال: Feb أو رقم يسهل حفظه',
                           hintStyle: TextStyle(
                             color: Colors.grey.shade500,
                             fontFamily: 'IBMPlexSansArabic',

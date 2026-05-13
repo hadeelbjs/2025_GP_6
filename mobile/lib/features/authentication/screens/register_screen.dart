@@ -28,6 +28,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _phoneController = TextEditingController();
   final _passwordController = TextEditingController();
+  String _passwordValue = '';
+  bool _passwordFocused = false;
+
 
   bool _isLoading = false;
   bool _obscurePassword = true;
@@ -42,6 +45,14 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     super.dispose();
   }
+  // real time check for password 
+  @override
+void initState() {
+  super.initState();
+  _passwordController.addListener(() {
+    setState(() => _passwordValue = _passwordController.text);
+  });
+}
 
   final menaCountries = [
   {'name': 'السعودية', 'code': 'SA', 'dial_code': '+966', 'flag': '🇸🇦'},
@@ -423,33 +434,38 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
 
                       
-                      const SizedBox(height: 16),
-                      CustomTextField(
-                        controller: _passwordController,
-                        obscureText: _obscurePassword,
-
-                        label: 'كلمة المرور',
-                        hint: 'أدخل كلمة المرور',
-                        icon: Icons.lock,
-                        isPassword: true,
-                        enabled: !_isLoading,
-                        suffixIcon: IconButton(
-                        icon: Icon(
-                          !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: Colors.grey.shade600,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                        validator: (value) {
-                          if (value == null || value.isEmpty) {
-                            return 'الرجاء إدخال كلمة المرور';
-                          }
-                          if (value.length < 8) {
-                            return 'يجب أن تكون كلمة المرور 8 أحرف على الأقل';
-                          }
-                          return null;
+                    const SizedBox(height: 16),
+                      Focus(
+                        onFocusChange: (hasFocus) {
+                          if (hasFocus) setState(() => _passwordFocused = true);
                         },
+                        child: CustomTextField(
+                          controller: _passwordController,
+                          obscureText: _obscurePassword,
+                          label: 'كلمة المرور',
+                          hint: 'أدخل كلمة المرور',
+                          icon: Icons.lock,
+                          isPassword: true,
+                          enabled: !_isLoading,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              color: Colors.grey.shade600,
+                            ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) return 'الرجاء إدخال كلمة المرور';
+                            if (value.length < 8) return 'يجب أن تكون كلمة المرور 8 أحرف على الأقل';
+                            if (!RegExp(r'[0-9]').hasMatch(value)) return 'يجب أن تحتوي على رقم';
+                            if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(value)) return 'يجب أن تحتوي على رمز خاص';
+                            if (!RegExp(r'[a-zA-Z]').hasMatch(value)) return 'يجب أن تحتوي على حرف إنجليزي';
+                            return null;
+                          },
+                        ),
                       ),
+                      const SizedBox(height: 10),
+                      if (_passwordFocused) _PasswordRequirements(password: _passwordValue),
                       const SizedBox(height: 24),
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleRegister,
@@ -506,6 +522,79 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
           ),
+        ],
+      ),
+    );
+  }
+
+}
+  class _PasswordRequirements extends StatelessWidget {
+  final String password;
+  const _PasswordRequirements({required this.password});
+
+  @override
+  Widget build(BuildContext context) {
+    final checks = [
+      {'label': '8 أحرف على الأقل', 'met': password.length >= 8},
+      {'label': 'رقم واحد على الأقل', 'met': RegExp(r'[0-9]').hasMatch(password)},
+      {'label': 'رمز خاص (!@#\$...)', 'met': RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)},
+      {'label': 'حرف إنجليزي واحد على الأقل', 'met': RegExp(r'[a-zA-Z]').hasMatch(password)},
+    ];
+
+    const purple = Color(0xFF2D1B69);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Color(0xFFE8E0F0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'متطلبات كلمة المرور:',
+            style: TextStyle(
+              fontSize: 12,
+              fontFamily: 'IBMPlexSansArabic',
+              fontWeight: FontWeight.w600,
+              color: purple,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...checks.map((c) {
+            final met = c['met'] as bool;
+            final isEmpty = password.isEmpty;
+            final color = isEmpty
+                ? Colors.grey.shade400
+                : met
+                    ? purple
+                    : Colors.red.shade400;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 3),
+              child: Row(
+                children: [
+                  Icon(
+                    met && !isEmpty
+                        ? Icons.check_circle_rounded
+                        : Icons.cancel_rounded,
+                    size: 16,
+                    color: color,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    c['label'] as String,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontFamily: 'IBMPlexSansArabic',
+                      color: color,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );

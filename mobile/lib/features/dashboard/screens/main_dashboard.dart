@@ -1196,27 +1196,37 @@ Widget _buildStatCard(String title, Map<String, dynamic> stats, IconData icon, d
     ),
   );
 }
-
 Widget _buildStatRow(String label, int value, Color color, IconData icon, double width) {
   return Padding(
     padding: EdgeInsets.only(bottom: width * 0.01),
     child: Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Row(
-          children: [
-            Icon(icon, color: color, size: width * 0.03),
-            SizedBox(width: width * 0.01),
-            Text(label,
-              style: TextStyle(
-                fontSize: width * 0.03,
-                color: AppColors.textPrimary.withOpacity(0.7),
-                fontFamily: 'IBMPlexSansArabic',
+        // 1. Wrap the left side in Expanded so it doesn't push the value off-screen
+        Expanded(
+          child: Row(
+            children: [
+              Icon(icon, color: color, size: width * 0.03),
+              SizedBox(width: width * 0.01),
+              // 2. Wrap text in Flexible or use overflow to handle long labels
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis, // Adds "..." if text is too long
+                  maxLines: 1,
+                  style: TextStyle(
+                    fontSize: width * 0.03,
+                    color: AppColors.textPrimary.withOpacity(0.7),
+                    fontFamily: 'IBMPlexSansArabic',
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-        Text('$value',
+        SizedBox(width: width * 0.02), // Add a small gap so text doesn't touch the value
+        Text(
+          '$value',
           style: TextStyle(
             fontSize: width * 0.03,
             color: color,

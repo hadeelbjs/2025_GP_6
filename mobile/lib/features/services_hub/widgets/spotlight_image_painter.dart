@@ -30,7 +30,12 @@ class SpotlightImagePainter extends CustomPainter {
     final imageRect = Rect.fromLTWH(dx, dy, scaledW, scaledH);
 
     // 1. رسم الصورة الأصلية
-    paintImage(canvas: canvas, rect: imageRect, image: image, fit: BoxFit.fill);
+   paintImage(
+      canvas: canvas,
+      rect: imageRect,
+      image: image,
+      fit: BoxFit.contain,
+    );
 
     if (items.isEmpty) return;
 

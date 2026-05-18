@@ -17,6 +17,9 @@ class ApiContentService {
   static ScanStats linkStats = ScanStats();
   static ScanStats fileStats = ScanStats();
   ApiService _apiService = ApiService();
+  int _uploadedWidth = 0;
+int _uploadedHeight = 0;
+
 
   Future<ScanResult> scanURL(String url) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/urls');
@@ -52,6 +55,7 @@ class ApiContentService {
       }
 
       final analysisData = json.decode(analysisResponse.body);
+      print(analysisData);
       ScanResult scanResult = ScanResult.fromJson(analysisData);
       if(scanResult.isSafe){linkStats.recordSafe();
       await updateScanStats('link', false);
@@ -202,6 +206,11 @@ Future<Map<String, dynamic>> getAllStats() async {
   try {
     final compressedFile = await _compressImage(imageFile);
 
+    final bytes = await compressedFile.readAsBytes();
+    final decoded = await decodeImageFromList(bytes);
+    _uploadedWidth = decoded.width;
+    _uploadedHeight = decoded.height;
+
     var request = http.MultipartRequest(
       'POST',
       Uri.parse('$apiBaseUrl/content-scanning-stats/scan-image'),
@@ -239,6 +248,8 @@ Future<Map<String, dynamic>> getAllStats() async {
     return null;
   }
 }
+int get uploadedWidth => _uploadedWidth;
+int get uploadedHeight => _uploadedHeight;
   // الحصول على الصورة مع البوكسات
   Uint8List? getAnnotatedImage() {
     return annotatedImageBytes;
@@ -446,39 +457,25 @@ Future<Map<String, dynamic>> getAllStats() async {
 
   // ترجمة أسماء الوثائق من الإنجليزي للعربي
   String _translateDocumentClass(String docClass) {
-    Map<String, String> translations = {
-      // YOLO model classes
-      'text_region': 'منطقة نصية',
-      'id_card': 'بطاقة هوية',
-      'national_id': 'هوية وطنية',
-      'passport': 'جواز سفر',
-      'driver_license': 'رخصة قيادة',
-      'residence_permit': 'إقامة',
-      'iqama': 'إقامة',
-      'birth_certificate': 'شهادة ميلاد',
-      'health_card': 'بطاقة صحية',
-      'insurance_card': 'بطاقة تأمين',
-      'credit_card': 'بطاقة ائتمانية',
-      'bank_card': 'بطاقة بنكية',
-      'document': 'وثيقة',
-      'paper': 'ورقة',
-      'form': 'نموذج',
-      'certificate': 'شهادة',
-      'license': 'رخصة',
-      'card': 'بطاقة',
-      'car_plate': 'لوحة سيارة',
+  Map<String, String> translations = {
+    'credit_card': 'بطاقة ائتمانية',
+    'bank_card': 'بطاقة بنكية',
+    'id_card': 'بطاقة هوية',
+    'passport': 'جواز سفر',
+    'car_plate': 'لوحة سيارة',
+  };
 
-      // حالات خاصة
-      'face': 'وجه',
-      'person': 'شخص',
-      'barcode': 'باركود',
-      'qr_code': 'رمز QR',
-    };
+  String normalized = docClass
+      .toLowerCase()
+      .replaceAll(' ', '_');
 
-    // البحث عن الترجمة
-    String normalized = docClass.toLowerCase().replaceAll(' ', '_');
-    return translations[normalized] ?? docClass;
+  // تحويل الجمع إلى مفرد
+  if (normalized.endsWith('s')) {
+    normalized = normalized.substring(0, normalized.length - 1);
   }
+
+  return translations[normalized] ?? docClass;
+}
 
   String _getIconForType(String type) {
     Map<String, String> icons = {

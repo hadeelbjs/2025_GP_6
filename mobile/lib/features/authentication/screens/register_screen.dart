@@ -494,7 +494,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                         child: const Text(
                           'لديك حساب؟ تسجيل الدخول',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 15,
                             fontFamily: 'IBMPlexSansArabic',
                             fontWeight: FontWeight.w400,
                           ),

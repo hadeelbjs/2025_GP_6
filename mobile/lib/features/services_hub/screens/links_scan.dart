@@ -336,8 +336,8 @@ class _LinksScreenState extends State<LinksScreen> {
                         if (isUrl && _urlScanResult != null)
                           Text(
                             _urlScanResult!.isSafe
-                                ? 'لم يتم تسجيل هذا الرابط حتى الآن كرابط\nخبيث وبإمكانك المتابعة مع الحذر من\nمشاركة معلومات شخصية لمن لا يحق\nله ذلك'
-                                : 'تم تسجيل هذا الرمز كرابط خبيث\nيرجى الحذر وتجنب استخدامه',
+                           ? 'لم يتم اكتشاف أي خطر في هذا الرابط حتى الآن، لكن يُنصح بالحذر وعدم مشاركة معلومات شخصية.'
+: 'تحذير: هذا الرابط غير آمن. يُرجى تجنب فتحه أو استخدامه.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontFamily: 'IBMPlexSansArabic',

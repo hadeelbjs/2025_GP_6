@@ -159,9 +159,9 @@ PODS:
     - Flutter
     - ScreenProtectorKit (= 1.4.2)
   - ScreenProtectorKit (1.4.2)
-  - SDWebImage (5.21.3):
-    - SDWebImage/Core (= 5.21.3)
-  - SDWebImage/Core (5.21.3)
+  - SDWebImage (5.21.7):
+    - SDWebImage/Core (= 5.21.7)
+  - SDWebImage/Core (5.21.7)
   - SDWebImageWebPCoder (0.15.0):
     - libwebp (~> 1.0)
     - SDWebImage/Core (~> 5.17)
@@ -333,7 +333,7 @@ SPEC CHECKSUMS:
   screen_capture_event: efc4eb455e1c5cc304cec85a4372e0a633ff2a7c
   screen_protector: dc5f885bc1a59fba80ae486c7b5a1a5d95c506f7
   ScreenProtectorKit: 9a05e5d137175e6d6e4fa81c2994e7614689efe6
-  SDWebImage: 16309af6d214ba3f77a7c6f6fdda888cb313a50a
+  SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
   SDWebImageWebPCoder: 0e06e365080397465cc73a7a9b472d8a3bd0f377
   shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   sqflite_darwin: 20b2a3a3b70e43edae938624ce550a3cbf66a3d0

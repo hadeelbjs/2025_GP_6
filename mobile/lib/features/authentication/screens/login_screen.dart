@@ -313,11 +313,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                   );
                                 },
                           child: const Text(
-                            'نسيت كلمة المرور؟',
+                            '  نسيت كلمة المرور؟ اضغط هنا لتغييرها',
                             style: TextStyle(
-                              fontSize: 12,
+                              fontSize: 15,
                               fontFamily: 'IBMPlexSansArabic',
-                              fontWeight: FontWeight.w400,
+                              fontWeight: FontWeight.w500,
                             ),
                           ),
                         ),
@@ -448,7 +448,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: const Text(
                           'لا يوجد لديك حساب؟ إنشاء حساب',
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 15,
                             fontFamily: 'IBMPlexSansArabic',
                             fontWeight: FontWeight.w400,
                           ),

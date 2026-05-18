@@ -85,7 +85,6 @@ class MessagingService {
           return false;
         }
       } else {}
-        print('🔍 Checking for expired messages on app start...');
     await deleteExpiredMessages(); 
     
       await _loadMessageTimers();
@@ -93,7 +92,6 @@ class MessagingService {
       if (!_hasStartedTimer) {
         startLocalExpiryTimer();
         _hasStartedTimer = true;
-        print('⏱️ Global expiry timer started');
       }
 
       _setupSocketListeners();

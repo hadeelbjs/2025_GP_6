@@ -223,8 +223,8 @@ class _QRScreenState extends State<QRScreen> {
                       if (isUrl && _urlScanResult != null)
                         Text(
                           _urlScanResult!.isSafe
-                              ? 'لم يتم تسجيل هذا الرمز حتى الآن كرابط\nخبيث وبإمكانك المتابعة مع الحذر من\nمشاركة معلومات شخصية لمن لا يحق\nله ذلك'
-                              : 'تم تسجيل هذا الرمز كرابط خبيث\nيرجى الحذر وتجنب استخدامه',
+                               ? 'لم يتم اكتشاف أي خطر في هذا الرمز حتى الآن، لكن يُنصح بالحذر وعدم مشاركة معلومات شخصية.'
+: 'تحذير: هذا الرمز غير آمن. يُرجى تجنب فتحه أو استخدامه.',
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontFamily: 'IBMPlexSansArabic',

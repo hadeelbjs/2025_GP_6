@@ -61,65 +61,86 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   }
 
   // بناء قائمة العناصر الحساسة من نتيجة API
-  List<SensitiveItem> _buildSensitiveItems() {
-    final boxes = _apiService.getBoxes();
-    final items = <SensitiveItem>[];
+List<SensitiveItem> _buildSensitiveItems() {
+  final boxes = _apiService.getBoxes();
+  final items = <SensitiveItem>[];
 
-    // وجوه
-    for (final face in boxes['faces'] ?? []) {
-      final rect = extractRect(face);
-      if (rect != null) {
-        items.add(SensitiveItem(rect: rect, label: 'وجه', color: const Color(0xFF9B8EC4)));
-      }
-    }
+  // Scale from API image space → ui.Image space
+  final apiW = _apiService.uploadedWidth.toDouble();
+  final apiH = _apiService.uploadedHeight.toDouble();
+  final imgW = _uiImage!.width.toDouble();
+  final imgH = _uiImage!.height.toDouble();
 
-    // وثائق وأشياء حساسة
-    const sensitiveDocTypes = [
-      'id_card', 'national_id', 'passport', 'driver_license',
-      'residence_permit', 'iqama', 'birth_certificate',
-      'health_card', 'insurance_card', 'credit_card', 'bank_card', 'car_plate',
-    ];
-    const docLabels = {
-      'id_card': 'بطاقة هوية',
-      'national_id': 'هوية وطنية',
-      'passport': 'جواز سفر',
-      'driver_license': 'رخصة قيادة',
-      'residence_permit': 'إقامة',
-      'iqama': 'إقامة',
-      'birth_certificate': 'شهادة ميلاد',
-      'health_card': 'بطاقة صحية',
-      'insurance_card': 'بطاقة تأمين',
-      'credit_card': 'بطاقة ائتمانية',
-      'bank_card': 'بطاقة بنكية',
-      'car_plate': 'لوحة سيارة',
-    };
+  final scaleX = (apiW > 0) ? imgW / apiW : 1.0;
+  final scaleY = (apiH > 0) ? imgH / apiH : 1.0;
 
-    for (final doc in boxes['documents'] ?? []) {
-      final normalized = (doc['class'] ?? '').toString().toLowerCase().replaceAll(' ', '_');
-      if (!sensitiveDocTypes.contains(normalized)) continue;
-      final rect = extractRect(doc);
-      if (rect != null) {
-        items.add(SensitiveItem(
-          rect: rect,
-          label: docLabels[normalized] ?? normalized,
-          color: Colors.white,
-        ));
-      }
-    }
-
-    // باركود
-    for (final bc in boxes['barcodes'] ?? []) {
-      final isSensitive = bc['analysis']?['sensitive'] == true;
-      if (!isSensitive) continue;
-      final rect = extractRect(bc);
-      if (rect != null) {
-        items.add(SensitiveItem(rect: rect, label: 'QR/باركود', color: const Color(0xFF1A73E8)));
-      }
-    }
-
-    return items;
+  Rect? scaledRect(Map<String, dynamic> data) {
+    final r = extractRect(data);
+    if (r == null) return null;
+    return Rect.fromLTRB(
+      r.left * scaleX,
+      r.top * scaleY,
+      r.right * scaleX,
+      r.bottom * scaleY,
+    );
   }
 
+  for (final face in boxes['faces'] ?? []) {
+    final rect = scaledRect(face);
+    if (rect != null) {
+      items.add(SensitiveItem(rect: rect, label: 'وجه', color: const Color(0xFF9B8EC4)));
+    }
+  }
+
+  const sensitiveDocTypes = [
+    'id_card', 'national_id', 'passport', 'driver_license',
+    'residence_permit', 'iqama', 'birth_certificate',
+    'health_card', 'insurance_card', 'credit_card', 'bank_card', 'car_plate',
+  ];
+  const docLabels = {
+    'id_card': 'بطاقة هوية',
+    'national_id': 'هوية وطنية',
+    'passport': 'جواز سفر',
+    'driver_license': 'رخصة قيادة',
+    'residence_permit': 'إقامة',
+    'iqama': 'إقامة',
+    'birth_certificate': 'شهادة ميلاد',
+    'health_card': 'بطاقة صحية',
+    'insurance_card': 'بطاقة تأمين',
+    'credit_card': 'بطاقة ائتمانية',
+    'credit_cards': 'بطاقة ائتمانية',
+    'bank_card': 'بطاقة بنكية',
+    'car_plate': 'لوحة سيارة',
+  };
+
+  for (final doc in boxes['documents'] ?? []) {
+    final normalized = (doc['class'] ?? '')
+        .toString()
+        .toLowerCase()
+        .replaceAll(' ', '_')
+        .replaceAll(RegExp(r's$'), '');
+    if (!sensitiveDocTypes.contains(normalized)) continue;
+    final rect = scaledRect(doc);
+    if (rect != null) {
+      items.add(SensitiveItem(
+        rect: rect,
+        label: docLabels[normalized] ?? normalized,
+        color: Colors.white,
+      ));
+    }
+  }
+
+  for (final bc in boxes['barcodes'] ?? []) {
+    final isSensitive = bc['analysis']?['sensitive'] == true;
+    if (!isSensitive) continue;
+    final rect = scaledRect(bc);
+    if (rect != null) {
+      items.add(SensitiveItem(rect: rect, label: 'QR/باركود', color: const Color(0xFF1A73E8)));
+    }
+  }
+
+  return items;
+}
   Future<void> _startScan() async {
     setState(() {
       _currentState = _ScanState.scanning;

@@ -162,7 +162,7 @@ class _FileScreenState extends State<FilesScreen> {
                     children: [
                       Text(
                         result.isSafe
-                            ? 'لم يتم تسجيل هذا الملف حتى الآن كملف\nخبيث'
+                            ? 'لم يتم اكتشاف أي خطر في هذا الملف حتى الآن \n'
                             : 'تم تسجيل هذا الملف كملف خبيث\nيرجى الحذر ويتجنب استخدامه',
                         textAlign: TextAlign.center,
                         style: TextStyle(

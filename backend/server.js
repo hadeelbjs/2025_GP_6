@@ -108,7 +108,7 @@ app.use('/api/contacts/', relaxedLimiter);
 app.use('/api/content-scanning-stats/', relaxedLimiter);
 app.use('/api/messages/', relaxedLimiter);
 
-app.use('/api/', generalLimiter(req, res, next));
+app.use('/api/', generalLimiter);
 
 
 // Database Connection

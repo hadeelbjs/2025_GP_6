@@ -23,12 +23,6 @@ router.post('/check', authMiddleware, async (req, res) => {
         const { latitude, longitude, locationName, ssid } = req.body;
         const anomalies = [];
 
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('Anomaly Check: طلب جديد');
-        console.log(`   → userId: ${userId}`);
-        console.log(`   → SSID: ${ssid}`);
-        console.log(`   → Location: ${latitude}, ${longitude} — ${locationName}`);
-
         const user = await User.findById(userId).select(
             'registrationLocation registrationWifi pendingFailedAttemptsAlert'
         );
@@ -43,14 +37,12 @@ router.post('/check', authMiddleware, async (req, res) => {
                 await User.findByIdAndUpdate(userId, {
                     registrationLocation: { lat: latitude, lng: longitude }
                 });
-                console.log(`📍 registrationLocation محفوظ لأول مرة: ${latitude}, ${longitude}`);
             } else {
                 const distance = distanceKm(
                     latitude, longitude,
                     user.registrationLocation.lat,
                     user.registrationLocation.lng
                 );
-                console.log(`📏 المسافة عن موقع التسجيل: ${Math.round(distance)} km`);
 
                 if (distance > 100) {
                     const displayLocation = locationName || `${Number(latitude).toFixed(2)}, ${Number(longitude).toFixed(2)}`;
@@ -58,33 +50,23 @@ router.post('/check', authMiddleware, async (req, res) => {
                         type: 'new_location',
                         detail: `تسجيل دخول من ${displayLocation}`,
                     });
-                    console.log(`🚨 new_location: ${displayLocation}`);
-                } else {
-                    console.log(`✅ الموقع طبيعي — المسافة ${Math.round(distance)} km`);
-                }
+                } 
             }
         }
 
         // شبكة جديدة
         if (ssid && ssid !== 'unknown' && ssid !== '<unknown ssid>') {
             const savedWifi = user.registrationWifi;
-            console.log(`📶 SSID: "${ssid}" | المحفوظة: "${savedWifi || 'لا يوجد بعد'}"`);
 
             if (!savedWifi) {
                 await User.findByIdAndUpdate(userId, { registrationWifi: ssid });
-                console.log(`📶 أول شبكة محفوظة: "${ssid}"`);
             } else if (savedWifi !== ssid) {
                 anomalies.push({
                     type: 'new_wifi',
                     detail: `تم الدخول من شبكة جديدة: ${ssid}`,
                 });
-                console.log(`🚨 new_wifi: "${ssid}"`);
-            } else {
-                console.log(`✅ الشبكة معروفة — لا يوجد تحذير`);
-            }
-        } else {
-            console.log('SSID غير متاح — تخطي فحص الشبكة');
-        }
+            } 
+        } 
 
         // محاولات دخول فاشلة سابقة
         if (user.pendingFailedAttemptsAlert > 0) {
@@ -92,15 +74,12 @@ router.post('/check', authMiddleware, async (req, res) => {
                 type: 'failed_attempts',
                 detail: `تم رصد محاولات لتسجيل الدخول إلى حسابك`,
             });
-            console.log(`🚨 failed_attempts: ${user.pendingFailedAttemptsAlert}`);
             await User.findByIdAndUpdate(userId, { pendingFailedAttemptsAlert: 0 });
         }
 
-        console.log(`Anomalies: ${anomalies.length}`);
         return res.json({ success: true, anomalies });
 
     } catch (err) {
-        console.error('🔥 Anomaly System Error:', err);
         return res.status(500).json({
             success: false,
             message: 'نظام كشف الأنشطة يواجه مشكلة فنية',
@@ -112,7 +91,6 @@ router.post('/check', authMiddleware, async (req, res) => {
 router.post('/report-action', authMiddleware, async (req, res) => {
     try {
         const { anomalyId, wasMe } = req.body;
-        console.log(`📢 بلاغ: ${anomalyId} | wasMe: ${wasMe}`);
         return res.json({ success: true, message: 'تم استلام بلاغك بنجاح' });
     } catch (err) {
         return res.status(500).json({ success: false });

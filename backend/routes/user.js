@@ -58,7 +58,7 @@ async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
       `
       <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
         <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
-          <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
+          <h2 style="color:white;margin:0"> تنبيه أمني</h2>
         </div>
         <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
           <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
@@ -83,7 +83,7 @@ async function sendActivityAlert(oldEmail, fullName, changeType, freezeToken) {
     `
     <div dir="rtl" style="font-family:Arial;max-width:600px;margin:auto;padding:20px;">
       <div style="background:#2D1B69;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
-        <h2 style="color:white;margin:0">⚠️ تنبيه أمني</h2>
+        <h2 style="color:white;margin:0"> تنبيه أمني</h2>
       </div>
       <div style="background:#f9f9f9;padding:30px;border-radius:0 0 12px 12px;border:1px solid #eee;">
         <p style="font-size:16px">مرحباً <strong>${fullName}</strong>،</p>
@@ -657,7 +657,6 @@ router.get('/freeze-confirmation', (req, res) => {
             .hint{color:#6B7280;font-size:12px;margin-top:16px}
         </style></head>
         <body><div class="box">
-            <div class="icon">🔒</div>
             <h2>تأكيد تجميد الحساب</h2>
             <p>تم رصد نشاط مشبوه على حسابك.</p>
             <p>هل أنت متأكد من رغبتك في <strong style="color:#f87171">تجميد حسابك فوراً</strong>؟</p>
@@ -693,7 +692,6 @@ router.post('/freeze-by-token', async (req, res) => {
             p{color:#9CA3AF;font-size:14px;line-height:1.8;margin:0}
         </style></head>
         <body><div class="box">
-            <div class="icon">⚠️</div>
             <h2>الرابط غير صالح</h2>
             <p>هذا الرابط منتهي الصلاحية أو تم استخدامه مسبقاً.</p>
             <p style="margin-top:8px">إذا كنت بحاجة لتجميد حسابك، افتح التطبيق وتواصل معنا.</p>
@@ -729,7 +727,6 @@ router.post('/freeze-by-token', async (req, res) => {
         .hint{color:#6B7280;font-size:12px;margin-top:16px}
     </style></head>
     <body><div class="box">
-        <div class="icon">🔐</div>
         <h2>تم تجميد حسابك</h2>
         <p>حسابك الآن مجمّد لحمايتك.</p>
         <p>تم إرسال <strong style="color:#e5e7eb">رمز فك التجميد</strong> إلى بريدك الإلكتروني.</p>

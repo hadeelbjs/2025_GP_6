@@ -92,11 +92,18 @@ const uploadLimiter = rateLimit({
   message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
 });
 
-app.use('/api/', generalLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/upload', uploadLimiter);
 app.use('/api/anomaly', anomalyRoutes);
+
+app.use('/api/', (req, res, next) => {
+  const excluded = ['/api/auth/login', '/api/auth/register'];
+  if (excluded.some(path => req.path.startsWith(path.replace('/api', '')))) {
+    return next(); // تجاوز generalLimiter
+  }
+  generalLimiter(req, res, next);
+});
 
 
 // Database Connection

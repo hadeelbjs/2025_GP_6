@@ -92,26 +92,30 @@ const uploadLimiter = rateLimit({
   message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
 });
 
+const relaxedLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  keyGenerator: (req) => req.headers['authorization'] || req.ip,
+});
+
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 app.use('/api/upload', uploadLimiter);
 app.use('/api/anomaly', anomalyRoutes);
 
-app.use('/api/', (req, res, next) => {
-  const excluded = ['/api/auth/login', '/api/auth/register'];
-  if (excluded.some(path => req.path.startsWith(path.replace('/api', '')))) {
-    return next(); // تجاوز generalLimiter
-  }
-  generalLimiter(req, res, next);
-});
+app.use('/api/user/', relaxedLimiter);
+app.use('/api/contacts/', relaxedLimiter);
+app.use('/api/content-scanning-stats/', relaxedLimiter);
+app.use('/api/messages/', relaxedLimiter);
+
+app.use('/api/', generalLimiter(req, res, next));
 
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ Connected to MongoDB'))
-  .catch(err => console.error('❌ DB connection error:', err));
+  .then(() => console.log(' Connected to MongoDB'))
+  .catch(err => console.error(' DB connection error:', err));
 
-// ✅ Socket.IO - يجب أن تكون قبل Routes
 require('./sockets/messageSocket')(io);
 startMessageExpiryJob(io);
 

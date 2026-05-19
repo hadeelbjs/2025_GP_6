@@ -1534,4 +1534,26 @@ class ApiService {
       return {'success': false, 'message': 'فشل جلب نصيحة اليوم: $e'};
     }
   }
+  Future<Map<String, dynamic>> sendSupportRequest({
+  required String type,
+  required String subject,
+  required String message,
+}) async {
+  try {
+    final headers = await _authHeaders();
+    final response = await http.post(
+      Uri.parse('$baseUrl/support/contact'),
+      headers: headers,
+      body: jsonEncode({
+        'type': type,
+        'subject': subject,
+        'message': message,
+      }),
+    ).timeout(const Duration(seconds: 15));
+
+    return jsonDecode(response.body);
+  } catch (e) {
+    return {'success': false, 'message': 'خطأ في الاتصال'};
+  }
+}
 }

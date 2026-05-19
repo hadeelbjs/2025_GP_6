@@ -81,5 +81,10 @@
 	<array>
 		<string>com.waseed.processingtask</string>
 	</array>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>mailto</string>
+	</array>
+
 </dict>
 </plist>

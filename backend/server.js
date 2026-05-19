@@ -45,6 +45,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // خدمة الملفات الثابتة
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
+
 // حماية من NoSQL Injection
 app.use((req, res, next) => {
   if (req.query) {
@@ -136,6 +137,8 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/content-scanning-stats',require('./routes/contentScanning') )
 app.use('/api/securitytips', require('./routes/securitytips'));
+app.use('/api/support', require('./routes/support'));
+
 
 app.get('/', (req, res) => {
   res.json({ 

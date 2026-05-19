@@ -14,6 +14,8 @@ import 'package:http/http.dart' as http;
 import '../../../services/socket_service.dart';
 import '../../../config/appConfig.dart';
 import '../../../services/messaging_service.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
@@ -30,7 +32,14 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
   bool _isLoading = true;
   static String? get baseUrl => AppConfig.apiBaseUrl;
 
-
+  void _contactSupport() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => _SupportSheet(apiService: _apiService),
+    );
+  }
  
   @override
   void initState() {
@@ -163,7 +172,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                             _buildSecuritySettings(),
                             _buildEditOptions(),
                             const SizedBox(height: 20),
-
+                           
                             _buildLogoutButton(context),
                             const SizedBox(height: 12),
                             _buildEmergencyModeButton(context),
@@ -385,6 +394,12 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
             onTap: _showChangePasswordDialog,
           ),
            _buildDivider(),
+         _buildSettingsItem(
+         icon: Icons.support_agent_outlined,
+         title: 'خدمة العملاء',
+        onTap: _contactSupport,
+       ),
+ _buildDivider(),
 
           _buildSettingsItem(
           icon: Icons.delete_outline,
@@ -392,6 +407,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
           isDelete: true,
           onTap: _confirmDeleteAccount,
         ),
+      
         ],
       ),
     );
@@ -479,7 +495,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                  Icon(Icons.check_circle, color: Colors.green, size: 12),
+                    Icon(Icons.check_circle, color: Colors.green, size: 12),
                   SizedBox(width: 4),
                   Text(
                     'مؤكد',
@@ -2067,3 +2083,251 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
     );
   }
 }
+  class _SupportSheet extends StatefulWidget {
+  final ApiService apiService;
+  const _SupportSheet({required this.apiService});
+
+  @override
+  State<_SupportSheet> createState() => _SupportSheetState();
+}
+class _SupportSheetState extends State<_SupportSheet> {
+  final _subjectController = TextEditingController();
+  final _messageController = TextEditingController();
+  bool _subjectError = false;
+  bool _messageError = false;
+  String _selectedType = 'استفسار';
+  bool _isSending = false;
+
+  final List<String> _types = ['استفسار', 'شكوى', 'اقتراح'];
+
+  @override
+  void dispose() {
+    _subjectController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    setState(() {
+      _subjectError = _subjectController.text.trim().isEmpty;
+      _messageError = _messageController.text.trim().isEmpty;
+    });
+
+    if (_subjectError || _messageError) return;
+
+    setState(() => _isSending = true);
+
+    final result = await widget.apiService.sendSupportRequest(
+      type: _selectedType,
+      subject: _subjectController.text.trim(),
+      message: _messageController.text.trim(),
+    );
+
+    setState(() => _isSending = false);
+
+    if (!mounted) return;
+
+    if (result['success'] == true) {
+      Navigator.pop(context);
+      showDialog(
+        context: context,
+        builder: (context) => Directionality(
+          textDirection: TextDirection.rtl,
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF2D1B69),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('تم إرسال طلبك بنجاح',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                const SizedBox(height: 8),
+                const Text('سنتواصل معك في أقرب وقت',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 14, color: Colors.white70)),
+                const SizedBox(height: 20),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.white,
+                    foregroundColor: const Color(0xFF2D1B69),
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('حسناً',
+                    style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                      fontWeight: FontWeight.bold, fontSize: 16)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result['message'] ?? 'حدث خطأ، حاولي مرة أخرى',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontFamily: 'IBMPlexSansArabic')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
+        padding: EdgeInsets.only(
+          top: 24, left: 20, right: 20,
+          bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text('تواصل مع خدمة العملاء',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D1B69))),
+              const SizedBox(height: 20),
+
+              const Text('نوع الطلب',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              Row(
+                children: _types.map((type) {
+                  final selected = _selectedType == type;
+                  return Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _selectedType = type),
+                      child: Container(
+                        margin: const EdgeInsets.only(left: 8),
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          color: selected ? const Color(0xFF2D1B69) : Colors.grey.shade100,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(type, textAlign: TextAlign.center,
+                          style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 13, fontWeight: FontWeight.w600,
+                            color: selected ? Colors.white : Colors.black87)),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 16),
+
+              const Text('العنوان',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _subjectController,
+                onChanged: (_) => setState(() => _subjectError = false),
+                decoration: InputDecoration(
+                  hintText: 'اكتب عنوان طلبك',
+                  hintStyle: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.grey.shade400),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: _subjectError ? Colors.red : Colors.grey.shade300,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: _subjectError ? Colors.red : const Color(0xFF2D1B69),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+              const SizedBox(height: 16),
+
+              const Text('الرسالة',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _messageController,
+                maxLines: 5,
+                onChanged: (_) => setState(() => _messageError = false),
+                decoration: InputDecoration(
+                  hintText: 'اكتب تفاصيل طلبك هنا...',
+                  hintStyle: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.grey.shade400),
+                  filled: true,
+                  fillColor: Colors.grey.shade50,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: _messageError ? Colors.red : Colors.grey.shade300,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: _messageError ? Colors.red : const Color(0xFF2D1B69),
+                      width: 2,
+                    ),
+                  ),
+                ),
+                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+              const SizedBox(height: 20),
+
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isSending ? null : _send,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2D1B69),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  ),
+                  child: _isSending
+                    ? const SizedBox(width: 20, height: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('إرسال', style: TextStyle(fontFamily: 'IBMPlexSansArabic',
+                        fontSize: 16, fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+

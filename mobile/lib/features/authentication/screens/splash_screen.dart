@@ -201,7 +201,6 @@ class _OnboardingScreenState extends State<OnboardingScreen>
   }
 }
 
-/// ------------------------------ Widgets ------------------------------
 class _Logo extends StatelessWidget {
   final double size;
   const _Logo({required this.size});

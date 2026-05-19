@@ -49,10 +49,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // print('🔄 App resumed from ManageAccount - reconnecting socket...');
       _ensureSocketConnection();
     } else if (state == AppLifecycleState.paused) {
-     // print('⏸️ App paused from ManageAccount');
     }
   }
 
@@ -63,13 +61,11 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
         print('🔌 Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
-         // print('✅ Socket connected after resume');
           await _requestAllContactsStatus();
         } else {
           print('❌ Failed to connect socket after resume');
         }
       } else {
-       // print('✅ Socket already connected');
         await _requestAllContactsStatus();
       }
     } catch (e) {
@@ -607,7 +603,6 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
     }
   }
 
-  // ============= Edit Email =============
   void _showEditEmailDialog() {
     final controller = TextEditingController();
 

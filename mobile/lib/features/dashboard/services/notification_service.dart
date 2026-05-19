@@ -12,7 +12,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  // ─── HIBP Config ───────────────────────────────────────────
+  //  HIBP Config 
   static String _hibpApiKey = AppConfig.hibpApikey;
   static const String _hibpBaseUrl = 'https://haveibeenpwned.com/api/v3';
 
@@ -61,7 +61,7 @@ class NotificationService {
 String _translateDataClass(String english) {
   return _dataClassTranslations[english] ?? english;
 }
-  // ─── HIBP: تحقق من تسريب الإيميل ──────────────────────────
+  //  HIBP: تحقق من تسريب الإيميل 
  Future<void> checkEmailBreachAndNotify() async {
   if (_hasCheckedBreach) return;
   _hasCheckedBreach = true;
@@ -125,7 +125,7 @@ String _translateDataClass(String english) {
           ));
         }
 
-        // ─── احفظ كل الـ breaches الحالية ────────────────────
+        //  احفظ كل الـ breaches الحالية 
         final Map<String, String> allBreaches = {
           for (var b in breaches)
             b['Name'] as String: b['BreachDate'] as String,
@@ -151,7 +151,7 @@ String _translateDataClass(String english) {
   }
 }
 
-  // ─── Fetch Post ────────────────────────────────────────────
+  //  Fetch Post 
   Future<Post> fetchPost() async {
     final response = await http
         .get(Uri.parse('https://jsonplaceholder.typicode.com/posts/1'));
@@ -163,7 +163,7 @@ String _translateDataClass(String english) {
     }
   }
 
-  // ─── Get User Data ─────────────────────────────────────────
+  //  Get User Data 
   Future<String> getUserData(String key) async {
     final storage = const FlutterSecureStorage();
     final userDataStr = await storage.read(key: 'user_data');
@@ -187,7 +187,7 @@ void resetSession() {
   _notifications.clear();
   _controller.add(_notifications);
 }
-  // ─── Notifications ─────────────────────────────────────────
+  //  Notifications 
  void addNotification(AppNotification notification) {
   // تحقق إذا الإشعار موجود مسبقاً بنفس الـ id
   final exists = _notifications.any((n) => n.id == notification.id);
@@ -223,7 +223,7 @@ void resetSession() {
   _controller.add(_notifications);
 }
 
-// ─── Breach Storage (مستقل عن الإشعارات) ──────────────────
+//  Breach Storage (مستقل عن الإشعارات) 
 static const String _breachesStorageKey = 'all_breaches_data';
 static const String _fixedBreachesKey = 'fixed_breaches';
 

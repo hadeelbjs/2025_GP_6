@@ -394,7 +394,6 @@ class _MainDashboardState extends State<MainDashboard>
     }
   }
 
-  // Dialog لطلب الصلاحيات لأول مرة
   void _showPermissionRequestDialog() {
     showDialog(
       context: context,

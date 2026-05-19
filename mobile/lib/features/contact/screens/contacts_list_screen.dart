@@ -57,7 +57,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
         print('🔌 Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
-         // print('✅ Socket connected after resume');
           //  طلب الحالة لجميع جهات الاتصال بعد الاتصال
           await _requestAllContactsStatus();
         } else {
@@ -278,7 +277,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
 
     if (result['success']) {
       setState(() {
-        //  حذف من القائمتين معاً في setState واحد
         _contacts.removeWhere((c) => c['id'] == contactId);
         _results.removeWhere((c) => c['id'] == contactId);
       });
@@ -357,7 +355,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
                 ),
               ),
 
-              // ✅ Modern Pending Requests Section - Scrollable
               if (_pendingRequests.isNotEmpty)
                 Container(
                   margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
@@ -390,7 +387,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Header (ثابت)
                       Padding(
                         padding: const EdgeInsets.all(20),
                         child: Row(
@@ -449,7 +445,6 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
                         ),
                       ),
                       
-                      // ✅ Scrollable List
                       Flexible(
                         child: ListView.builder(
                           shrinkWrap: true,

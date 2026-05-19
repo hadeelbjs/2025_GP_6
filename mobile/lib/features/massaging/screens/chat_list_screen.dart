@@ -1,4 +1,3 @@
-//lib/features/massaging/screens/chat_list_screen.dart
 import 'package:flutter/material.dart';
 import 'dart:async';
 import '/shared/widgets/header_widget.dart';
@@ -688,17 +687,17 @@ Future<void> _handleFailedVerification(String otherUserId, String name) async {
   try {
     print('🗑️ Handling failed verification for $otherUserId');
     
-    // ✅ 1. حذف جميع رسائل المحادثة محلياً
+    // حذف جميع رسائل المحادثة محلياً
     final conversationId = _generateConversationId(otherUserId);
     await DatabaseHelper.instance.deleteConversation(conversationId);
     
-    // ✅ 2. إرسال إشعار للسيرفر (بدون socket مباشرة)
+    //  إرسال إشعار للسيرفر (بدون socket مباشرة)
     SocketService().emitEvent('conversation:failed_verification', {
       'otherUserId': otherUserId,
     });
     
     
-    // ✅ 3. عرض رسالة للمستخدم
+    // عرض رسالة للمستخدم
     if (!mounted) return;
     
     showDialog(
@@ -765,7 +764,7 @@ String _generateConversationId(String otherUserId) {
 
 
 
-  // ✅ Dialog للتنبيه عند عدم وجود بصمة مسجلة
+  // Dialog للتنبيه عند عدم وجود بصمة مسجلة
   void _showBiometricNotEnrolledDialog() {
     showDialog(
       context: context,

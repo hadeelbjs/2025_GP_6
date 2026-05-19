@@ -193,7 +193,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
           _currentProgress = progress;
         });
 
-        // ✅ إخفاء المؤشر بعد الانتهاء أو الخطأ
+        //إخفاء المؤشر بعد الانتهاء أو الخطأ
         if (progress.isComplete || progress.isError) {
           Future.delayed(Duration(seconds: 2), () {
             if (mounted) {
@@ -277,9 +277,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     );
   }
 
-  // =====================================================
+  
   //  دالة جلب السياسة من السيرفر
-  // =====================================================
   Future<void> _loadScreenshotPolicyFromServer() async {
     try {
       setState(() => _isLoadingScreenshotPolicy = true);
@@ -321,9 +320,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     }
   }
 
-  // =====================================================
   //  الكشف عن Screenshot في iOS
-  // =====================================================
   void _setupScreenshotDetection() {
     if (Platform.isIOS) {
       _screenListener.addScreenShotListener((filePath) {
@@ -803,9 +800,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
         print('❌ Decryption failed: $errorType');
 
-        // ========================================
         //  معالجة خاصة لـ InvalidSessionException
-        // ========================================
         if (errorType == 'InvalidSessionException' ||
             errorType == 'NoSessionException' ||
             errorType?.toString().contains('session') == true) {
@@ -832,9 +827,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
   //review
 
-  // ========================================
   //: إعادة إنشاء Session تلقائياً (بدون Dialog)
-  // ========================================
   Future<void> _autoRecreateSession() async {
     try {
       print('Auto-recreating session for ${widget.userId}');
@@ -1105,7 +1098,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         source: source,
         maxWidth: 1920,
         maxHeight: 1920,
-        imageQuality: 85, // ضغط مباشر
+        imageQuality: 85, 
       );
 
       if (picked == null) return;

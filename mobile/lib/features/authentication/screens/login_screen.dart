@@ -49,9 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  // ============================================
   // معالجة تسجيل الدخول العادي
-  // ============================================
   Future<void> _handleLogin() async {
     bool isValid = _formKey.currentState!.validate();
     
@@ -107,9 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
     }
   }
 
-  // ============================================
   // معالجة الدخول بالبايومتركس
-  // ============================================
   Future<void> _handleBiometricLogin() async {
     // 1 - الحصول على إيميل المستخدم المحفوظ
     final biometricUser = await BiometricService.getBiometricUser();

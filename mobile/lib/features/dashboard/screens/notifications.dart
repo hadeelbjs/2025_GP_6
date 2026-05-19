@@ -247,7 +247,6 @@ class SimpleNotificationsPage extends StatelessWidget {
     );
   }
 
-  // ─── Anomaly Buttons ─────────────────────────────────────────
   Widget _buildAnomalyButtons(BuildContext context, AppNotification n) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 4),

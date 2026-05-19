@@ -91,10 +91,18 @@ dependencies:
   device_info_plus: ^10.1.0
   geocoding: ^3.0.0
   app_links: ^3.4.3
+  flutter_launcher_icons: ^0.14.3
+  
+  sqflite_sqlcipher: ^3.4.0
+
 
 
   
 flutter_local_notifications: ^17.0.0
+flutter_launcher_icons:
+    android: true
+    ios: true
+    image_path: "assets/icons/app_icon.png"
 
 dev_dependencies:
   flutter_test:

@@ -939,6 +939,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
       if (mounted) {
         Navigator.of(context, rootNavigator: true).pop();
       }
+      await _loadMessagesFromDatabase();
 }
     } catch (e) {
       _showMessage('حدث خطأ في تهيئة المحادثة', false);
@@ -997,15 +998,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   }
 
   void _subscribeToRealtimeUpdates() {
-    _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
-      if (data['conversationId'] == _conversationId) {
-        //فك تشفير الرسائل الجديدة تلقائيًا
-        Future.delayed(Duration(milliseconds: 300), () {
-          _decryptAllMessages();
-        });
-        _loadMessagesFromDatabase();
-      }
-    });
+    _newMessageSubscription = _messagingService.onNewMessage.listen((data) async {
+    if (data['conversationId'] == _conversationId) {
+      // Await decryption pipeline fully before reading the database row
+      await _decryptAllMessages();
+      await _loadMessagesFromDatabase();
+    }
+  });
 
     _deleteSubscription = _messagingService.onMessageDeleted.listen((
       data,

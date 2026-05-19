@@ -1,141 +1,135 @@
-
+// lib/services/messaging_service.dart
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:uuid/uuid.dart';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import 'socket_service.dart';
 import 'api_services.dart';
 import 'biometric_service.dart';
 import 'local_db/database_helper.dart';
 import 'crypto/signal_protocol_manager.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'media_service.dart';
 
 class MessagingService {
-  static bool _hasStartedTimer = false; 
+  // ---------------------------------------------------------------------------
+  // Singleton
+  // ---------------------------------------------------------------------------
+
   static final MessagingService _instance = MessagingService._internal();
   factory MessagingService() => _instance;
-
   MessagingService._internal();
 
-  final _socketService = SocketService();
-  final _apiService = ApiService();
-  final _db = DatabaseHelper.instance;
-  final _signalProtocol = SignalProtocolManager();
-  final _storage = const FlutterSecureStorage();
-   final _mediaService = MediaService.instance; 
+  // ---------------------------------------------------------------------------
+  // Dependencies
+  // ---------------------------------------------------------------------------
 
+  final _socket = SocketService();
+  final _api = ApiService();
+  final _db = DatabaseHelper.instance;
+  final _signal = SignalProtocolManager();
+  final _media = MediaService.instance;
+  final _storage = const FlutterSecureStorage();
   final _uuid = const Uuid();
-  String? _userIdCache;
+
+  // ---------------------------------------------------------------------------
+  // State
+  // ---------------------------------------------------------------------------
+
+  static bool _expiryTimerStarted = false;
+  static int _decryptionFailureCount = 0;
+
+  String? _cachedUserId;
   String? _currentOpenChatUserId;
+  bool _listenersSetup = false;
 
   final Set<String> _processedMessageIds = {};
-  bool _listenersSetup = false;
-  StreamSubscription? _messageSubscription;
-  StreamSubscription? _statusSubscription;
-  StreamSubscription? _deleteSubscription;
-  Timer? _cleanupTimer;
-  Timer? _expiryTimer;
-  static int decryptionFailure = 0;
-  
   final Map<String, Timer> _messageTimers = {};
 
-  final _newMessageController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final _messageDeletedController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final _messageStatusController =
-      StreamController<Map<String, dynamic>>.broadcast();
-  final _messageExpiredController = 
-      StreamController<Map<String, dynamic>>.broadcast();
-  final _uploadProgressController = StreamController<UploadProgress>.broadcast();
+  StreamSubscription? _msgSub;
+  StreamSubscription? _statusSub;
+  StreamSubscription? _deleteSub;
+  Timer? _cleanupTimer;
+  Timer? _expiryTimer;
 
+  // ---------------------------------------------------------------------------
+  // Public streams
+  // ---------------------------------------------------------------------------
 
+  final _newMessageCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _deletedCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _statusCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _expiredCtrl = StreamController<Map<String, dynamic>>.broadcast();
+  final _uploadProgressCtrl = StreamController<UploadProgress>.broadcast();
 
-  Stream<Map<String, dynamic>> get onNewMessage => _newMessageController.stream;
-  Stream<Map<String, dynamic>> get onMessageDeleted =>
-      _messageDeletedController.stream;
-  Stream<Map<String, dynamic>> get onMessageStatusUpdate =>
-      _messageStatusController.stream;
-         Stream<Map<String, dynamic>> get onMessageExpired => 
-      _messageExpiredController.stream;
-        Stream<UploadProgress> get onUploadProgress => _uploadProgressController.stream;
+  Stream<Map<String, dynamic>> get onNewMessage => _newMessageCtrl.stream;
+  Stream<Map<String, dynamic>> get onMessageDeleted => _deletedCtrl.stream;
+  Stream<Map<String, dynamic>> get onMessageStatusUpdate => _statusCtrl.stream;
+  Stream<Map<String, dynamic>> get onMessageExpired => _expiredCtrl.stream;
+  Stream<UploadProgress> get onUploadProgress => _uploadProgressCtrl.stream;
 
+  bool get isConnected => _socket.isConnected;
+  Stream<Map<String, dynamic>> get onUserStatusChange => _socket.onUserStatusChange;
 
-
-  bool get isConnected => _socketService.isConnected;
-  Stream<Map<String, dynamic>> get onUserStatusChange =>
-      _socketService.onUserStatusChange;
-
-  void requestUserStatus(String userId) {
-    _socketService.requestUserStatus(userId);
-  }
+  // ---------------------------------------------------------------------------
+  // Initialisation
+  // ---------------------------------------------------------------------------
 
   Future<bool> initialize() async {
     try {
       await _cacheUserId();
-      await SignalProtocolManager().initialize();
+      await _signal.initialize();
 
-      if (!_socketService.isConnected) {
-        final socketConnected = await _socketService.connect();
-        if (!socketConnected) {
-          return false;
-        }
-      } else {}
-    await deleteExpiredMessages(); 
-    
+      if (!_socket.isConnected) {
+        final connected = await _socket.connect();
+        if (!connected) return false;
+      }
+
+      await deleteExpiredMessages();
       await _loadMessageTimers();
-    
-      if (!_hasStartedTimer) {
-        startLocalExpiryTimer();
-        _hasStartedTimer = true;
+
+      if (!_expiryTimerStarted) {
+        _startGlobalExpiryTimer();
+        _expiryTimerStarted = true;
       }
 
       _setupSocketListeners();
-      _startMessageCacheCleanup();
+      _startCacheCleanupTimer();
 
       return true;
-    } catch (e) {
+    } catch (_) {
       return false;
     }
   }
 
   void _setupSocketListeners() {
-    if (_listenersSetup) {
-      return;
-    }
+    if (_listenersSetup) return;
 
-    _messageSubscription = _socketService.onNewMessage.listen((data) async {
-      await _handleIncomingMessage(data);
+    _msgSub = _socket.onNewMessage.listen(_handleIncomingMessage);
+    _statusSub = _socket.onStatusUpdate.listen(_handleStatusUpdate);
+    _deleteSub = _socket.onMessageDeleted.listen((data) async {
+      final messageId = data['messageId'] as String;
+      await _db.deleteMessage(messageId);
+      _deletedCtrl.add(data);
     });
 
-    _statusSubscription = _socketService.onStatusUpdate.listen((data) async {
-      await _handleStatusUpdate(data);
+    _socket.onMessageExpired.listen((data) async {
+      final messageId = data['messageId'] as String;
+      await _db.deleteMessage(messageId);
+      _expiredCtrl.add({'messageId': messageId});
     });
-
-    _deleteSubscription = _socketService.onMessageDeleted.listen((data) async {
-       final deletedMessageId = data['messageId'];
-  
-  await _db.deleteMessage(deletedMessageId);
-  _messageDeletedController.add(data);
-    });
-
-  _socketService.onMessageExpired.listen((data) async {
-    final messageId = data['messageId'] as String;
-    print('⏱️ Message expired from backend: $messageId');
-    
-    await _db.deleteMessage(messageId);
-    
-    _messageExpiredController.add({'messageId': messageId});
-  });
 
     _listenersSetup = true;
   }
 
-  // إرسال رسالة مع Base64
+  // ---------------------------------------------------------------------------
+  // Send message
+  // ---------------------------------------------------------------------------
+
   Future<Map<String, dynamic>> sendMessage({
     required String recipientId,
     required String recipientName,
@@ -146,143 +140,83 @@ class MessagingService {
   }) async {
     try {
       resendPendingMessages();
+
       final messageId = _uuid.v4();
-      final conversationId = _generateConversationId(recipientId);
+      final conversationId = _conversationId(recipientId);
       final timestamp = DateTime.now().millisecondsSinceEpoch;
 
-      
-    final duration = await _db.getUserDuration(conversationId);
-    
-    if (duration == null) {
-      throw Exception('يجب تحديد مدة الرسالة أولاً');
-    }
+      final duration = await _db.getUserDuration(conversationId);
+      if (duration == null) {
+        throw Exception('يجب تحديد مدة الرسالة أولاً');
+      }
 
-    final now = DateTime.now();
-    final expiresAt = now.add(Duration(seconds: duration));
+      final expiresAt = DateTime.now().add(Duration(seconds: duration));
 
-        String? attachmentData;
+      // ── Attachment processing ────────────────────────────────────────────
+      String? attachmentData;
       String? attachmentType;
       String? attachmentName;
 
       if (imageFile != null) {
-        _emitProgress(UploadProgress(
-          stage: UploadStage.compressing,
-          progress: 0.1,
-          message: 'جاري ضغط الصورة...',
-        ));
-
-        //  ضغط الصورة
-        final mediaResult = await _mediaService.processImage(imageFile);
-
-        if (!mediaResult.success || mediaResult.file == null) {
-          throw Exception(mediaResult.errorMessage ?? 'فشل معالجة الصورة');
+        _emitProgress(UploadProgress(stage: UploadStage.compressing, progress: 0.1, message: 'جاري ضغط الصورة...'));
+        final result = await _media.processImage(imageFile);
+        if (!result.success || result.file == null) {
+          throw Exception(result.errorMessage ?? 'فشل معالجة الصورة');
         }
-
-        _emitProgress(UploadProgress(
-          stage: UploadStage.encoding,
-          progress: 0.4,
-          message: 'جاري تحويل الصورة...',
-        ));
-
-        //  تحويل ل Base64
-        attachmentData = await _mediaService.fileToBase64(mediaResult.file!);
+        _emitProgress(UploadProgress(stage: UploadStage.encoding, progress: 0.4, message: 'جاري تحويل الصورة...'));
+        attachmentData = await _media.fileToBase64(result.file!);
         attachmentType = 'image';
-        attachmentName = mediaResult.fileName;
-
-
+        attachmentName = result.fileName;
       } else if (attachmentFile != null) {
-        _emitProgress(UploadProgress(
-          stage: UploadStage.validating,
-          progress: 0.2,
-          message: 'جاري التحقق من الملف...',
-        ));
-
-        //  التحقق من الحجم
+        _emitProgress(UploadProgress(stage: UploadStage.validating, progress: 0.2, message: 'جاري التحقق من الملف...'));
         final fileSize = await attachmentFile.length();
         if (fileSize > MediaService.maxFileSizeMB * 1024 * 1024) {
           throw Exception('الملف كبير جداً (الحد الأقصى ${MediaService.maxFileSizeMB}MB)');
         }
-
-        _emitProgress(UploadProgress(
-          stage: UploadStage.encoding,
-          progress: 0.5,
-          message: 'جاري تحويل الملف...',
-        ));
-
-        //  تحويل ل Base64
-        attachmentData = await _mediaService.fileToBase64(attachmentFile);
+        _emitProgress(UploadProgress(stage: UploadStage.encoding, progress: 0.5, message: 'جاري تحويل الملف...'));
+        attachmentData = await _media.fileToBase64(attachmentFile);
         attachmentType = 'file';
         attachmentName = fileName ?? attachmentFile.path.split('/').last;
-
       }
 
-      // لا ترسل باستخدام session قديمة إذا مفاتيح الطرف الآخر غير موجودة على السيرفر
-      final peerVersionResult = await _apiService.getPeerKeysVersion(recipientId);
-      final peerKeysExist = peerVersionResult['success'] == true &&
-          peerVersionResult['exists'] == true;
-      if (peerVersionResult['success'] == true && !peerKeysExist) {
+      // ── Session checks ───────────────────────────────────────────────────
+      final peerCheck = await _api.getPeerKeysVersion(recipientId);
+      final peerKeysExist = peerCheck['success'] == true && peerCheck['exists'] == true;
+
+      if (peerCheck['success'] == true && !peerKeysExist) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('rekey_required_$recipientId', true);
-        return {
-          'success': false,
-          'code': 'REKEY_REQUIRED',
-          'message': 'الطرف الآخر لم يرفع مفاتيح التشفير الجديدة بعد',
-        };
+        return {'success': false, 'code': 'REKEY_REQUIRED', 'message': 'الطرف الآخر لم يرفع مفاتيح التشفير الجديدة بعد'};
       }
 
       final prefs = await SharedPreferences.getInstance();
-      final rekeyRequired = prefs.getBool('rekey_required_$recipientId') ?? false;
-      if (rekeyRequired) {
-        final rekeySuccess = await createNewSession(recipientId);
-        if (!rekeySuccess) {
-          return {
-            'success': false,
-            'code': 'REKEY_REQUIRED',
-            'message': 'تعذر إنشاء جلسة تشفير جديدة حالياً',
-          };
+      if (prefs.getBool('rekey_required_$recipientId') ?? false) {
+        if (!await createNewSession(recipientId)) {
+          return {'success': false, 'code': 'REKEY_REQUIRED', 'message': 'تعذر إنشاء جلسة تشفير جديدة حالياً'};
         }
         await prefs.remove('rekey_required_$recipientId');
       }
 
-      final hasSession = await _signalProtocol.sessionExists(recipientId);
-      if (!hasSession) {
-        print('⚠️ No session found with $recipientId. Creating one...');
-        final sessionCreated = await createNewSession(recipientId);
-        if (!sessionCreated) {
-          return {
-            'success': false,
-            'code': 'REKEY_REQUIRED',
-            'message': 'تعذر إنشاء جلسة تشفير جديدة مع الطرف الآخر',
-          };
+      if (!await _signal.sessionExists(recipientId)) {
+        if (!await createNewSession(recipientId)) {
+          return {'success': false, 'code': 'REKEY_REQUIRED', 'message': 'تعذر إنشاء جلسة تشفير جديدة مع الطرف الآخر'};
         }
       }
 
-      //  تشفير الرسالة
-      final encrypted = await _signalProtocol.encryptMessage(
-        recipientId,
-        messageText,
-      );
+      // ── Encrypt ──────────────────────────────────────────────────────────
+      final encrypted = await _signal.encryptMessage(recipientId, messageText);
+      if (encrypted == null) throw Exception('Encryption failed');
 
-      if (encrypted == null) {
-        throw Exception('Encryption failed');
-      }
-      //تشفير الملف 
-      String? encryptedAttachmentData;
-       String? attachmentEncryptionType;
-
+      String? encryptedAttachment;
+      String? attachmentEncType;
       if (attachmentData != null) {
-        final encryptedAttachment = await _signalProtocol.encryptMessage(recipientId, attachmentData);
-
-        if (encryptedAttachment == null) {
-          throw Exception('Failed to encrypt attachment');
-        }
-        encryptedAttachmentData = encryptedAttachment['body'];
-        attachmentEncryptionType = encryptedAttachment['type']?.toString();
-        print('✅ Attachment encrypted');
+        final enc = await _signal.encryptMessage(recipientId, attachmentData);
+        if (enc == null) throw Exception('Failed to encrypt attachment');
+        encryptedAttachment = enc['body'] as String;
+        attachmentEncType = enc['type']?.toString();
       }
 
-
-      //  حفظ في SQLite
+      // ── Persist ──────────────────────────────────────────────────────────
       await _db.saveMessage({
         'id': messageId,
         'conversationId': conversationId,
@@ -300,15 +234,12 @@ class MessagingService {
         'attachmentType': attachmentType,
         'attachmentName': attachmentName,
         'visibilityDuration': duration,
-        'expiresAt': expiresAt?.millisecondsSinceEpoch,
+        'expiresAt': expiresAt.millisecondsSinceEpoch,
         'isExpired': 0,
       });
-      
-      if (expiresAt != null) {
-        _scheduleMessageExpiry(messageId, expiresAt.millisecondsSinceEpoch);
-      }
 
-      // حفظ المحادثة
+      _scheduleMessageExpiry(messageId, expiresAt.millisecondsSinceEpoch);
+
       await _db.saveConversation({
         'id': conversationId,
         'contactId': recipientId,
@@ -316,539 +247,303 @@ class MessagingService {
         'lastMessage': attachmentType == 'image'
             ? '📷 صورة'
             : attachmentType == 'file'
-            ? '📎 $attachmentName'
-            : messageText,
+                ? '📎 $attachmentName'
+                : messageText,
         'lastMessageTime': timestamp,
         'unreadCount': 0,
         'updatedAt': timestamp,
       });
-       _emitProgress(UploadProgress(
-        stage: UploadStage.sending,
-        progress: 0.9,
-        message: 'جاري الإرسال...',
-      ));
 
-      //  إرسال عبر Socket مع المرفقات
-      _socketService.sendMessageWithAttachment(
+      // ── Send over socket ─────────────────────────────────────────────────
+      _emitProgress(UploadProgress(stage: UploadStage.sending, progress: 0.9, message: 'جاري الإرسال...'));
+
+      _socket.sendMessageWithAttachment(
         messageId: messageId,
         recipientId: recipientId,
         encryptedType: encrypted['type'],
         encryptedBody: encrypted['body'],
-        attachmentData: encryptedAttachmentData,
+        attachmentData: encryptedAttachment,
         attachmentType: attachmentType,
         attachmentName: attachmentName,
-        attachmentEncryptionType: attachmentEncryptionType,
-        visibilityDuration: duration,                 
+        attachmentEncryptionType: attachmentEncType,
+        visibilityDuration: duration,
         expiresAt: expiresAt.toUtc().toIso8601String(),
         createdAt: DateTime.fromMillisecondsSinceEpoch(timestamp).toUtc().toIso8601String(),
       );
-     _emitProgress(UploadProgress(
-        stage: UploadStage.complete,
-        progress: 1.0,
-        message: 'تم الإرسال بنجاح',
-      ));
-      print('✅ Message sent with encrypted Base64 attachment');
-      Future.delayed(Duration(seconds: 1), () {
-      });
+
+      _emitProgress(UploadProgress(stage: UploadStage.complete, progress: 1.0, message: 'تم الإرسال بنجاح'));
 
       return {'success': true, 'messageId': messageId};
     } catch (e) {
-      _emitProgress(UploadProgress(
-        stage: UploadStage.error,
-        progress: 0.0,
-        message: 'فشل الإرسال: $e',
-      ));      return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
+      _emitProgress(UploadProgress(stage: UploadStage.error, progress: 0.0, message: 'فشل الإرسال: $e'));
+      return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
     }
   }
 
-   void _emitProgress(UploadProgress progress) {
-    if (!_uploadProgressController.isClosed) {
-      _uploadProgressController.add(progress);
-    }
+  void _emitProgress(UploadProgress p) {
+    if (!_uploadProgressCtrl.isClosed) _uploadProgressCtrl.add(p);
   }
 
-  // استقبال رسالة مع Base64
+  // ---------------------------------------------------------------------------
+  // Receive message
+  // ---------------------------------------------------------------------------
+
   Future<void> _handleIncomingMessage(Map data) async {
-  try {
-    final messageId = data['messageId'] as String;
-
-    if (_processedMessageIds.contains(messageId)) {
-      return;
-    }
-
-    final existing = await _db.getMessage(messageId);
-    if (existing != null) {
-      _processedMessageIds.add(messageId);
-      return;
-    }
-
-    _processedMessageIds.add(messageId);
-
-    final senderId = data['senderId'] as String;
-    final encryptedType = data['encryptedType'] as int;
-    final encryptedBody = data['encryptedBody'] as String;
-    final encryptedAttachmentData = data['attachmentData'] as String?;
-    final attachmentType = data['attachmentType'] as String?;
-    final attachmentName = data['attachmentName'] as String?;
-    final attachmentEncryptionType = data['attachmentEncryptionType'] as String?;
-    final visibilityDuration = data['visibilityDuration'] as int?;
-    final expiresAtStr = data['expiresAt'] as String?;
-
-    // ⚠️ لا تحاول فك التشفير هنا - احفظ المشفر فقط
-    // سيتم فك التشفير لاحقاً في decryptAllConversationMessages
-    
-    final timestamp = data['createdAt'] != null
-        ? DateTime.parse(data['createdAt']).millisecondsSinceEpoch
-        : DateTime.now().millisecondsSinceEpoch;
-    
-    final nowUtc = DateTime.now().toUtc();
-    final now = nowUtc.millisecondsSinceEpoch;
-  
-    int? expiresAt;
-    if (expiresAtStr != null && visibilityDuration != null) {
-      try {
-        final originalExpiresAt = DateTime.parse(expiresAtStr).toUtc().millisecondsSinceEpoch;
-        final createdAt = DateTime.fromMillisecondsSinceEpoch(timestamp, isUtc: true);
-        
-        // حساب الوقت المتبقي من وقت الإنشاء الأصلي
-        final timeSinceCreation = nowUtc.difference(createdAt);
-        final originalLifetime = Duration(seconds: visibilityDuration);
-        
-        // هذا يضمن أن المستقبل يرى الرسالة للمدة المحددة (10 ثواني مثلاً)
-        // بغض النظر عن وقت الوصول (حتى لو وصلت متأخرة)
-        expiresAt = now + (visibilityDuration * 1000);
-      } catch (e) {
-        print('⚠️ Failed to parse expiresAt: $e');
-        // في حالة الخطأ، استخدم المدة المحددة من وقت الاستقبال
-        if (visibilityDuration != null) {
-          expiresAt = now + (visibilityDuration * 1000);
-        }
-      }
-    } else if (visibilityDuration != null) {
-      // إذا لم يكن هناك expiresAt، احسبه من وقت الاستقبال
-      expiresAt = now + (visibilityDuration * 1000);
-      print('📥 Message received: no expiresAt, using duration from receive time: ${DateTime.fromMillisecondsSinceEpoch(expiresAt, isUtc: true).toIso8601String()}');
-    }
-
-    final conversationId = _generateConversationId(senderId);
-    final bool isCurrentChat = _currentOpenChatUserId == senderId;
-
-    // حفظ الرسالة مع المرفق المشفر كما هو
-    await _db.saveMessage({
-      'id': messageId,
-      'conversationId': conversationId,
-      'senderId': senderId,
-      'receiverId': await _getCurrentUserId(),
-      'ciphertext': encryptedBody,
-      'encryptionType': encryptedType,
-      'plaintext': null,
-      'status': 'delivered',
-      'createdAt': timestamp,
-      'deliveredAt': DateTime.now().millisecondsSinceEpoch,
-      'isMine': 0,
-      'requiresBiometric': 1,
-      'isDecrypted': 0, // ✅ ضع 0 - ستُفك لاحقاً
-      'attachmentData': encryptedAttachmentData, // ✅ احفظ المشفر
-      'attachmentType': attachmentType,
-      'attachmentName': attachmentName,
-      'visibilityDuration': visibilityDuration,
-      'expiresAt': expiresAt,
-      'isExpired': 0,
-    });
-    
-    // ✅ جدولة حذف الرسالة المستقبلة في الوقت المحدد بالضبط
-    if (expiresAt != null) {
-      _scheduleMessageExpiry(messageId, expiresAt);
-    }
-
-    if (!isCurrentChat) {
-      await _db.incrementUnreadCount(conversationId);
-    } else {
-      await _db.markConversationAsRead(conversationId);
-    }
-
-    _newMessageController.add({
-      'messageId': messageId,
-      'conversationId': conversationId,
-      'senderId': senderId,
-      'isLocked': true,
-    });
-  } catch (e) {
-    print('❌ Error in _handleIncomingMessage: $e');
-  }
-
-    Future<void> updateConversationPrivacyPolicy({
-      required String peerUserId,
-      required bool allowScreenshots,
-    }) async {
-      try {
-        await ApiService.instance.putJson('/contacts/$peerUserId/screenshots', {
-          'allowScreenshots': allowScreenshots,
-        });
-      } catch (e) {
-        debugPrint('❌ Failed to update privacy policy: $e');
-      }
-    }
-  }
-
-  Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
     try {
-      if (data['type'] == 'peer_emergency_mode') {
-        final peerId = data['userId'];
-        if (peerId is String && peerId.isNotEmpty) {
-          await _signalProtocol.deleteSession(peerId);
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('rekey_required_$peerId', true);
-        }
+      final messageId = data['messageId'] as String;
 
-        if (!_messageStatusController.isClosed) {
-          _messageStatusController.add(Map<String, dynamic>.from(data));
-        }
+      if (_processedMessageIds.contains(messageId)) return;
+      if (await _db.getMessage(messageId) != null) {
+        _processedMessageIds.add(messageId);
         return;
       }
+      _processedMessageIds.add(messageId);
 
-      if (data['type'] == 'recipient_failed_verification') {
-        final recipientId = data['recipientId'];
-        print('⚠️ Handling failed verification for recipient: $recipientId');
-
-        if (!_messageStatusController.isClosed) {
-          _messageStatusController.add({
-            'type': 'recipient_failed_verification',
-            'recipientId': recipientId,
-          });
-        }
-        return;
-      }
-
-      final messageId = data['messageId'];
-      final newStatus = data['status'];
+      final senderId = data['senderId'] as String;
+      final encryptedType = data['encryptedType'] as int;
+      final encryptedBody = data['encryptedBody'] as String;
+      final encryptedAttachment = data['attachmentData'] as String?;
+      final attachmentType = data['attachmentType'] as String?;
+      final attachmentName = data['attachmentName'] as String?;
+      final attachmentEncType = data['attachmentEncryptionType'] as String?;
       final visibilityDuration = data['visibilityDuration'] as int?;
       final expiresAtStr = data['expiresAt'] as String?;
 
-   
-    int? expiresAt;
-    if (expiresAtStr != null) {
-      try {
-        expiresAt = DateTime.parse(expiresAtStr).millisecondsSinceEpoch;
-      } catch (e) {
-        print('⚠️ Failed to parse expiresAt from status_update: $expiresAtStr');
+      final timestamp = data['createdAt'] != null
+          ? DateTime.parse(data['createdAt'] as String).millisecondsSinceEpoch
+          : DateTime.now().millisecondsSinceEpoch;
+
+      // Receiver always gets a fresh window starting from now
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+      final int? expiresAt = visibilityDuration != null
+          ? now + (visibilityDuration * 1000)
+          : null;
+
+      final conversationId = _conversationId(senderId);
+      final isCurrentChat = _currentOpenChatUserId == senderId;
+
+      await _db.saveMessage({
+        'id': messageId,
+        'conversationId': conversationId,
+        'senderId': senderId,
+        'receiverId': await _getCurrentUserId(),
+        'ciphertext': encryptedBody,
+        'encryptionType': encryptedType,
+        'plaintext': null,
+        'status': 'delivered',
+        'createdAt': timestamp,
+        'deliveredAt': now,
+        'isMine': 0,
+        'requiresBiometric': 1,
+        'isDecrypted': 0,
+        'attachmentData': encryptedAttachment,
+        'attachmentType': attachmentType,
+        'attachmentName': attachmentName,
+        'visibilityDuration': visibilityDuration,
+        'expiresAt': expiresAt,
+        'isExpired': 0,
+      });
+
+      if (expiresAt != null) _scheduleMessageExpiry(messageId, expiresAt);
+
+      if (isCurrentChat) {
+        await _db.markConversationAsRead(conversationId);
+      } else {
+        await _db.incrementUnreadCount(conversationId);
       }
-    }
 
-    final updateData = <String, dynamic>{
-      'status': newStatus,
-    };
-
-    if (visibilityDuration != null) {
-      updateData['visibilityDuration'] = visibilityDuration;
-    }
-
-    /*
-    if (expiresAt != null) {
-      updateData['expiresAt'] = expiresAt;
-    }
-    */
-
-    await _db.updateMessage(messageId, updateData);
-
-      if (!_messageStatusController.isClosed) {
-        _messageStatusController.add({
-          'messageId': messageId,
-          'status': newStatus,
-        });
-      }
+      _newMessageCtrl.add({
+        'messageId': messageId,
+        'conversationId': conversationId,
+        'senderId': senderId,
+        'isLocked': true,
+      });
     } catch (e) {
-      print('❌ Error in _handleStatusUpdate: $e');
+      debugPrint('❌ _handleIncomingMessage: $e');
     }
   }
 
-  Future<void> resendPendingMessages() async {
-    final db = DatabaseHelper.instance;
-    final pending = await db.getPendingMessages();
+  // ---------------------------------------------------------------------------
+  // Status update
+  // ---------------------------------------------------------------------------
 
+  Future<void> _handleStatusUpdate(Map<String, dynamic> data) async {
+    try {
+      final type = data['type'] as String?;
+
+      if (type == 'peer_emergency_mode') {
+        final peerId = data['userId'] as String?;
+        if (peerId != null && peerId.isNotEmpty) {
+          await _signal.deleteSession(peerId);
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('rekey_required_$peerId', true);
+        }
+        _emit(_statusCtrl, Map<String, dynamic>.from(data));
+        return;
+      }
+
+      if (type == 'recipient_failed_verification') {
+        _emit(_statusCtrl, {
+          'type': 'recipient_failed_verification',
+          'recipientId': data['recipientId'],
+        });
+        return;
+      }
+
+      final messageId = data['messageId'] as String;
+      final newStatus = data['status'] as String;
+      final visibilityDuration = data['visibilityDuration'] as int?;
+
+      final updateData = <String, dynamic>{'status': newStatus};
+      if (visibilityDuration != null) updateData['visibilityDuration'] = visibilityDuration;
+
+      await _db.updateMessage(messageId, updateData);
+      _emit(_statusCtrl, {'messageId': messageId, 'status': newStatus});
+    } catch (e) {
+      debugPrint('❌ _handleStatusUpdate: $e');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Resend pending
+  // ---------------------------------------------------------------------------
+
+  Future<void> resendPendingMessages() async {
+    final pending = await _db.getPendingMessages();
     for (final msg in pending) {
       try {
-        print('🔁 Re-sending pending message ${msg['id']}');
-        
-        // إعادة حساب expiresAt إذا كانت موجودة
         String? expiresAtStr;
         String? createdAtStr;
-        
+
         if (msg['createdAt'] != null) {
           final createdAt = DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int);
           createdAtStr = createdAt.toUtc().toIso8601String();
-          
+
           if (msg['expiresAt'] != null) {
-            final expiresAt = DateTime.fromMillisecondsSinceEpoch(msg['expiresAt'] as int);
-            expiresAtStr = expiresAt.toUtc().toIso8601String();
+            expiresAtStr = DateTime.fromMillisecondsSinceEpoch(msg['expiresAt'] as int).toUtc().toIso8601String();
           } else if (msg['visibilityDuration'] != null) {
-            // إعادة حساب expiresAt بناءً على createdAt الأصلي
-            final expiresAt = createdAt.add(Duration(seconds: msg['visibilityDuration'] as int));
-            expiresAtStr = expiresAt.toUtc().toIso8601String();
+            expiresAtStr = createdAt.add(Duration(seconds: msg['visibilityDuration'] as int)).toUtc().toIso8601String();
           }
         }
-        
-        _socketService.sendMessageWithAttachment(
-          messageId: msg['id'],
-          recipientId: msg['receiverId'],
+
+        _socket.sendMessageWithAttachment(
+          messageId: msg['id'] as String,
+          recipientId: msg['receiverId'] as String,
           encryptedType: msg['encryptionType'],
-          encryptedBody: msg['ciphertext'],
-          attachmentData: msg['attachmentData'],
-          attachmentType: msg['attachmentType'],
-          attachmentName: msg['attachmentName'],
-          visibilityDuration: msg['visibilityDuration'],
+          encryptedBody: msg['ciphertext'] as String,
+          attachmentData: msg['attachmentData'] as String?,
+          attachmentType: msg['attachmentType'] as String?,
+          attachmentName: msg['attachmentName'] as String?,
+          visibilityDuration: msg['visibilityDuration'] as int?,
           expiresAt: expiresAtStr,
           createdAt: createdAtStr,
         );
-        await db.updateMessageStatus(msg['id'], 'sent');
+
+        await _db.updateMessageStatus(msg['id'] as String, 'sent');
       } catch (e) {
-        print('⚠️ Failed to resend ${msg['id']}: $e');
+        debugPrint('⚠️ Failed to resend ${msg['id']}: $e');
       }
     }
   }
 
-  Future<void> _handleMessageDeleted(Map<String, dynamic> data) async {
+  // ---------------------------------------------------------------------------
+  // Decryption
+  // ---------------------------------------------------------------------------
+
+  Future<Map<String, dynamic>> decryptAllConversationMessages(String conversationId) async {
     try {
-      final messageId = data['messageId'];
-      final deletedFor = data['deletedFor'];
-      print('🗑️ Received delete notification: $messageId (deletedFor: $deletedFor)');
-
-
-      if (!_messageDeletedController.isClosed) {
-        _messageDeletedController.add({
-          'messageId': messageId,
-          'deletedFor': deletedFor,
-        });
+      final encrypted = await _db.getEncryptedMessages(conversationId);
+      if (encrypted.isEmpty) {
+        return {'success': true, 'message': 'لا توجد رسائل تحتاج فك تشفير', 'count': 0};
       }
 
-      // ثم حذف من SQLite
-      await Future.delayed(Duration(milliseconds: 50));
+      int successCount = 0;
+      String? lastError;
+      String? lastErrorType;
 
-      if (deletedFor == 'everyone') {
-        await _db.deleteMessage(messageId);
-       print('✅ Deleted message for everyone: $messageId');
+      for (final message in encrypted) {
+        try {
+          final messageId = message['id'] as String;
+          final senderId = message['senderId'] as String;
+          final encryptionType = message['encryptionType'] as int;
 
-      } else if (deletedFor == 'recipient') {
-        await _db.deleteMessage(messageId);
-      print('✅ Deleted message at recipient: $messageId');
+          final decrypted = await _signal.decryptMessage(senderId, encryptionType, message['ciphertext'] as String);
 
-      }
-    } catch (e) {
-    print('❌ Error handling delete: $e');
+          if (decrypted == null) {
+            _decryptionFailureCount++;
+            lastError = 'Decryption returned null';
+            lastErrorType = 'DecryptionFailure';
 
-    }
-  }
+            if (_decryptionFailureCount >= 1) {
+              await _signal.deleteSession(senderId);
+              await deleteConversation(conversationId);
+              return {'success': false, 'error': 'SessionReset', 'message': 'Session reset due to decryption errors'};
+            }
+            continue;
+          }
 
-  // في MessagingService - تحديث decryptAllConversationMessages
-
-Future<Map<String, dynamic>> decryptAllConversationMessages(
-  String conversationId,
-) async {
-  try {
-    print('Starting decryption for conversation: $conversationId');
-
-    // جلب الرسائل المشفرة غير المفكوكة
-    final encryptedMessages = await _db.getEncryptedMessages(conversationId);
-
-    if (encryptedMessages.isEmpty) {
-      print('No encrypted messages to decrypt');
-      return {
-        'success': true,
-        'message': 'لا توجد رسائل تحتاج فك تشفير',
-        'count': 0,
-      };
-    }
-
-    print('Found ${encryptedMessages.length} encrypted messages');
-
-    int successCount = 0;
-    String? lastError;
-    String? lastErrorType;
-
-    for (final message in encryptedMessages) {
-      try {
-        final messageId = message['id'];
-        final senderId = message['senderId'];
-        final encryptionType = message['encryptionType'];
-        
-        print('Decrypting message $messageId from $senderId');
-
-        // فك تشفير النص
-        final decrypted = await _signalProtocol.decryptMessage(
-          senderId,
-          encryptionType,
-          message['ciphertext'],
-        );
-
-        if (decrypted != null) {
-          //  فك تشفير المرفق أيضاً إذا كان موجود
-          String? decryptedAttachmentData;
-          if (message['attachmentData'] != null && 
-              message['attachmentType'] != null) {
+          // Decrypt attachment if present
+          String? decryptedAttachment = message['attachmentData'] as String?;
+          if (decryptedAttachment != null && message['attachmentType'] != null) {
             try {
-              print('🔓 Attempting to decrypt attachment for message $messageId');
-              
-              decryptedAttachmentData = await _signalProtocol.decryptMessage(
-                senderId,
-                encryptionType, // استخدم نفس encryptionType
-                message['attachmentData'],
-              );
-              
-              if (decryptedAttachmentData != null) {
-                print('✅ Attachment decrypted successfully');
-              } else {
-                print('⚠️ Attachment decryption returned null - keeping encrypted data');
-                decryptedAttachmentData = message['attachmentData'];
-              }
-            } catch (e) {
-              print('❌ Error decrypting attachment: $e');
-              decryptedAttachmentData = message['attachmentData'];
+              decryptedAttachment = await _signal.decryptMessage(senderId, encryptionType, decryptedAttachment)
+                  ?? decryptedAttachment;
+            } catch (_) {
+              // Keep the stored value; decryption will be reattempted next session.
             }
           }
 
-          // تحديث الرسالة مع النص والمرفق المفكوكين
           await _db.updateMessage(messageId, {
             'plaintext': decrypted,
-            'attachmentData': decryptedAttachmentData, 
+            'attachmentData': decryptedAttachment,
             'isDecrypted': 1,
             'requiresBiometric': 1,
             'status': 'read',
             'readAt': DateTime.now().millisecondsSinceEpoch,
           });
 
-          // إرسال حالة القراءة للمرسل
-          _socketService.updateMessageStatus(
-            messageId: messageId,
-            status: 'verified',
-            recipientId: senderId,
-          );
-
+          _socket.updateMessageStatus(messageId: messageId, status: 'verified', recipientId: senderId);
           successCount++;
-          print('Message $messageId decrypted successfully ✅');
-        } else {
-          lastError = 'Decryption returned null';
-          decryptionFailure++;
-          
-          if (decryptionFailure >= 1) {
-            await _signalProtocol.deleteSession(senderId);
-            await deleteConversation(conversationId);
-            return {
-              'success': false,
-              'error': 'SessionReset',
-              'message': 'Session reset due to decryption errors',
-            };
-          }
-          
-          lastErrorType = 'DecryptionFailure';
-          print('Decryption returned null for message $messageId');
+        } catch (e) {
+          _decryptionFailureCount++;
+          lastError = e.toString();
+          lastErrorType = _classifyDecryptionError(e.toString());
+          debugPrint('Failed to decrypt: $lastErrorType – $e');
         }
-      } catch (e) {
-        lastError = e.toString();
-
-        
-        decryptionFailure++;
-
-        if (e.toString().contains('InvalidKeyException')) {
-          lastErrorType = 'InvalidKeyException';
-        } else if (e.toString().contains('InvalidMessageException')) {
-          lastErrorType = 'InvalidMessageException';
-        } else if (e.toString().contains('InvalidSessionException') ||
-            e.toString().contains('NoSessionException')) {
-          lastErrorType = 'InvalidSessionException';
-        } else if (e.toString().contains('UntrustedIdentityException')) {
-          lastErrorType = 'UntrustedIdentityException';
-        } else if (e.toString().contains('session') ||
-            e.toString().contains('Session')) {
-          lastErrorType = 'InvalidSessionException';
-        } else {
-          lastErrorType = 'UnknownError';
-        }
-
-        print('Failed to decrypt message: $lastErrorType - $e');
       }
+
+      if (successCount == encrypted.length) {
+        return {'success': true, 'message': 'تم فك تشفير $successCount رسائل', 'count': successCount};
+      }
+
+      if (successCount == 0) {
+        return {'success': false, 'message': 'فشل فك تشفير جميع الرسائل', 'count': 0, 'error': lastErrorType, 'errorMessage': lastError};
+      }
+
+      return {'success': true, 'message': 'تم فك تشفير $successCount من ${encrypted.length} رسائل', 'count': successCount, 'error': lastErrorType, 'errorMessage': lastError};
+    } catch (e) {
+      return {'success': false, 'message': 'فشل فك تشفير الرسائل', 'count': 0, 'error': _classifyDecryptionError(e.toString()), 'errorMessage': e.toString()};
     }
-
-    if (successCount == encryptedMessages.length) {
-      print('All messages decrypted successfully ($successCount/${encryptedMessages.length})');
-      return {
-        'success': true,
-        'message': 'تم فك تشفير $successCount رسائل',
-        'count': successCount,
-      };
-    }
-
-    if (successCount == 0) {
-      print('All messages failed to decrypt. Error: $lastErrorType');
-      return {
-        'success': false,
-        'message': 'فشل فك تشفير جميع الرسائل',
-        'count': 0,
-        'error': lastErrorType,
-        'errorMessage': lastError,
-      };
-    }
-
-    print('Partial success: $successCount/${encryptedMessages.length} decrypted');
-    return {
-      'success': true,
-      'message': 'تم فك تشفير $successCount من ${encryptedMessages.length} رسائل',
-      'count': successCount,
-      'error': lastErrorType,
-      'errorMessage': lastError,
-    };
-  } catch (e) {
-    print('Critical error in decryptAllConversationMessages: $e');
-
-    String errorType = 'UnknownError';
-
-    if (e.toString().contains('InvalidKeyException')) {
-      errorType = 'InvalidKeyException';
-    } else if (e.toString().contains('InvalidSessionException') ||
-        e.toString().contains('NoSessionException')) {
-      errorType = 'InvalidSessionException';
-    } else if (e.toString().contains('session') ||
-        e.toString().contains('Session')) {
-      errorType = 'InvalidSessionException';
-    }
-
-    return {
-      'success': false,
-      'message': 'فشل فك تشفير الرسائل',
-      'count': 0,
-      'error': errorType,
-      'errorMessage': e.toString(),
-    };
   }
-}
-  //فك تشفير رسالة واحدة (يطلب التحقق كل مرة) - نبقي هذه الدالة كاحتياط
+
+  /// Single-message decrypt with biometric gate (fallback / on-demand use).
   Future<Map<String, dynamic>> decryptMessage(String messageId) async {
     try {
-      // التحقق البيومتري - كل مرة تُفتح رسالة
       final authenticated = await BiometricService.authenticateWithBiometrics(
         reason: 'تحقق من هويتك لقراءة الرسالة',
       );
-
-      if (!authenticated) {
-        return {'success': false, 'message': 'فشل التحقق بالبايومتركس'};
-      }
+      if (!authenticated) return {'success': false, 'message': 'فشل التحقق بالبايومتركس'};
 
       final message = await _db.getMessage(messageId);
-      if (message == null) {
-        throw Exception('Message not found');
-      }
+      if (message == null) throw Exception('Message not found');
 
-      // فك التشفير
-      final decrypted = await _signalProtocol.decryptMessage(
-        message['senderId'],
-        message['encryptionType'],
-        message['ciphertext'],
+      final decrypted = await _signal.decryptMessage(
+        message['senderId'] as String,
+        message['encryptionType'] as int,
+        message['ciphertext'] as String,
       );
+      if (decrypted == null) throw Exception('Decryption failed');
 
-      if (decrypted == null) {
-        throw Exception('Decryption failed');
-      }
-
-      // تحديث الرسالة
       await _db.updateMessage(messageId, {
         'plaintext': decrypted,
         'isDecrypted': 1,
@@ -857,10 +552,10 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
         'readAt': DateTime.now().millisecondsSinceEpoch,
       });
 
-      _socketService.updateMessageStatus(
+      _socket.updateMessageStatus(
         messageId: messageId,
         status: 'verified',
-        recipientId: message['senderId'],
+        recipientId: message['senderId'] as String,
       );
 
       return {'success': true, 'plaintext': decrypted};
@@ -869,14 +564,136 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
     }
   }
 
-  //  جلب الرسائل
+  String _classifyDecryptionError(String msg) {
+    if (msg.contains('InvalidKeyException'))      return 'InvalidKeyException';
+    if (msg.contains('InvalidMessageException'))  return 'InvalidMessageException';
+    if (msg.contains('InvalidSessionException') ||
+        msg.contains('NoSessionException') ||
+        msg.contains('session') ||
+        msg.contains('Session'))                  return 'InvalidSessionException';
+    if (msg.contains('UntrustedIdentityException')) return 'UntrustedIdentityException';
+    return 'UnknownError';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Message expiry
+  // ---------------------------------------------------------------------------
+
+  void _scheduleMessageExpiry(String messageId, int expiresAtMillis) {
+    _messageTimers[messageId]?.cancel();
+    _messageTimers.remove(messageId);
+
+    final delay = DateTime.fromMillisecondsSinceEpoch(expiresAtMillis, isUtc: true)
+        .difference(DateTime.now().toUtc());
+
+    if (delay.isNegative || delay.inMilliseconds <= 0) {
+      _deleteSingleExpiredMessage(messageId);
+      return;
+    }
+
+    _messageTimers[messageId] = Timer(delay, () {
+      _deleteSingleExpiredMessage(messageId);
+      _messageTimers.remove(messageId);
+    });
+  }
+
+  Future<void> _deleteSingleExpiredMessage(String messageId) async {
+    try {
+      if (await _db.getMessage(messageId) == null) return;
+      await _db.deleteMessage(messageId);
+      _expiredCtrl.add({'messageId': messageId});
+    } catch (e) {
+      debugPrint('❌ Error expiring message $messageId: $e');
+    }
+  }
+
+  Future<void> deleteExpiredMessages() async {
+    final expiredIds = await _db.deleteExpiredMessages();
+    for (final id in expiredIds) {
+      _expiredCtrl.add({'messageId': id});
+    }
+  }
+
+  Future<void> _loadMessageTimers() async {
+    try {
+      final db = await _db.database;
+      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
+
+      final rows = await db.query(
+        'messages',
+        columns: ['id', 'expiresAt'],
+        where: 'expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) > ?',
+        whereArgs: [now],
+      );
+
+      for (final row in rows) {
+        _scheduleMessageExpiry(row['id'] as String, row['expiresAt'] as int);
+      }
+    } catch (e) {
+      debugPrint('⚠️ Error loading message timers: $e');
+    }
+  }
+
+  /// Fallback sweep every 5 s to catch any messages whose timers were missed.
+  void _startGlobalExpiryTimer() {
+    _expiryTimer?.cancel();
+    _expiryTimer = Timer.periodic(const Duration(seconds: 5), (_) => deleteExpiredMessages());
+  }
+
+  // ---------------------------------------------------------------------------
+  // Delete message
+  // ---------------------------------------------------------------------------
+
+  Future<Map<String, dynamic>> deleteMessage({
+    required String messageId,
+    required bool deleteForEveryone,
+  }) async {
+    try {
+      final message = await _db.getMessage(messageId);
+      if (message == null) return {'success': false, 'message': 'الرسالة غير موجودة'};
+
+      final isMine = (message['isMine'] as int?) == 1;
+      final otherUserId = isMine
+          ? message['receiverId'] as String
+          : message['senderId'] as String;
+
+      _messageTimers[messageId]?.cancel();
+      _messageTimers.remove(messageId);
+
+      if (deleteForEveryone) {
+        await _db.deleteMessage(messageId);
+        _socket.socket?.emit('message:delete_local', {
+          'messageId': messageId,
+          'deleteFor': 'everyone',
+          'recipientId': otherUserId,
+        });
+        return {'success': true, 'message': 'تم الحذف للجميع'};
+      } else {
+        await _db.updateMessage(messageId, {'deletedForRecipient': 1});
+        _socket.socket?.emit('message:delete_local', {
+          'messageId': messageId,
+          'deleteFor': 'recipient',
+          'recipientId': otherUserId,
+        });
+        return {'success': true, 'message': 'تم الحذف من عند المستقبل'};
+      }
+    } catch (e) {
+      debugPrint('❌ deleteMessage: $e');
+      return {'success': false, 'message': 'فشل الحذف: $e'};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Conversations
+  // ---------------------------------------------------------------------------
+
   Future<List<Map<String, dynamic>>> getConversationMessages(
     String conversationId, {
     int limit = 50,
   }) async {
     try {
       return await _db.getMessages(conversationId, limit: limit);
-    } catch (e) {
+    } catch (_) {
       return [];
     }
   }
@@ -884,7 +701,7 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
   Future<List<Map<String, dynamic>>> getAllConversations() async {
     try {
       return await _db.getConversations();
-    } catch (e) {
+    } catch (_) {
       return [];
     }
   }
@@ -892,382 +709,156 @@ Future<Map<String, dynamic>> decryptAllConversationMessages(
   Future<void> markConversationAsRead(String conversationId) async {
     try {
       await _db.markConversationAsRead(conversationId);
-    } catch (e) {}
-  }
-
-  // حذف رسالة - مُحدَّث
-  Future<Map<String, dynamic>> deleteMessage({
-    required String messageId,
-    required bool deleteForEveryone,
-  }) async {
-    try {
-      final message = await _db.getMessage(messageId);
-
-      if (message == null) {
-        return {'success': false, 'message': 'الرسالة غير موجودة'};
-      }
-
-      final String otherUserId;
-    final bool isMine = (message['isMine'] as int?) == 1;
-    
-    if (isMine) {
-      otherUserId = message['receiverId'] as String;
-    } else {
-      otherUserId = message['senderId'] as String;
-    }
-
-    print('🗑️ Delete request:');
-    print('   messageId: $messageId');
-    print('   otherUserId: $otherUserId');
-    print('   deleteForEveryone: $deleteForEveryone');
-
-
-      // إلغاء Timer الخاص بالرسالة
-      _messageTimers[messageId]?.cancel();
-      _messageTimers.remove(messageId);
-      
-      if (deleteForEveryone) {
-        await _db.deleteMessage(messageId);
-        _socketService.socket?.emit('message:delete_local', {
-        'messageId': messageId,
-        'deleteFor': 'everyone',
-        'recipientId': otherUserId,
-      });
-
-      print('✅ Deleted for everyone');
-
-        return {'success': true, 'message': 'تم الحذف للجميع'};
-      } else {
-        // إلغاء Timer الخاص بالرسالة
-        _messageTimers[messageId]?.cancel();
-        _messageTimers.remove(messageId);
-        
-        await _db.updateMessage(messageId, {'deletedForRecipient': 1});
-                print('✅ Updated deletedForRecipient = 1 for message: $messageId');
-
-
-      _socketService.socket?.emit('message:delete_local', {
-        'messageId': messageId,
-        'deleteFor': 'recipient',
-        'recipientId': otherUserId,
-      });
-
-  final updatedMessage = await _db.getMessage(messageId);
-  print('🔍 Message after update: $updatedMessage');
-
-
-
-        return {'success': true, 'message': 'تم الحذف من عند المستقبل'};
-      }
-      } catch (e, stackTrace) {
-    print('❌ Delete error: $e');
-    print('Stack trace: $stackTrace');
-      return {'success': false, 'message': 'فشل الحذف: $e'};
-    }
+    } catch (_) {}
   }
 
   Future<void> deleteConversation(String conversationId) async {
     try {
       await _db.deleteConversation(conversationId);
-    } catch (e) {}
+    } catch (_) {}
   }
 
-  Future<void> logout() async {
-    try {
-      _socketService.disconnectOnLogout();
-      await _db.clearAllData();
-    } catch (e) {}
-  }
+  // ---------------------------------------------------------------------------
+  // Session management
+  // ---------------------------------------------------------------------------
 
-  String _generateConversationId(String otherUserId) {
-    final currentUserId = _getCurrentUserIdSync();
-    final ids = [currentUserId, otherUserId]..sort();
-    return '${ids[0]}-${ids[1]}';
-  }
-
-  Future<String> _getCurrentUserId() async {
-    final userDataStr = await _storage.read(key: 'user_data');
-
-    if (userDataStr != null) {
-      final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
-      return userData['id'] as String;
-    }
-
-    throw Exception('User not logged in');
-  }
-
-  String _getCurrentUserIdSync() {
-    if (_userIdCache != null) {
-      return _userIdCache!;
-    }
-    throw Exception('User ID not cached');
-  }
-
-  Future<void> _cacheUserId() async {
-    _userIdCache = await _getCurrentUserId();
-  }
-
-  void _startMessageCacheCleanup() {
-    _cleanupTimer?.cancel();
-    _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
-      if (_processedMessageIds.length > 100) {
-        final toKeep = _processedMessageIds
-            .skip(_processedMessageIds.length - 50)
-            .toList();
-        _processedMessageIds.clear();
-        _processedMessageIds.addAll(toKeep);
-      }
-    });
-  }
-
-  void dispose() {
-    _messageSubscription?.cancel();
-    _statusSubscription?.cancel();
-    _deleteSubscription?.cancel();
-    _cleanupTimer?.cancel();
-    _processedMessageIds.clear();
-    _listenersSetup = false;
-    _socketService.dispose();
-    _newMessageController.close();
-    _messageDeletedController.close();
-    _messageStatusController.close();
-    
-    // إلغاء جميع Timers الخاصة بالرسائل
-    for (final timer in _messageTimers.values) {
-      timer.cancel();
-    }
-    _messageTimers.clear();
-    
-    _messageExpiredController.close();
-    _uploadProgressController.close();
-    _expiryTimer?.cancel();
-    _cleanupTimer?.cancel();
-  }
-
-  String getConversationId(String otherUserId) {
-    return _generateConversationId(otherUserId);
-  }
-
-  void setCurrentOpenChat(String? userId) {
-    _currentOpenChatUserId = userId;
-  }
-
-  /// حذف Session مع مستخدم معين
   Future<void> deleteSession(String userId) async {
-    try {
-      print('🗑️ Deleting session for $userId');
-      await _signalProtocol.deleteSession(userId);
-      print('✅ Session deleted successfully');
-    } catch (e) {
-      print('❌ Error deleting session: $e');
-      rethrow;
-    }
+    await _signal.deleteSession(userId);
   }
 
-  /// إنشاء Session جديد مع مستخدم معين
   Future<bool> createNewSession(String userId) async {
     try {
-      print('🔄 Creating new session for $userId');
-
-      // تهيئة SignalProtocol إذا لم يكن مهيئاً
-      await _signalProtocol.initialize();
-
-      final success = await _signalProtocol.createSession(userId);
-
-      if (success) {
-        print('✅ New session created successfully for $userId');
-      } else {
-        print('❌ Failed to create new session for $userId');
-      }
-
-      return success;
-    } catch (e) {
-      print('❌ Error creating new session: $e');
+      await _signal.initialize();
+      return await _signal.createSession(userId);
+    } catch (_) {
       return false;
     }
   }
 
-  
-Future<int?> getUserDuration(String conversationId) async {
-  return await _db.getUserDuration(conversationId);
-}
+  // ---------------------------------------------------------------------------
+  // Duration / visibility
+  // ---------------------------------------------------------------------------
 
-Future<void> setUserDuration(String conversationId, int duration) async {
-  await _db.setUserDuration(conversationId, duration);
+  Future<int?> getUserDuration(String conversationId) => _db.getUserDuration(conversationId);
 
-  
-}
+  Future<void> setUserDuration(String conversationId, int duration) =>
+      _db.setUserDuration(conversationId, duration);
 
-Future<void> deleteExpiredMessages() async {
-  final now = DateTime.now();
-  
-  final expiredIds = await _db.deleteExpiredMessages();
-  
-  
-  for (final messageId in expiredIds) {
-    _messageExpiredController.add({'messageId': messageId});
-  }
- 
-}
+  // ---------------------------------------------------------------------------
+  // Privacy policy
+  // ---------------------------------------------------------------------------
 
-  //  Create a dynamic timer to delete messages on the specified time
-  void _scheduleMessageExpiry(String messageId, int expiresAtMillis) {
-    // Cancel old timer if it exists
-    _messageTimers[messageId]?.cancel();
-    _messageTimers.remove(messageId);
-    
-    final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final expiresAt = DateTime.fromMillisecondsSinceEpoch(expiresAtMillis, isUtc: true);
-    final nowUtc = DateTime.now().toUtc();
-    
-    // Calculate the duration until expairation is reached
-    final delay = expiresAt.difference(nowUtc);
-    
-    // If the expiration time is reached delete the message immeditely
-    if (delay.isNegative || delay.inMilliseconds <= 0) {
-      _deleteSingleMessage(messageId);
-      return;
+  Future<void> updateConversationPrivacyPolicy({
+    required String peerUserId,
+    required bool allowScreenshots,
+  }) async {
+    try {
+      await ApiService.instance.putJson('/contacts/$peerUserId/screenshots', {
+        'allowScreenshots': allowScreenshots,
+      });
+    } catch (e) {
+      debugPrint('❌ Failed to update privacy policy: $e');
     }
-    
-    // Create a timer to delete the message immeditely
-    _messageTimers[messageId] = Timer(delay, () {
-      _deleteSingleMessage(messageId);
-      _messageTimers.remove(messageId);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Misc helpers
+  // ---------------------------------------------------------------------------
+
+  void requestUserStatus(String userId) => _socket.requestUserStatus(userId);
+
+  void setCurrentOpenChat(String? userId) => _currentOpenChatUserId = userId;
+
+  String getConversationId(String otherUserId) => _conversationId(otherUserId);
+
+  Future<void> logout() async {
+    try {
+      _socket.disconnectOnLogout();
+      await _db.clearAllData();
+    } catch (_) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Internal helpers
+  // ---------------------------------------------------------------------------
+
+  String _conversationId(String otherUserId) {
+    final ids = [_getCurrentUserIdSync(), otherUserId]..sort();
+    return '${ids[0]}-${ids[1]}';
+  }
+
+  Future<String> _getCurrentUserId() async {
+    final raw = await _storage.read(key: 'user_data');
+    if (raw == null) throw Exception('User not logged in');
+    return (jsonDecode(raw) as Map<String, dynamic>)['id'] as String;
+  }
+
+  String _getCurrentUserIdSync() {
+    if (_cachedUserId == null) throw Exception('User ID not cached');
+    return _cachedUserId!;
+  }
+
+  Future<void> _cacheUserId() async => _cachedUserId = await _getCurrentUserId();
+
+  void _startCacheCleanupTimer() {
+    _cleanupTimer?.cancel();
+    _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      if (_processedMessageIds.length > 100) {
+        final keep = _processedMessageIds.skip(_processedMessageIds.length - 50).toList();
+        _processedMessageIds..clear()..addAll(keep);
+      }
     });
-    
-  }
-  
-  // حذف رسالة واحدة
-  Future<void> _deleteSingleMessage(String messageId) async {
-    try {
-      final message = await _db.getMessage(messageId);
-      if (message == null) return;
-      
-      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-      final nowReadable = DateTime.now().toIso8601String();
-      final expiresAt = message['expiresAt'] as int?;
-      final createdAt = message['createdAt'] as int;
-      final deliveredAt = message['deliveredAt'] as int?;
-      final isMine = (message['isMine'] as int?) == 1;
-      final duration = message['visibilityDuration'] as int?;
-      
-      if (expiresAt != null) {
-        final expiresAtReadable = DateTime.fromMillisecondsSinceEpoch(expiresAt, isUtc: true).toIso8601String();
-        final createdAtReadable = DateTime.fromMillisecondsSinceEpoch(createdAt, isUtc: true).toIso8601String();
-        final delay = now - expiresAt;
-        
-        // حساب Actual Lifetime بناءً على نوع الرسالة
-        // للمرسل: من createdAt (وقت الإرسال)
-        // للمستقبل: من deliveredAt (وقت الاستقبال) إذا كان موجوداً، وإلا من createdAt
-        final viewStartTime = (isMine || deliveredAt == null) ? createdAt : deliveredAt;
-        final actualLifetime = now - viewStartTime;
-        
-        String lifetimeInfo;
-        if (isMine) {
-          lifetimeInfo = 'From creation';
-        } else if (deliveredAt != null) {
-          final deliveredAtReadable = DateTime.fromMillisecondsSinceEpoch(deliveredAt, isUtc: true).toIso8601String();
-          lifetimeInfo = 'From delivery ($deliveredAtReadable)';
-        } else {
-          lifetimeInfo = 'From creation (no delivery time)';
-        }
-        
-        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        print('⏱️  MESSAGE EXPIRED (Precise Timer):');
-        print('   📝 Message ID: $messageId');
-        print('   ⏱️ Duration Set: ${duration}s');
-        print('   📅 Created: $createdAtReadable');
-        print('   ⏰ Should expire: $expiresAtReadable');
-        print('   🕐 Actually deleted: $nowReadable');
-        print('   ⏳ Deletion Delay: ${delay}ms (${(delay / 1000).toStringAsFixed(3)}s)');
-        print('   ⌛ Actual Lifetime: ${(actualLifetime / 1000).toStringAsFixed(3)}s (Expected: ${duration}s) - $lifetimeInfo');
-        print('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      }
-      
-      await _db.deleteMessage(messageId);
-      _messageExpiredController.add({'messageId': messageId});
-      _messageTimers.remove(messageId);
-      
-      print('✅ [DB] Deleted expired message: $messageId');
-    } catch (e) {
-      print('❌ Error deleting message $messageId: $e');
-    }
   }
 
-  // تحميل جميع الرسائل وإنشاء Timers لها عند بدء التطبيق
-  Future<void> _loadMessageTimers() async {
-    try {
-      final db = DatabaseHelper.instance;
-      final messages = await db.database;
-      final now = DateTime.now().toUtc().millisecondsSinceEpoch;
-      
-      // جلب جميع الرسائل التي لديها expiresAt ولم تنته صلاحيتها بعد
-      final messagesWithExpiry = await messages.query(
-        'messages',
-        where: 'expiresAt IS NOT NULL AND CAST(expiresAt AS INTEGER) > ?',
-        whereArgs: [now],
-        columns: ['id', 'expiresAt'],
-      );
-      
-      for (final msg in messagesWithExpiry) {
-        final messageId = msg['id'] as String;
-        final expiresAt = msg['expiresAt'] as int;
-        _scheduleMessageExpiry(messageId, expiresAt);
-      }
-      
-      print('✅ Loaded ${messagesWithExpiry.length} message timers');
-    } catch (e) {
-      print('⚠️ Error loading message timers: $e');
-    }
+  void _emit(StreamController<Map<String, dynamic>> ctrl, Map<String, dynamic> data) {
+    if (!ctrl.isClosed) ctrl.add(data);
   }
 
- void startLocalExpiryTimer() {
-    //  لا نحتاج Timer عام بعد الآن - نستخدم Timer ديناميكي لكل رسالة
-    // لكن نبقي Timer عام كنسخة احتياطية لحذف أي رسائل فاتتها
-    if (_expiryTimer != null && _expiryTimer!.isActive) {
-      return;
-    }
-    
-    // Timer كل 5 ثوانٍ لحذف أي رسائل فاتتها
-    _expiryTimer = Timer.periodic(
-      const Duration(seconds: 5), 
-      (timer) async {
-        await deleteExpiredMessages();
-      },
-    );
-  }
+  // ---------------------------------------------------------------------------
+  // Dispose
+  // ---------------------------------------------------------------------------
 
+  void dispose() {
+    _msgSub?.cancel();
+    _statusSub?.cancel();
+    _deleteSub?.cancel();
+    _cleanupTimer?.cancel();
+    _expiryTimer?.cancel();
+
+    for (final t in _messageTimers.values) t.cancel();
+    _messageTimers.clear();
+    _processedMessageIds.clear();
+
+    _listenersSetup = false;
+    _socket.dispose();
+
+    _newMessageCtrl.close();
+    _deletedCtrl.close();
+    _statusCtrl.close();
+    _expiredCtrl.close();
+    _uploadProgressCtrl.close();
+  }
 }
-enum UploadStage {
-  idle,
-  validating,
-  compressing,
-  encoding,
-  encrypting,
-  saving,
-  sending,
-  complete,
-  error,
-}
+
+// ---------------------------------------------------------------------------
+// Upload progress model
+// ---------------------------------------------------------------------------
+
+enum UploadStage { idle, validating, compressing, encoding, encrypting, saving, sending, complete, error }
 
 class UploadProgress {
   final UploadStage stage;
-  final double progress; //حسبناها على اساس من صفر لواحد 
+  final double progress; // 0.0 – 1.0
   final String message;
 
-  UploadProgress({
+  const UploadProgress({
     required this.stage,
     required this.progress,
     required this.message,
   });
 
-  factory UploadProgress.idle() {
-    return UploadProgress(
-      stage: UploadStage.idle,
-      progress: 0.0,
-      message: '',
-    );
-  }
+  factory UploadProgress.idle() =>
+      const UploadProgress(stage: UploadStage.idle, progress: 0.0, message: '');
 
   bool get isIdle => stage == UploadStage.idle;
   bool get isComplete => stage == UploadStage.complete;

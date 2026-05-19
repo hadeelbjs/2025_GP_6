@@ -46,32 +46,6 @@ class AppConfig {
     return dotenv.isInitialized;
   }
 
-  static void printConfig() {
-    print('🔧 App Configuration:');
-    print('   - API Base URL: $apiBaseUrl');
-    print('   - Socket URL: $socketUrl');
-    print('   - Hosting: $hosting');
-    print('   - Production: $isProduction');
-    print('   - DotEnv Loaded: $isLoaded');
-  }
-
-  // التحقق من صحة الإعدادات
-  static bool validate() {
-    if (!isLoaded) {
-      print('❌ .env file not loaded!');
-      return false;
-    }
-
-    if (isProduction) {
-      final baseUrl = apiBaseUrl;
-
-      if (baseUrl != null && !baseUrl.startsWith('https://')) {
-        print('⚠️ Warning: Production should use HTTPS!');
-        return false;
-      }
-    }
-
-    print('✅ Configuration validated successfully');
-    return true;
-  }
+  
+  
 }

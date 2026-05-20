@@ -31,7 +31,7 @@ router.get('/today', async (req, res) => {
       tip,
     });
   } catch (error) {
-    console.error('❌ Error fetching today security tip:', error);
+    console.error('Error fetching today security tip:', error);
     return res.status(500).json({
       success: false,
       message: 'حدث خطأ أثناء جلب نصيحة اليوم',

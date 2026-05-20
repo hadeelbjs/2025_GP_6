@@ -1,4 +1,3 @@
-
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
@@ -24,7 +23,6 @@ setInterval(() => {
   const now = Date.now();
   for (const [key, value] of pendingRegistrations.entries()) {
     if (value.expiresAt < now) {
-      console.log(`🗑️ Cleaning expired registration: ${key}`);
       pendingRegistrations.delete(key);
     }
   }
@@ -362,9 +360,6 @@ router.post('/resend-registration-code', async (req, res) => {
     const newCode = generateCode();
     pendingData.verificationCode = newCode;
     pendingData.expiresAt = Date.now() + 10 * 60 * 1000;
-
-    console.log(`🔄 Resending code for: ${pendingData.email}`);
-    console.log(`   - New code: ${newCode}`);
 
     // إرسال الرمز الجديد
     try {
@@ -798,10 +793,8 @@ if (deviceName) {
         await User.findByIdAndUpdate(user._id, {
             registrationDevice: deviceName
         });
-        console.log(`تم تثبيت الجهاز الأساسي: ${deviceName}`);
     }
     else if (user.registrationDevice !== deviceName) {
-        console.log(`🚨 دخول من جهاز غير أساسي (${deviceName}) — إرسال إيميل...`);
         try {
         const freezeToken = crypto.randomBytes(32).toString('hex');
         user.freezeToken = freezeToken;
@@ -809,9 +802,8 @@ if (deviceName) {
         await user.save();
 
             await sendNewDeviceAlertEmail(user.email, user.fullName, deviceName, freezeToken);
-            console.log(` إيميل التنبيه أُرسل: ${user.email}`);
         } catch (emailErr) {
-            console.error('⚠️ فشل إرسال الإيميل:', emailErr.message);
+            console.error('خطأ في إرسال الإيميل:', emailErr.message);
         }
     }
 }

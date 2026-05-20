@@ -2,9 +2,6 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:screen_protector/screen_protector.dart';
 
-/// خدمة حماية لقطات الشاشة
-/// Android: FLAG_SECURE
-/// iOS: Native Method Channel
 class ScreenshotProtectionService {
   static const _channel = MethodChannel('com.waseed/screenshot_protection');
 
@@ -68,7 +65,7 @@ class ScreenshotProtectionService {
       _isEnabled = true;
       return true;
     } catch (e) {
-      print('❌ Error enabling screenshot protection: $e');
+      print('Error enabling screenshot protection: $e');
       return false;
     }
   }
@@ -80,15 +77,15 @@ class ScreenshotProtectionService {
     try {
       if (Platform.isAndroid) {
         await ScreenProtector.preventScreenshotOff();
-        print('🔓 Android: Screenshot protection disabled');
+        print('Android: Screenshot protection disabled');
       } else if (Platform.isIOS) {
         final result = await _channel.invokeMethod('disableProtection');
-        print('🔓 iOS: Screenshot protection disabled: $result');
+        print('iOS: Screenshot protection disabled: $result');
       }
       _isEnabled = false;
       return true;
     } catch (e) {
-      print('❌ Error disabling screenshot protection: $e');
+      print('Error disabling screenshot protection: $e');
       return false;
     }
   }

@@ -5,8 +5,6 @@ const Contact = require('../models/Contact');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
-// البحث عن مستخدم
-
 router.post('/search',
   auth,
   [
@@ -103,7 +101,7 @@ router.post('/search',
       });
 
     } catch (error) {
-      console.error('❌ خطأ في البحث:', error.message);
+      console.error('خطأ في البحث:', error.message);
       console.error('Stack:', error.stack);
       console.error('Path:', req.path);
       res.status(500).json({ 
@@ -196,7 +194,7 @@ router.post('/send-request',
       });
 
     } catch (error) {
-      console.error('❌ خطأ في إرسال الطلب:', error.message);
+      console.error('خطأ في إرسال الطلب:', error.message);
       console.error('Stack:', error.stack);
       
       if (error.code === 11000) {
@@ -235,7 +233,6 @@ router.get('/pending-requests', auth, async (req, res) => {
     if (invalidRequests.length > 0) {
       const invalidIds = invalidRequests.map(req => req._id);
       await Contact.deleteMany({ _id: { $in: invalidIds } });
-      console.log(`🧹 تم حذف ${invalidIds.length} طلبات من مستخدمين محذوفين`);
     }
 
     const requests = validRequests.map(req => ({
@@ -255,7 +252,7 @@ router.get('/pending-requests', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ خطأ في جلب الطلبات:', error.message);
+    console.error('خطأ في جلب الطلبات:', error.message);
     console.error('Stack:', error.stack);
     console.error('User ID:', req.user?.id);
     res.status(500).json({ 
@@ -308,7 +305,7 @@ router.post('/accept-request/:requestId',
       });
 
     } catch (error) {
-      console.error('❌ خطأ في قبول الطلب:', error.message);
+      console.error('خطأ في قبول الطلب:', error.message);
       console.error('Stack:', error.stack);
       res.status(500).json({ 
         success: false, 
@@ -359,7 +356,7 @@ router.post('/reject-request/:requestId',
       });
 
     } catch (error) {
-      console.error('❌ خطأ في رفض الطلب:', error.message);
+      console.error('خطأ في رفض الطلب:', error.message);
       console.error('Stack:', error.stack);
       res.status(500).json({ 
         success: false, 
@@ -406,7 +403,7 @@ router.get('/list', auth, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ خطأ في جلب الأصدقاء:', error.message);
+    console.error('خطأ في جلب الأصدقاء:', error.message);
     console.error('Stack:', error.stack);
     console.error('User ID:', req.user?.id);
     res.status(500).json({
@@ -463,7 +460,7 @@ router.delete('/:contactId',
       });
 
     } catch (error) {
-      console.error('❌ خطأ في الحذف:', error.message);
+      console.error('خطأ في الحذف:', error.message);
       console.error('Stack:', error.stack);
       res.status(500).json({ 
         success: false, 
@@ -479,10 +476,7 @@ router.get('/:peerUserId/screenshots', auth, async (req, res) => {
     const currentUserId = req.user.id;
     const { peerUserId } = req.params;
 
-    console.log('📥 GET /screenshots request');
-    console.log('   Current User:', currentUserId);
-    console.log('   Peer User:', peerUserId);
-
+  
     const contact = await Contact.findOne({
       $or: [
         { requester: currentUserId, recipient: peerUserId },
@@ -513,10 +507,7 @@ router.get('/:peerUserId/screenshots', auth, async (req, res) => {
       ? contact.recipientAllowsScreenshots 
       : contact.requesterAllowsScreenshots;
 
-    console.log(' Policies:');
-    console.log('   My policy (I allow peer):', myPolicy);
-    console.log('   Peer policy (peer allows me):', peerPolicy);
-
+  
     res.json({
       success: true,
       myPolicy: myPolicy || false,      // أنا أسمح للطرف الآخر؟
@@ -525,7 +516,7 @@ router.get('/:peerUserId/screenshots', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Get screenshot policy error:', err);
+    console.error('خطأ في جلب السياسة:', err);
     res.status(500).json({ 
       success: false, 
       message: 'خطأ في جلب السياسة',
@@ -543,10 +534,6 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
     const currentUserId = req.user.id;
     const { peerUserId } = req.params;
 
-    console.log('📝 PUT /screenshots request');
-    console.log('   Current User:', currentUserId);
-    console.log('   Peer User:', peerUserId);
-    console.log('   Allow:', allowScreenshots);
 
     if (typeof allowScreenshots !== 'boolean') {
       return res.status(400).json({ 
@@ -581,8 +568,6 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
     
     await contact.save();
 
-    console.log(' Policy updated:', iAmRequester ? 'requester' : 'recipient', '=', allowScreenshots);
-
     //  إرسال إشعار Socket للطرف الآخر
     try {
       const io = req.app.get('io');
@@ -594,10 +579,9 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
             ? 'الطرف الآخر سمح لك بلقطات الشاشة'
             : 'الطرف الآخر منع لقطات الشاشة'
         });
-        console.log(sent ? ' Socket notification sent' : '⚠️ User offline');
       }
     } catch (socketErr) {
-      console.error('❌ Socket notification failed:', socketErr);
+      console.error('خطأ في إشعار Socket:', socketErr);
     }
 
     res.json({
@@ -609,7 +593,7 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Privacy update error:', err);
+    console.error('خطأ في تحديث السياسة:', err);
     res.status(500).json({ 
       success: false, 
       message: 'خطأ في تحديث السياسة' 

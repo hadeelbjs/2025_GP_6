@@ -58,7 +58,6 @@ void initState() {
   // انتظر التطبيق يبني نفسه كامل
   Future.delayed(const Duration(milliseconds: 300), () async {
     final uri = await _appLinks.getInitialAppLink();
-    print('🔗 Initial after delay: $uri');
     if (uri != null && uri.scheme == 'waseed' && uri.host == 'frozen') {
       pendingDeepLinkRoute = '/frozen';
       pendingDeepLinkArgs = {'type': uri.queryParameters['type'] ?? 'email'};
@@ -66,7 +65,6 @@ void initState() {
   });
 
   _appLinks.uriLinkStream.listen((uri) {
-    print('🔗 Stream: $uri');
     if (uri.scheme == 'waseed' && uri.host == 'frozen') {
       final type = uri.queryParameters['type'] ?? 'email';
       navigatorKey.currentState?.pushNamedAndRemoveUntil(
@@ -168,11 +166,9 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
     try {
-      print('Checking app state...');
 
       // 1. فحص إذا للتو تم logout
       final justLoggedOut = await BiometricService.getJustLoggedOut();
-      print('Just logged out? $justLoggedOut');
       final isAuth = await _authGuard.isAuthenticated();
       if (!isAuth) {
         await BiometricService.setJustLoggedOut(false);
@@ -181,7 +177,6 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       // 2. فحص إذا مسجل دخول
-      print('Is authenticated? $isAuth');
 
       if (isAuth) {
         BiometricService.setJustLoggedOut(false);
@@ -210,7 +205,7 @@ class _SplashScreenState extends State<SplashScreen>
   ///  تهيئة MessagingService
   Future<void> _initializeMessaging() async {
     try {
-      print('🔌 Initializing MessagingService...');
+      print('Initializing MessagingService...');
 
       final success = await MessagingService().initialize();
 
@@ -218,11 +213,9 @@ class _SplashScreenState extends State<SplashScreen>
         print('MessagingService initialized successfully');
       } else {
         print('MessagingService initialization failed');
-        // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
       }
     } catch (e) {
-      print('❌ Error initializing MessagingService: $e');
-      // لا نوقف التطبيق
+      print('Error initializing MessagingService: $e');
     }
   }
 
@@ -241,7 +234,6 @@ class _SplashScreenState extends State<SplashScreen>
           key.contains('session_') ||
           key.contains('peer_identity')) {
         await storage.delete(key: key);
-        print('🗑️ Deleted: $key');
       }
     }
 
@@ -250,24 +242,22 @@ class _SplashScreenState extends State<SplashScreen>
   /// تهيئة التشفير للمستخدم المسجل دخول
   Future<void> _initializeEncryption() async {
     try {
-      print('🔐 جاري تهيئة التشفير...');
+      print(' جاري تهيئة التشفير...');
 
       // 1. جلب userId أولاً
       final storage = const FlutterSecureStorage();
       final userDataStr = await storage.read(key: 'user_data');
 
       if (userDataStr == null) {
-        print('❌ لا توجد بيانات مستخدم');
+        print(' لا توجد بيانات مستخدم');
         return;
       }
 
       final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
       final userId = userData['id'] as String;
 
-      print('👤 User ID: $userId');
       final userEmail = userData['email'] as String;
-      print('user email: $userEmail');
-
+      
       // 2. تهيئة SignalProtocolManager
       final signalManager = SignalProtocolManager();
       await signalManager.initialize(userId: userId);
@@ -276,22 +266,19 @@ class _SplashScreenState extends State<SplashScreen>
       final userIdentityKey = await storage.read(key: '${userId}_identity_key');
 
       if (userIdentityKey != null) {
-        print('Kesy exist $userId');
         await signalManager.checkAndRefreshPreKeys();
         await signalManager.ensureSignedPreKeyRotation(userId);
-        print(await signalManager.checkKeysStatus());
       } else {
         await signalManager.generateAndUploadKeys();
       }
     } catch (e) {
-      print('❌ خطأ في تهيئة التشفير: $e');
+      print('خطأ في تهيئة التشفير: $e');
     }
   }
 
   /// تهيئة خدمة أمان WiFi
   Future<void> _initializeWifiSecurity() async {
     try {
-      print('📡 [3/3] Initializing WiFi Security Service...');
       final success = await _wifiService.initialize();
       if (success) {
         print('WiFi Security Service initialized successfully');
@@ -315,11 +302,11 @@ class _SplashScreenState extends State<SplashScreen>
           break;
 
         case WifiCheckResultType.permissionDenied:
-          print('⚠️ Permissions denied');
+          print('Permissions denied');
           // سيتم عرض dialog من Dashboard
           break;
         case WifiCheckResultType.userDeclined:
-          print('ℹ️ User declined WiFi check permanently - respecting choice');
+          print('User declined WiFi check permanently - respecting choice');
           // المستخدم رفض نهائياً - لا نزعجه
           break;
 

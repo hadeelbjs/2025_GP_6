@@ -1,6 +1,3 @@
-
-
-// backend/routes/upload.js
 const express = require('express');
 const router = express.Router();
 const multer = require('multer');
@@ -17,7 +14,6 @@ const filesDir = path.join(uploadDir, 'files');
 [uploadDir, imagesDir, filesDir].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
-    console.log(`✅ Created directory: ${dir}`);
   }
 });
 
@@ -97,9 +93,7 @@ router.post('/image', auth, uploadImage.single('image'), async (req, res) => {
 
     //  رابط الصورة
     const imageUrl = `/uploads/images/${req.file.filename}`;
-    
-    console.log(`✅ Image uploaded: ${req.file.filename} by user ${req.user.id}`);
-
+  
     res.json({
       success: true,
       message: 'تم رفع الصورة بنجاح',
@@ -110,7 +104,7 @@ router.post('/image', auth, uploadImage.single('image'), async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Image upload error:', error);
+    console.error('Image upload error:', error);
     
     //  حذف الملف إذا حصل خطأ
     if (req.file && req.file.path) {
@@ -139,20 +133,18 @@ router.post('/file', auth, uploadFile.single('file'), async (req, res) => {
     //  رابط الملف
     const fileUrl = `/uploads/files/${req.file.filename}`;
     
-    console.log(`✅ File uploaded: ${req.file.filename} by user ${req.user.id}`);
-
     res.json({
       success: true,
       message: 'تم رفع الملف بنجاح',
       url: fileUrl,
-      filename: req.file.originalname, //  الاسم الصدقي
-      savedAs: req.file.filename, // الاسم المحفوظ
+      filename: req.file.originalname, 
+      savedAs: req.file.filename, 
       size: req.file.size,
       mimetype: req.file.mimetype,
     });
 
   } catch (error) {
-    console.error('❌ File upload error:', error);
+    console.error('File upload error:', error);
     
     //  حذف الملف إذا صار فيه خطأ
     if (req.file && req.file.path) {
@@ -192,15 +184,13 @@ router.delete('/image/:filename', auth, async (req, res) => {
 
     fs.unlinkSync(filePath);
     
-    console.log(`🗑️ Image deleted: ${filename}`);
-
     res.json({
       success: true,
       message: 'تم حذف الصورة'
     });
 
   } catch (error) {
-    console.error('❌ Delete image error:', error);
+    console.error('Delete image error:', error);
     res.status(500).json({
       success: false,
       message: 'فشل حذف الصورة'
@@ -231,15 +221,13 @@ router.delete('/file/:filename', auth, async (req, res) => {
 
     fs.unlinkSync(filePath);
     
-    console.log(`🗑️ File deleted: ${filename}`);
-
     res.json({
       success: true,
       message: 'تم حذف الملف'
     });
 
   } catch (error) {
-    console.error('❌ Delete file error:', error);
+    console.error('Delete file error:', error);
     res.status(500).json({
       success: false,
       message: 'فشل حذف الملف'

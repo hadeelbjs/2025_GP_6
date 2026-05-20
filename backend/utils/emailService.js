@@ -1,6 +1,3 @@
-// backend/utils/emailService.js
-
-
 const { Resend } = require('resend');
 
 // إنشاء instance من Resend
@@ -44,12 +41,11 @@ const sendVerificationEmail = async (email, fullName, verificationCode) => {
       `
     });
 
-    console.log('✅ Verification email sent via Resend:', data.id);
     return { success: true, messageId: data.id };
   } catch (error) {
-    console.error('❌ Resend error:', error);
-    return { 
-      success: false, 
+    console.error('Resend error:', error);
+    return {
+      success: false,
       error: error.message || 'فشل إرسال البريد الإلكتروني'
     };
   }
@@ -89,7 +85,7 @@ const sendBiometricVerificationEmail = async (email, fullName, verificationCode)
             <p style="text-align: center;">الرمز صالح لمدة <strong>10 دقائق</strong> فقط</p>
             <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; margin: 20px 0;">
               <p style="margin: 0; color: #2D1B69; text-align: center;">
-                🔒 هذه الخطوة تضمن أمان حسابك
+                هذه الخطوة تضمن أمان حسابك
               </p>
             </div>
             <div class="footer">
@@ -100,11 +96,9 @@ const sendBiometricVerificationEmail = async (email, fullName, verificationCode)
         </html>
       `
     });
-
-    console.log('✅ Biometric email sent via Resend:', data.id);
     return { success: true, messageId: data.id };
   } catch (error) {
-    console.error('❌ Biometric email error:', error);
+    console.error('Biometric email error:', error);
     return { 
       success: false, 
       error: error.message || 'فشل إرسال البريد الإلكتروني'
@@ -121,10 +115,9 @@ const sendActivityAlertEmail = async (email, fullName, subject, htmlContent) => 
       subject: subject,
       html: htmlContent,
     });
-    console.log('✅ Activity alert email sent:', data.id);
     return { success: true, messageId: data.id };
   } catch (error) {
-    console.error('❌ Activity alert email error:', error);
+    console.error('Activity alert email error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -160,7 +153,7 @@ const sendUnfreezeCodeEmail = async (email, fullName, unfreezeCode) => {
             <p style="text-align: center;">الرمز صالح لمدة <strong>30 دقيقة</strong> فقط</p>
             <div style="background:#fff1f2;padding:15px;border-radius:8px;margin:20px 0;border:1px solid #fecaca;">
               <p style="margin:0;color:#dc2626;text-align:center;">
-                ⚠️ إذا لم تطلب تجميد حسابك، تجاهل هذه الرسالة
+                 إذا لم تطلب تجميد حسابك، تجاهل هذه الرسالة
               </p>
             </div>
             <div class="footer">
@@ -171,10 +164,9 @@ const sendUnfreezeCodeEmail = async (email, fullName, unfreezeCode) => {
         </html>
       `
     });
-    console.log('✅ Unfreeze code email sent:', data.id);
     return { success: true, messageId: data.id };
   } catch (error) {
-    console.error('❌ Unfreeze code email error:', error);
+    console.error('Unfreeze code email error:', error);
     return { success: false, error: error.message };
   }
 };
@@ -215,10 +207,9 @@ const sendVerificationOTP = async (email, fullName, verificationCode) => {
       `
     });
 
-    console.log('✅ Verification email sent via Resend:', data.id);
     return { success: true, messageId: data.id };
   } catch (error) {
-    console.error('❌ Resend error:', error);
+    console.error('Resend error:', error);
     return { 
       success: false, 
       error: error.message || 'فشل إرسال البريد الإلكتروني'

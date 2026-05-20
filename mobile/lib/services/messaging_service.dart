@@ -2,12 +2,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-
 import 'socket_service.dart';
 import 'api_services.dart';
 import 'biometric_service.dart';
@@ -107,24 +105,33 @@ class MessagingService {
   }
 
   void _setupSocketListeners() {
-    if (_listenersSetup) return;
+  if (_listenersSetup) return;
 
-    _msgSub = _socket.onNewMessage.listen(_handleIncomingMessage);
-    _statusSub = _socket.onStatusUpdate.listen(_handleStatusUpdate);
-    _deleteSub = _socket.onMessageDeleted.listen((data) async {
-      final messageId = data['messageId'] as String;
-      await _db.deleteMessage(messageId);
-      _deletedCtrl.add(data);
-    });
+  _msgSub = _socket.onNewMessage.listen(_handleIncomingMessage);
+  _statusSub = _socket.onStatusUpdate.listen(_handleStatusUpdate);
+  
+  _socket.onUserStatusChange.listen((data) async {
+    final isOnline = data['isOnline'] ?? data['status'] == 'online';
+    if (isOnline == true) {
+      debugPrint('Contact came online! Triggering pending messages flush.');
+      await resendPendingMessages();
+    }
+  });
 
-    _socket.onMessageExpired.listen((data) async {
-      final messageId = data['messageId'] as String;
-      await _db.deleteMessage(messageId);
-      _expiredCtrl.add({'messageId': messageId});
-    });
+  _deleteSub = _socket.onMessageDeleted.listen((data) async {
+    final messageId = data['messageId'] as String;
+    await _db.deleteMessage(messageId);
+    _deletedCtrl.add(data);
+  });
 
-    _listenersSetup = true;
-  }
+  _socket.onMessageExpired.listen((data) async {
+    final messageId = data['messageId'] as String;
+    await _db.deleteMessage(messageId);
+    _expiredCtrl.add({'messageId': messageId});
+  });
+
+  _listenersSetup = true;
+}
 
   // ---------------------------------------------------------------------------
   // Send message
@@ -359,7 +366,7 @@ class MessagingService {
         'isLocked': true,
       });
     } catch (e) {
-      debugPrint('❌ _handleIncomingMessage: $e');
+      debugPrint('_handleIncomingMessage: $e');
     }
   }
 
@@ -400,7 +407,7 @@ class MessagingService {
       await _db.updateMessage(messageId, updateData);
       _emit(_statusCtrl, {'messageId': messageId, 'status': newStatus});
     } catch (e) {
-      debugPrint('❌ _handleStatusUpdate: $e');
+      debugPrint('_handleStatusUpdate: $e');
     }
   }
 
@@ -419,10 +426,11 @@ class MessagingService {
           final createdAt = DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int);
           createdAtStr = createdAt.toUtc().toIso8601String();
 
-          if (msg['expiresAt'] != null) {
-            expiresAtStr = DateTime.fromMillisecondsSinceEpoch(msg['expiresAt'] as int).toUtc().toIso8601String();
-          } else if (msg['visibilityDuration'] != null) {
-            expiresAtStr = createdAt.add(Duration(seconds: msg['visibilityDuration'] as int)).toUtc().toIso8601String();
+          // احسب expiresAt من الآن دائماً عشان ما تكون منتهية
+          if (msg['visibilityDuration'] != null) {
+            expiresAtStr = DateTime.now().toUtc()
+                .add(Duration(seconds: msg['visibilityDuration'] as int))
+                .toIso8601String();
           }
         }
 
@@ -440,8 +448,13 @@ class MessagingService {
         );
 
         await _db.updateMessageStatus(msg['id'] as String, 'sent');
+
+        _emit(_statusCtrl, {
+          'messageId': msg['id'] as String,
+          'status': 'sent',
+        });
       } catch (e) {
-        debugPrint('⚠️ Failed to resend ${msg['id']}: $e');
+        debugPrint('Failed to resend ${msg['id']}: $e');
       }
     }
   }
@@ -503,6 +516,7 @@ class MessagingService {
           });
 
           _socket.updateMessageStatus(messageId: messageId, status: 'verified', recipientId: senderId);
+          _socket.socket?.emit('message:verified_and_saved', {'messageId': messageId});
           successCount++;
         } catch (e) {
           _decryptionFailureCount++;
@@ -603,7 +617,7 @@ class MessagingService {
       await _db.deleteMessage(messageId);
       _expiredCtrl.add({'messageId': messageId});
     } catch (e) {
-      debugPrint('❌ Error expiring message $messageId: $e');
+      debugPrint('Error expiring message $messageId: $e');
     }
   }
 
@@ -630,7 +644,7 @@ class MessagingService {
         _scheduleMessageExpiry(row['id'] as String, row['expiresAt'] as int);
       }
     } catch (e) {
-      debugPrint('⚠️ Error loading message timers: $e');
+      debugPrint('Error loading message timers: $e');
     }
   }
 
@@ -678,7 +692,7 @@ class MessagingService {
         return {'success': true, 'message': 'تم الحذف من عند المستقبل'};
       }
     } catch (e) {
-      debugPrint('❌ deleteMessage: $e');
+      debugPrint('deleteMessage: $e');
       return {'success': false, 'message': 'فشل الحذف: $e'};
     }
   }
@@ -757,7 +771,7 @@ class MessagingService {
         'allowScreenshots': allowScreenshots,
       });
     } catch (e) {
-      debugPrint('❌ Failed to update privacy policy: $e');
+      debugPrint('Failed to update privacy policy: $e');
     }
   }
 

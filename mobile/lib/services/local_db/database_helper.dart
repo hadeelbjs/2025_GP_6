@@ -5,7 +5,7 @@ class DatabaseHelper {
   static final DatabaseHelper instance = DatabaseHelper._internal();
   static Database? _database;
 
-  static  String? _dbPassword = dotenv.env['DB_PASSWORD'];
+  static String? get _dbPassword => dotenv.env['DB_PASSWORD'];
 
   DatabaseHelper._internal();
 

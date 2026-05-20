@@ -1,14 +1,11 @@
-// routes/chatbot.js
 const express = require("express");
 const router = express.Router();
 const { askGeminiCyberOnly } = require("../utils/geminiService");
 
-// GET /api/chatbot/health (للتجربة السريعة)
 router.get("/health", (req, res) => {
   res.json({ success: true, message: "chatbot route is OK" });
 });
 
-// POST /api/chatbot/ask
 router.post("/ask", async (req, res) => {
   try {
     const message = (req.body?.message || "").toString().trim();
@@ -16,7 +13,7 @@ router.post("/ask", async (req, res) => {
     if (!message) {
       return res.json({
         success: true,
-        reply: "اكتبي سؤالك هنا 😊",
+        reply: "اكتبي سؤالك هنا",
         reason: "EMPTY",
       });
     }

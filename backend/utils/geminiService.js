@@ -1,7 +1,6 @@
-// utils/geminiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// رسالة توجيه لطيفة إذا كان السؤال بعيد جداً عن الأمن الرقمي
+// رسالة توجيه إذا كان السؤال بعيد جداً عن الأمن الرقمي
 function refusalMessage() {
   return "أنا متخصص في الأمن السيبراني وحماية البيانات والخصوصية. إذا وضّحتي لي قصدك (حسابات؟ جهاز؟ واي فاي؟ روابط؟) أقدر أساعدك بخطوات عملية.";
 }
@@ -45,7 +44,7 @@ async function askGeminiCyberOnly(userText) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      console.error("❌ GEMINI_API_KEY is missing in .env file!");
+      console.error("GEMINI_API_KEY is missing in .env file!");
       return {
         ok: false,
         message: "خطأ في الإعدادات. تواصل مع الدعم الفني.",
@@ -65,23 +64,19 @@ async function askGeminiCyberOnly(userText) {
       },
     });
 
-    console.log(`📨 User question: "${msg}"`);
-
     const result = await withTimeout(model.generateContent(msg), 20000);
 
     const text = result?.response?.text?.() || "";
     const reply = (text || "").toString().trim();
 
     if (!reply) {
-      console.error("❌ Gemini returned empty response");
+      console.error("Gemini returned empty response");
       return {
         ok: false,
         message: "المساعد ما رجّع إجابة الآن. جرّبي بعد قليل.",
         reason: "MODEL_EMPTY",
       };
     }
-
-    console.log(` Gemini reply: "${reply.substring(0, 120)}..."`);
 
     //  بدل الرفض القاطع: إذا الرد فعلاً رفض/بعيد، نرجّع توجيه لطيف
     const refusalHints = [
@@ -99,7 +94,7 @@ async function askGeminiCyberOnly(userText) {
 
     return { ok: true, message: reply, reason: "OK" };
   } catch (error) {
-    console.error("❌ Gemini Service Error:", error);
+    console.error("Gemini Service Error:", error);
 
     if (error?.message === "TIMEOUT") {
       return {

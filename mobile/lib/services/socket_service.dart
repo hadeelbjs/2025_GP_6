@@ -67,14 +67,12 @@ class SocketService {
 
       final token = await _storage.read(key: 'access_token');
       if (token == null) {
-        print('❌ No token found');
         _isConnecting = false;
         return false;
       }
 
       final userDataStr = await _storage.read(key: 'user_data');
       if (userDataStr == null) {
-        print('❌ No user data found');
         _isConnecting = false;
         return false;
       }
@@ -83,12 +81,10 @@ class SocketService {
       _userId = userData['id'];
 
       if (_userId == null || _userId!.isEmpty) {
-        print('❌ Invalid user ID');
         _isConnecting = false;
         return false;
       }
 
-      // ✅ إنشاء Socket مع خيارات محسّنة
       _socket = IO.io(
         baseUrl,
         IO.OptionBuilder()
@@ -110,7 +106,6 @@ class SocketService {
             data.toString().contains('No address')) {
           return;
         }
-        print('❌ [ERROR] Connection error: $data');
       });
 
       _socket!.onError((data) {
@@ -118,7 +113,6 @@ class SocketService {
             data.toString().contains('No address')) {
           return;
         }
-        print('❌ [ERROR] Socket error: $data');
       });
 
       _setupEventListeners();
@@ -128,20 +122,15 @@ class SocketService {
       await Future.delayed(Duration(seconds: 3));
 
       if (_socket!.connected) {
-        print('✅ [10/10] Socket connected successfully! 🎉');
         _isConnecting = false;
         return true;
       } else {
-        print('❌ [10/10] Socket NOT connected after 3 seconds');
-        print(
-          '❌ Socket state: ${_socket!.connected ? "connected" : "disconnected"}',
-        );
+       
         _isConnecting = false;
         return false;
       }
     } catch (e, stackTrace) {
-      print('❌ Socket connection error: $e');
-      print('❌ Stack trace: $stackTrace');
+   
       _isConnecting = false;
       return false;
     }
@@ -149,7 +138,6 @@ class SocketService {
 
   void _setupEventListeners() {
     if (_socket == null) {
-      print('❌ Cannot setup listeners - socket is null');
       return;
     }
 
@@ -167,12 +155,9 @@ class SocketService {
     _socket!.off('connect_timeout');
 
     _socket!.on('connect', (_) {
-      print('✅ Socket connected');
       _connectionController.add(true);
-      MessagingService().resendPendingMessages(); // 🔁 إعادة الإرسال
+      MessagingService().resendPendingMessages(); 
 
-      // بعد الاتصال، الشاشات سوف تطلب حالة الاتصال تلقائياً
-      print('🔄 Connected - screens will request status');
     });
     _socket!.on('connect_error', (error) {
       final errorStr = error.toString();
@@ -181,12 +166,8 @@ class SocketService {
           errorStr.contains('Failed host lookup')) {
         return;
       }
-      print('❌ Connect error: $error');
     });
 
-    _socket!.on('connect_timeout', (data) {
-      print('❌ Connect timeout: $data');
-    });
 
     _socket!.on('error', (data) {
       final errorStr = data.toString();
@@ -195,39 +176,25 @@ class SocketService {
           errorStr.contains('Failed host lookup')) {
         return;
       }
-      print('❌ Socket error: $data');
     });
 
-    _socket!.on('connected', (data) {
-      print('✅ Server confirmed connection: $data');
-    });
+    
 
-    _socket!.on('message:new', (data) async {
-      print('📥 New message received: ${data['messageId']}');
-      final messageId = data['messageId'] as String;
+   _socket!.on('message:new', (data) async {
+  final messageId = data['messageId'] as String;
 
-      if (_processedMessages.contains(messageId)) {
-        print('⚠️ Duplicate message, skipping');
-        return;
-      }
+  if (_processedMessages.contains(messageId)) {
+    return;
+  }
 
-      _processedMessages.add(messageId);
-      _messageController.add(Map<String, dynamic>.from(data));
+  _processedMessages.add(messageId);
+  _messageController.add(Map<String, dynamic>.from(data));
 
-      _socket?.emit('message:delivered', {
-        'messageId': data['messageId'],
-        'senderId': data['senderId'],
-        'encryptedType': data['encryptedType'],
-        'encryptedBody': data['encryptedBody'],
-        'attachmentData': data['attachmentData'],
-        'attachmentType': data['attachmentType'],
-        'attachmentName': data['attachmentName'],
-        'createdAt': data['createdAt'],
-      });
-    });
+  // أرسل تأكيد الاستلام للسيرفر ليحذف من MongoDB
+  _socket?.emit('message:delivered', {'messageId': messageId});
+});
 
     _socket!.on('message:sent', (data) async {
-      print('✅ Message sent confirmation: ${data['messageId']}');
       final messageId = data['messageId'];
       final delivered = data['delivered'] ?? false;
 
@@ -237,7 +204,6 @@ class SocketService {
           delivered ? 'delivered' : 'sent',
         );
       } catch (e) {
-        print('❌ Error updating message status: $e');
       }
     });
 
@@ -246,7 +212,6 @@ class SocketService {
     });
 
     _socket!.on('message:deleted', (data) async {
-      print('🗑️ Message deleted: ${data['messageId']}');
 
       final messageId = data['messageId'];
       final deletedFor = data['deletedFor'];
@@ -264,15 +229,14 @@ class SocketService {
           await DatabaseHelper.instance.deleteMessage(messageId);
         }
       } catch (e) {
-        print('❌ Error deleting message: $e');
+        print('Error deleting message: $e');
       }
     });
 
     _socket!.on('user:status', (data) {
       _userStatusController.add(Map<String, dynamic>.from(data));
     });
-
-    // ✅ استقبال إشعار فشل التحقق
+ 
     _socket!.on('conversation:recipient_failed_verification', (data) async {
       final recipientId = data['recipientId'];
       final Database db = await DatabaseHelper.instance.database;
@@ -300,25 +264,17 @@ class SocketService {
     });
 
     _socket!.on('disconnect', (reason) {
-      if (reason != 'transport close' && reason != 'io server disconnect') {
-        print('❌ Socket disconnected: $reason');
-      }
+     
       _connectionController.add(false);
     });
 
     _socket!.on('reconnect', (attempt) async {
-      print('🔄 Reconnected after $attempt attempts');
       _connectionController.add(true);
       _processedMessages.clear();
 
-      // إعادة طلب حالة الاتصال للمستخدمين بعد إعادة الاتصال
-      print('🔄 Reconnected - status will be requested by screens');
     });
 
     _socket!.on('privacy:screenshots:changed', (data) {
-      print(
-        '🔒 Screenshot policy changed from ${data['peerUserId']}: ${data['allowScreenshots']}',
-      );
 
       // تمرير الحدث للـ Controller
       if (!_statusController.isClosed) {
@@ -330,13 +286,8 @@ class SocketService {
       }
     });
 
-    /*_socket!.on('privacy:screenshots:changed', (data) {
-      print(
-        '🔒 Screenshot policy changed from ${data['peerUserId']}: ${data['allowScreenshots']}',
-      );
-    });*/
+  
     _socket!.on('screenshot:notification', (data) {
-      print('📸 Received screenshot notification: $data');
 
       final takenBy = data['takenBy'];
       final timestamp = data['timestamp'];
@@ -353,7 +304,6 @@ class SocketService {
     });
 
     _socket?.on('message:expired', (data) {
-      print('⏱️ Received message:expired event: $data');
 
       if (data != null && data is Map) {
         final messageId = data['messageId'];
@@ -366,9 +316,7 @@ class SocketService {
       }
     });
 
-    _socket?.on('conversation:duration:updated', (data) {
-      print('✅ Duration updated confirmed: $data');
-    });
+   
   }
 
   void sendMessageWithAttachment({
@@ -385,11 +333,9 @@ class SocketService {
     String? createdAt,
   }) {
     if (_socket == null || !isConnected) {
-      print('❌ Cannot send: Socket not connected');
       return;
     }
 
-    print('📤 Sending message: $messageId → $recipientId');
 
     _socket!.emit('message:send', {
       'messageId': messageId,
@@ -435,7 +381,6 @@ class SocketService {
 
   void updateConversationDuration(String conversationId, int duration) {
     if (_socket == null || !_socket!.connected) {
-      print('⚠️ Cannot update duration: Socket not connected');
       return;
     }
 
@@ -444,7 +389,6 @@ class SocketService {
       'duration': duration,
     });
 
-    print('⏱️ Sent duration update: ${duration}s for $conversationId');
   }
 
   void requestUserStatus(String userId) {
@@ -478,7 +422,6 @@ class SocketService {
   }
 
   void disconnectOnLogout() {
-    print('👋 Disconnecting on logout');
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;

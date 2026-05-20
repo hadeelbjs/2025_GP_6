@@ -46,21 +46,12 @@ Future<void> trackChatOpening() async {
   
   // الدالة الرئيسية — تُستدعى من main_dashboard.dart
   Future<void> runChecks() async {
-    print(' Anomaly Detection: بدء الفحص...');
 
     try {
   
       final locationData = await _getLocationData();
-      if (locationData != null) {
-        print('✅ Location: ${locationData['locationName']}');
-      } else {
-        print(' Location: غير متاح');
-      }
-
       final ssid = await _getCurrentSSID();
-      print('📶 SSID: ${ssid ?? 'غير متاح'}');
 
-      print('إرسال للـ Backend...');
       final result = await _api.checkAnomalies(
         lat: locationData?['lat'],
         lng: locationData?['lng'],
@@ -71,10 +62,8 @@ Future<void> trackChatOpening() async {
         onTimeout: () => {'success': false, 'message': 'timeout'},
       );
 
-      print('📥 Backend Response: $result');
 
       if (result['action'] == 'FORCE_LOGOUT') {
-      print(' FORCE_LOGOUT — جاري طرد الجهاز...');
       await _api.logout();
       final context = navigatorKey.currentContext;
       if (context != null) {
@@ -95,13 +84,11 @@ if (result['success'] == true && result['anomalies'] != null) {
         if (!hasLocationAlert) await prefs.remove('last_shown_new_location');
 
         for (final a in anomalies) {
-          print('   → type: ${a['type']} | detail: ${a['detail']}');
 
           if (a['type'] == 'new_wifi' || a['type'] == 'new_location') {
             final key = 'last_shown_${a['type']}';
             final lastShown = prefs.getString(key) ?? '';
             if (lastShown == a['detail']) {
-              print('  تم تخطي — نفس الإشعار السابق');
               continue;
             }
             await prefs.setString(key, a['detail']);
@@ -118,7 +105,7 @@ if (result['success'] == true && result['anomalies'] != null) {
         }
       }
     } catch (e) {
-      print('❌ Anomaly check failed: $e');
+      print('Anomaly check failed: $e');
     }
   } 
 
@@ -127,11 +114,9 @@ if (result['success'] == true && result['anomalies'] != null) {
   Future<Map<String, dynamic>?> _getLocationData() async {
     try {
       final permission = await Geolocator.checkPermission();
-      print('Location Permission: $permission');
 
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        print('⛔ الصلاحيات مرفوضة');
         return null;
       }
 
@@ -142,16 +127,13 @@ if (result['success'] == true && result['anomalies'] != null) {
           timeLimit: const Duration(seconds: 15),
         );
       } catch (e) {
-        print(' GPS timeout — جاري تجربة آخر موقع معروف...');
         position = await Geolocator.getLastKnownPosition();
       }
 
       if (position == null) {
-        print('❌ لا يوجد موقع متاح');
         return null;
       }
 
-      print('📌 GPS: ${position.latitude}, ${position.longitude}');
 
       String locationName = '';
       try {
@@ -165,10 +147,8 @@ if (result['success'] == true && result['anomalies'] != null) {
             if (p.locality?.isNotEmpty == true) p.locality,
             if (p.country?.isNotEmpty == true) p.country,
           ].join('، ');
-          print('City: $locationName');
         }
       } catch (e) {
-        print('⚠️ Reverse Geocoding فشل: $e');
         locationName =
             '${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)}';
       }
@@ -179,7 +159,6 @@ if (result['success'] == true && result['anomalies'] != null) {
         'locationName': locationName,
       };
     } catch (e) {
-      print('❌ Location fetch failed: $e');
       return null;
     }
   }
@@ -191,7 +170,6 @@ if (result['success'] == true && result['anomalies'] != null) {
       final ssid = prefs.getString(_wifiSsidKey);
       return (ssid != null && ssid.isNotEmpty) ? ssid : null;
     } catch (e) {
-      print('SSID fetch failed: $e');
       return null;
     }
   }

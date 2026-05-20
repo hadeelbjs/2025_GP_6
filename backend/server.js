@@ -103,7 +103,7 @@ const relaxedLimiter = rateLimit({
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log(' Connected to MongoDB'))
+  .then(() => console.log('Connected to MongoDB'))
   .catch(err => console.error(' DB connection error:', err));
 
 require('./sockets/messageSocket')(io);
@@ -164,9 +164,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`✅ Server running on port: ${PORT}`);
-  console.log(`✅ Socket.IO ready`);
-  console.log(`✅ Listening on all interfaces (0.0.0.0)`);
-  console.log(`✅ Message expiry job started`);
+  console.log(`Server running on port: ${PORT}`);
+  console.log(`Socket.IO ready`);
+  console.log(`Listening on all interfaces (0.0.0.0)`);
+  console.log(`Message expiry job started`);
 
 });

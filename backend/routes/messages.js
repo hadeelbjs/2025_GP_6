@@ -1,4 +1,3 @@
-// backend/routes/messages.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
@@ -51,7 +50,6 @@ router.post('/send', auth, async (req, res) => {
         createdAt: message.createdAt.toISOString(),
       });
 
-      console.log(`✅ Message sent to recipient: ${sent ? 'delivered' : 'saved for later'}`);
     }
 
     res.json({
@@ -115,7 +113,6 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
         deletedFor: 'recipient',
       });
       
-      console.log(`✅ Delete notification sent to recipient: ${sent}`);
     }
 
     res.json({
@@ -132,7 +129,7 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   }
 });
 
-//  حذف للجميع - 
+//  حذف للجميع 
 router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -182,7 +179,6 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
         deletedFor: 'everyone',
       });
 
-      console.log(`✅ Message deleted for everyone: ${messageId}`);
     }
 
     res.json({

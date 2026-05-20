@@ -1,4 +1,3 @@
-// routes/prekeys.js
 const express = require('express');
 const router = express.Router();
 const auth = require('../middleware/auth');
@@ -27,7 +26,7 @@ router.post('/upload', auth, async (req, res) => {
 
         //  تحذير إذا كان registrationId مختلف
         if (bundle.registrationId !== registrationId) {
-          console.warn('⚠️ WARNING: RegistrationId changed! Complete key rotation.');
+          console.warn('WARNING: RegistrationId changed! Complete key rotation.');
         }
         
         // استبدال كل شيء
@@ -146,7 +145,7 @@ router.get('/version/user/:userId', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Get User Version Error:', err);
+    console.error('خطأ في جلب نسخة مفاتيح المستخدم:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في جلب نسخة مفاتيح المستخدم'
@@ -201,7 +200,7 @@ router.get('/:userId', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Get PreKey Bundle Error:', err);
+    console.error('خطأ في جلب حزمة المفاتيح:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في جلب المفاتيح',
@@ -233,7 +232,7 @@ router.get('/version/current', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Get Version Error:', err);
+    console.error('خطأ في جلب النسخة:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في جلب النسخة'
@@ -267,7 +266,7 @@ router.get('/count/remaining', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Check PreKeys Count Error:', err);
+    console.error('خطأ في فحص المفاتيح:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في فحص المفاتيح'
@@ -308,7 +307,7 @@ router.post('/rotate-signed-prekey', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Rotate SignedPreKey Error:', err);
+    console.error('خطأ في تدوير SignedPreKey:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في تحديث المفتاح'
@@ -350,7 +349,7 @@ router.delete('/cleanup-old', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Cleanup PreKeys Error:', err);
+    console.error('خطأ في تنظيف المفاتيح:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في التنظيف'
@@ -378,7 +377,7 @@ router.delete('/delete-bundle', auth, async (req, res) => {
     });
 
   } catch (err) {
-    console.error('❌ Delete Bundle Error:', err);
+    console.error('خطأ في حذف Bundle:', err);
     res.status(500).json({
       success: false,
       message: 'حدث خطأ في حذف Bundle'

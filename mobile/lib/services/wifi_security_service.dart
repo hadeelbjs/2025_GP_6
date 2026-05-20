@@ -36,7 +36,6 @@ class WifiSecurityService {
   ///   - تُستدعى مرة واحدة عند تشغيل التطبيق
   Future<bool> initialize() async {
     if (_isInitialized) {
-      print('✅ WiFi Security Service already initialized');
       return true;
     }
 
@@ -45,11 +44,9 @@ class WifiSecurityService {
       _startNetworkMonitoring();
       
       _isInitialized = true;
-      print('✅ WiFi Security Service initialized');
       return true;
       
     } catch (e) {
-      print('❌ Error initializing WiFi Security Service: $e');
       return false;
     }
   }
@@ -89,7 +86,7 @@ class WifiSecurityService {
       }
       
     } catch (e) {
-      print('❌ Error getting permission state: $e');
+      print('Error getting permission state: $e');
       return PermissionState.neverAsked;
     }
   }
@@ -99,9 +96,8 @@ Future<void> markUserDeclinedPermanently() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_userDeclinedPermanentlyKey, true);
     await prefs.setBool(_permissionsAskedKey, true);
-    print('ℹ️ User declined WiFi check permanently');
   } catch (e) {
-    print('❌ Error marking user declined: $e');
+    print('Error marking user declined: $e');
   }
 }
 
@@ -123,11 +119,9 @@ Future<void> markUserDeclinedPermanently() async {
       // حفظ النتيجة
       await prefs.setBool(_permissionsGrantedKey, granted);
       
-      print('✅ Permissions requested: $granted');
       return granted;
       
     } catch (e) {
-      print('❌ Error requesting permissions: $e');
       return false;
     }
   }
@@ -142,9 +136,8 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
     try {
       await _requestLocationPermission();
       locationGranted = true;
-      print('✅ Flutter location permission granted');
     } catch (e) {
-      print('⚠️ Location permission error: $e');
+      print('Location permission error: $e');
     }
     
     // طلب صلاحيات من Native code
@@ -152,20 +145,17 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
     try {
       final result = await platform.invokeMethod<bool>('requestPermissions');
       nativeGranted = result ?? false;
-      print('✅ Native permission result: $nativeGranted');
     } catch (e) {
-      print('⚠️ Native permission error: $e');
+      print('Native permission error: $e');
     }
     
     final granted = locationGranted || nativeGranted;
     await prefs.setBool(_permissionsGrantedKey, granted);
     
     if (!granted) {
-      print('❌ No permissions granted');
       return WifiCheckResult.permissionDenied();
     }
     
-    print('⏳ Waiting for iOS to apply permissions...');
     await Future.delayed(const Duration(milliseconds: 1000));
     
     await resetCheckState();
@@ -173,16 +163,14 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
     // محاولات متعددة للفحص (iOS يحتاج وقت أحياناً)
     WifiSecurityStatus? status;
     for (int attempt = 1; attempt <= 3; attempt++) {
-      print('🔄 WiFi check attempt $attempt/3...');
       
       try {
         status = await _performNetworkCheck();
         if (status != null) {
-          print('✅ Success on attempt $attempt!');
           break;
         }
       } catch (e) {
-        print('⚠️ Attempt $attempt failed: $e');
+        print('Attempt $attempt failed: $e');
       }
       
       if (attempt < 3) {
@@ -191,17 +179,14 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
     }
     
     if (status == null) {
-      print('❌ Could not get WiFi info after 3 attempts');
       return WifiCheckResult.notConnected();
     }
     
     await _markNetworkAsChecked(status.ssid, status.bssid, status.isSecure);
     
-    print('✅ WiFi check complete: ${status.ssid} - Secure: ${status.isSecure}');
     return WifiCheckResult.success(status);
     
   } catch (e) {
-    print('❌ Error in requestPermissionsAndCheck: $e');
     return WifiCheckResult.error(e.toString());
   }
 }
@@ -236,7 +221,6 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
       final alreadyChecked = await _isNetworkAlreadyChecked(status.ssid, status.bssid);
       
       if (alreadyChecked) {
-        print('ℹ️ Network "${status.ssid}" already checked - skipping alert');
         return WifiCheckResult.alreadyChecked();
       }
       
@@ -246,7 +230,6 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
       return WifiCheckResult.success(status);
       
     } catch (e) {
-      print('❌ Error checking network on app launch: $e');
       return WifiCheckResult.error(e.toString());
     }
   }
@@ -271,7 +254,6 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
       return false;
       
     } catch (e) {
-      print('❌ Error checking if network was checked: $e');
       return false;
     }
   }
@@ -288,10 +270,9 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
         await prefs.setString(_lastWarningSSIDKey, ssid);
       }
       
-      print('✅ Network "$ssid" marked as checked');
       
     } catch (e) {
-      print('❌ Error marking network as checked: $e');
+      print('Error marking network as checked: $e');
     }
   }
 
@@ -302,9 +283,8 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
       await prefs.remove(_lastCheckedSSIDKey);
       await prefs.remove(_lastCheckedBSSIDKey);
       await prefs.remove(_lastWarningSSIDKey);
-      print('🔄 Check state reset - ready for new network');
     } catch (e) {
-      print('❌ Error resetting check state: $e');
+      print('Error resetting check state: $e');
     }
   }
 
@@ -314,7 +294,6 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
       final result = await platform.invokeMethod<bool>('checkPermissions');
       return result ?? false;
     } on PlatformException catch (e) {
-      print('❌ Permission check failed: ${e.message}');
       return false;
     }
   }
@@ -345,7 +324,6 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
   /// إجراء الفحص الفعلي للشبكة
   Future<WifiSecurityStatus?> _performNetworkCheck() async {
     if (_isCheckingNetwork) {
-      print('⏳ Already checking network...');
       return null;
     }
 
@@ -357,7 +335,6 @@ final Map<dynamic, dynamic> rawData =
         await platform.invokeMethod('getWifiSecurityStatus');
     
     if (rawData.isEmpty) {
-      print('⚠️ No network data received');
       _isCheckingNetwork = false;
       return null;
     }
@@ -368,12 +345,10 @@ final Map<dynamic, dynamic> rawData =
     return status;
     
   } on PlatformException catch (e) {
-    print('❌ Platform Error: ${e.code} - ${e.message}');
     _isCheckingNetwork = false;
     return null;
     
   } catch (e) {
-    print('❌ Unexpected Error: $e');
     _isCheckingNetwork = false;
     return null;
   }
@@ -384,13 +359,11 @@ final Map<dynamic, dynamic> rawData =
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
       (List<ConnectivityResult> result) async {
         if (result.contains(ConnectivityResult.wifi)) {
-          print('🔄 WiFi connection detected - checking if network changed');
           
           // التحقق من أن الشبكة تغيرت فعلاً
           final changed = await _hasNetworkChanged();
           
           if (changed) {
-            print('🆕 New network detected - resetting and will check on next dashboard open');
             await resetCheckState();
             final status = await _performNetworkCheck();
             if (status != null) {
@@ -398,10 +371,10 @@ final Map<dynamic, dynamic> rawData =
             }
             //  سيتم الفحص عند فتح Dashboard
           } else {
-            print('ℹ️ Same network - no action needed');
+            print('Same network - no action needed');
           }
         } else {
-          print('📵 Disconnected from WiFi');
+          print('Disconnected from WiFi');
         //await resetCheckState();
         }
       },
@@ -446,7 +419,7 @@ final Map<dynamic, dynamic> rawData =
       }
       
     } catch (e) {
-      print('❌ Error checking network change: $e');
+      print('Error checking network change: $e');
       return true; // للأمان، نعتبرها شبكة جديدة
     }
   }
@@ -457,7 +430,7 @@ final Map<dynamic, dynamic> rawData =
     _connectivitySubscription?.cancel();
     _networkStatusController.close();
    _isInitialized = false;
-    print('🛑 WiFi Security Service disposed');
+    print('WiFi Security Service disposed');
   }
 }
 

@@ -45,7 +45,6 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // خدمة الملفات الثابتة
 app.use('/api/uploads', express.static(path.join(__dirname, 'uploads')));
 
-
 // حماية من NoSQL Injection
 app.use((req, res, next) => {
   if (req.query) {
@@ -93,19 +92,19 @@ const uploadLimiter = rateLimit({
   message: { success: false, message: 'تم تجاوز عدد محاولات رفع الملفات' }
 });
 
-const relaxedLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  keyGenerator: (req) => req.headers['authorization'] || req.ip,
-});
-
+app.use('/api/', generalLimiter);
+app.use('/api/auth/login', authLimiter);
+app.use('/api/auth/register', authLimiter);
+app.use('/api/upload', uploadLimiter);
+app.use('/api/anomaly', anomalyRoutes);
 
 
 // Database Connection
 mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error(' DB connection error:', err));
+  .then(() => console.log('✅ Connected to MongoDB'))
+  .catch(err => console.error('❌ DB connection error:', err));
 
+// ✅ Socket.IO - يجب أن تكون قبل Routes
 require('./sockets/messageSocket')(io);
 startMessageExpiryJob(io);
 
@@ -137,8 +136,6 @@ app.use('/api/upload', require('./routes/upload'));
 app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/content-scanning-stats',require('./routes/contentScanning') )
 app.use('/api/securitytips', require('./routes/securitytips'));
-app.use('/api/support', require('./routes/support'));
-app.use('/api/anomaly', anomalyRoutes);
 
 app.get('/', (req, res) => {
   res.json({ 
@@ -164,9 +161,9 @@ app.use((err, req, res, next) => {
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port: ${PORT}`);
-  console.log(`Socket.IO ready`);
-  console.log(`Listening on all interfaces (0.0.0.0)`);
-  console.log(`Message expiry job started`);
+  console.log(`✅ Server running on port: ${PORT}`);
+  console.log(`✅ Socket.IO ready`);
+  console.log(`✅ Listening on all interfaces (0.0.0.0)`);
+  console.log(`✅ Message expiry job started`);
 
 });

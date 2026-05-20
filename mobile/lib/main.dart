@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'services/api_services.dart';
 import 'services/biometric_service.dart';
+import 'dart:ui';
 import 'services/messaging_service.dart';
 import 'features/authentication/screens/biometric_login_screen.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'services/auth_guard.dart';
+import 'dart:async'; 
 import 'features/authentication/screens/login_screen.dart';
 import 'features/authentication/screens/register_screen.dart';
 import 'features/dashboard/screens/main_dashboard.dart';
@@ -30,15 +32,53 @@ import 'features/account/screens/frozen_account_screen.dart';
 import 'package:app_links/app_links.dart';
 import 'features/authentication/screens/reset_password.dart';
 import 'features/laws/screens/laws_screen.dart';
-
+import 'package:flutter_background_service/flutter_background_service.dart';
+import '../services/anomaly_detection_service.dart';
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+Future<void> initializeBackgroundService() async {
+  final service = FlutterBackgroundService();
 
+  await service.configure(
+    androidConfiguration: AndroidConfiguration(
+      onStart: onStart, // الدالة التي ستعمل في الخلفية
+      autoStart: true,
+      isForegroundMode: true, // ضروري في الأندرويد حتى لا يغلق النظام التطبيق
+    ),
+    iosConfiguration: IosConfiguration(
+      autoStart: true,
+      onForeground: onStart,
+      onBackground: onIosBackground,
+    ),
+  );
+}
+
+// هذه الدالة تعمل في "بيئة معزولة" (Isolate) تماماً عن الواجهات وتستمر في العمل
+@pragma('vm:entry-point')
+void onStart(ServiceInstance service) async {
+  DartPluginRegistrant.ensureInitialized();
+
+  // هنا يمكنك وضع تيمر (Timer) يفحص كل 15 دقيقة مثلاً
+  Timer.periodic(const Duration(minutes: 15), (timer) async {
+    print("جاري الفحص التلقائي من الخلفية...");
+    
+    // استدعاء دالة الفحص الخاصة بك
+    final anomalyService = AnomalyDetectionService();
+    await anomalyService.runChecks();
+  });
+}
+
+@pragma('vm:entry-point')
+bool onIosBackground(ServiceInstance service) {
+  return true;
+}
 void main() async {
   await dotenv.load(fileName: ".env");
+  await initializeBackgroundService();
 
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
+
 
 class MyApp extends StatefulWidget {
   const MyApp({Key? key}) : super(key: key);
@@ -76,6 +116,7 @@ class _MyAppState extends State<MyApp> {
     }
   });
 }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

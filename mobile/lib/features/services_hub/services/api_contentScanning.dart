@@ -101,7 +101,6 @@ class ApiContentService {
       );
 
       if (response.statusCode == 200) {
-        print(response.body);
         return jsonDecode(response.body);
       }
 

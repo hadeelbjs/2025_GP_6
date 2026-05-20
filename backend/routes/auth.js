@@ -957,7 +957,7 @@ router.post('/reset-password', validatePasswordMiddleware, async (req, res) => {
     user.addToPasswordHistory(hashedPassword);
     
     user.password = hashedPassword;
-    user.passwordChangedAt = new Date(); // تحديث تاريخ التغيير
+    user.passwordChangedAt = new Date();
     user.passwordResetCode = undefined;
     user.passwordResetExpires = undefined;
     await user.save();

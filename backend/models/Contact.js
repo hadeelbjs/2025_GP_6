@@ -67,7 +67,7 @@ ContactSchema.statics.areFriends = async function(userId1, userId2) {
   return !!contact;
 };
 
-// ✅ دالة مساعدة: حالة العلاقة
+//   حالة العلاقة
 ContactSchema.statics.getRelationship = async function(userId1, userId2) {
   const contact = await this.findOne({
     $or: [
@@ -85,7 +85,7 @@ ContactSchema.statics.getRelationship = async function(userId1, userId2) {
   };
 };
 
-// ✅ دالة جديدة: جلب عدد الطلبات المعلقة
+//  جلب عدد الطلبات المعلقة
 ContactSchema.statics.getPendingCount = async function(userId) {
   return await this.countDocuments({
     recipient: userId,
@@ -93,7 +93,7 @@ ContactSchema.statics.getPendingCount = async function(userId) {
   });
 };
 
-// ✅ دالة جديدة: جلب عدد الأصدقاء
+//  جلب عدد الأصدقاء
 ContactSchema.statics.getFriendsCount = async function(userId) {
   return await this.countDocuments({
     $or: [

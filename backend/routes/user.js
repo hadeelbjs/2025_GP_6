@@ -142,9 +142,9 @@ router.get('/password-exp-date', authMiddleware, async (req, res) => {
     res.status(500).json({ success: false, message: 'حدث خطأ في السيرفر' });
   }
 });
-// ============================================
+
 // تحديث الصورة الرمزية (Memoji)
-// ============================================
+
 router.put('/update-memoji', auth, async (req, res) => {
   const { memoji } = req.body;
 
@@ -324,9 +324,7 @@ router.post('/request-email-change', [
   }
 });
 
-// ============================================
 // التحقق من تغيير البريد الإلكتروني
-// ============================================
 router.post('/verify-email-change', auth, async (req, res) => {
   const { newEmail, code } = req.body;
 
@@ -380,11 +378,8 @@ router.post('/verify-email-change', auth, async (req, res) => {
       message: 'حدث خطأ في السيرفر'
     });
   }
-});
-
-// ============================================
+}); 
 // طلب تغيير رقم الهاتف (إرسال رمز تحقق)
-// ============================================
 router.post('/request-phone-change', auth, async (req, res) => {
   const { newPhone } = req.body;
   const normalizedPhone = normalizePhone(newPhone);
@@ -444,9 +439,8 @@ router.post('/request-phone-change', auth, async (req, res) => {
   }
 });
 
-// ============================================
+
 // التحقق من تغيير رقم الهاتف
-// ============================================
 router.post('/verify-phone-change', auth, async (req, res) => {
   const { newPhone, code } = req.body;
   const normalizedPhone = normalizePhone(newPhone);
@@ -512,9 +506,8 @@ router.post('/verify-phone-change', auth, async (req, res) => {
   }
 });
 
-// ============================================
 // تغيير كلمة المرور
-// ============================================
+
 router.post('/change-password', [
   auth,
   body('currentPassword').notEmpty().withMessage('الرجاء إدخال كلمة المرور الحالية'),
@@ -579,16 +572,14 @@ if (req.body.invalidateSession === true) {
     });
   }
 });
-// ============================================
 // حذف الحساب نهائياً
-// ============================================
 router.delete('/delete-account', auth, async (req, res) => {
   try {
     const userId = req.user.id;
     const { password } = req.body;
 
 
-    // 1. التحقق من كلمة المرور
+    //التحقق من كلمة المرور
     const user = await User.findById(userId).select('+password');
     if (!user) {
       return res.status(404).json({
@@ -605,7 +596,7 @@ router.delete('/delete-account', auth, async (req, res) => {
       });
     }
 
-    // 2. حذف كل شي بالترتيب
+    //حذف كل شي بالترتيب
     const PreKeyBundle = require('../models/PreKeyBundle');
     const Message = require('../models/Message');
     const Contact = require('../models/Contact');

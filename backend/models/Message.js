@@ -39,13 +39,13 @@ const MessageSchema = new mongoose.Schema({
   },
   
   attachmentType: {
-    type: String, // 'image' or 'file'
+    type: String, // image or file
     enum: ['image', 'file', null],
     default: null,
   },
   
   attachmentName: {
-    type: String, // اسم الملف الأصلي
+    type: String,
     default: null,
   },
   
@@ -57,7 +57,7 @@ const MessageSchema = new mongoose.Schema({
     default: 'sent',
   },
 
-  // حذف من عند المستقبل فقط
+  // حذف من عند المستقبل 
   deletedForRecipient: {
     type: Boolean,
     default: false,

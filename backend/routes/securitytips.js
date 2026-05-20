@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const SecurityTip = require('../models/SecurityTip');
 
-// GET /api/securitytips/today
 router.get('/today', async (req, res) => {
   try {
     const total = await SecurityTip.countDocuments({ isActive: true });

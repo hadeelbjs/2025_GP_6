@@ -10,8 +10,8 @@ router.post('/send', auth, async (req, res) => {
       recipientId, 
       encryptedType, 
       encryptedBody,
-      attachmentData,    // Base64
-      attachmentType,    // 'image' or 'file'
+      attachmentData,    
+      attachmentType,    
       attachmentName,
       attachmentMimeType,
       attachmentEncryptionType,
@@ -69,7 +69,7 @@ router.post('/send', auth, async (req, res) => {
   }
 });
 
-// ✅ حذف من عند المستقبل فقط - مُحدَّث
+//  حذف من عند المستقبل فقط  
 router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -100,14 +100,14 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
 
     const recipientId = message.recipientId.toString();
     
-    // ✅ تحديث في قاعدة البيانات
+    //  تحديث في قاعدة البيانات
     if (!message.deletedFor.includes(recipientId)) {
       message.deletedFor.push(message.recipientId);
       message.deletedForRecipient = true;
       await message.save();
     }
 
-    // ✅ إرسال Socket فوري للمستقبل
+    // إرسال Socket فوري للمستقبل
     const io = req.app.get('io');
     if (io && io.sendToUser) {
       const sent = io.sendToUser(recipientId, 'message:deleted', {
@@ -132,7 +132,7 @@ router.delete('/delete-for-recipient/:messageId', auth, async (req, res) => {
   }
 });
 
-// ✅ حذف للجميع - مُحدَّث
+//  حذف للجميع - 
 router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
   try {
     const { messageId } = req.params;
@@ -170,13 +170,13 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
     if (io && io.sendToUser) {
       const recipientId = message.recipientId.toString();
       
-      // ✅ إرسال للمستقبل
+      //  إرسال للمستقبل
       io.sendToUser(recipientId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'everyone',
       });
 
-      // ✅ إرسال للمرسل (تأكيد)
+      //  إرسال للمرسل 
       io.sendToUser(currentUserId, 'message:deleted', {
         messageId: message.messageId,
         deletedFor: 'everyone',
@@ -199,7 +199,7 @@ router.delete('/delete-for-everyone/:messageId', auth, async (req, res) => {
   }
 });
 
-// ✅ جلب المحادثة
+//  جلب المحادثة
 router.get('/conversation/:userId', auth, async (req, res) => {
   try {
     const { userId: peerId } = req.params;

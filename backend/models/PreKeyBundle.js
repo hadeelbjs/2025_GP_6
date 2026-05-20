@@ -59,7 +59,6 @@ const PreKeyBundleSchema = new mongoose.Schema({
    
   }],
   
-  // ✅ إضافة رقم النسخة لتتبع التحديثات
   version: {
     type: Number,
     required: true,
@@ -84,7 +83,7 @@ PreKeyBundleSchema.pre('save', function(next) {
   next();
 });
 
-// ✅ عند تحديث كامل للمفاتيح، تحديث النسخة
+//  عند تحديث كامل للمفاتيح، تحديث النسخة
 PreKeyBundleSchema.methods.updateVersion = function() {
   this.version = Date.now();
 };
@@ -94,18 +93,18 @@ PreKeyBundleSchema.methods.getAvailablePreKeysCount = function() {
   return this.preKeys.filter(pk => !pk.used).length;
 };
 
-// دالة مساعدة: هل نحتاج تجديد المفاتيح؟
+//   هل نحتاج تجديد المفاتيح؟
 PreKeyBundleSchema.methods.needsRefresh = function() {
   const availableKeys = this.getAvailablePreKeysCount();
   return availableKeys < 20;
 };
 
-// دالة مساعدة: الحصول على PreKey غير مستخدم
+//   الحصول على PreKey غير مستخدم
 PreKeyBundleSchema.methods.getUnusedPreKey = function() {
   return this.preKeys.find(pk => !pk.used);
 };
 
-// دالة مساعدة: تحديد PreKey كمستخدم
+//  تحديد PreKey كمستخدم
 PreKeyBundleSchema.methods.markPreKeyAsUsed = async function(keyId) {
   const preKey = this.preKeys.find(pk => pk.keyId === keyId);
   if (preKey) {

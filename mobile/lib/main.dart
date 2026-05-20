@@ -31,7 +31,6 @@ import 'package:app_links/app_links.dart';
 import 'features/authentication/screens/reset_password.dart';
 import 'features/laws/screens/laws_screen.dart';
 
-
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -46,37 +45,40 @@ class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
 }
+
 String? pendingDeepLinkRoute;
 Map<String, dynamic>? pendingDeepLinkArgs;
+
 class _MyAppState extends State<MyApp> {
   late AppLinks _appLinks;
- @override
-void initState() {
-  super.initState();
-  _appLinks = AppLinks();
+  @override
+  void initState() {
+    super.initState();
+    _appLinks = AppLinks();
 
-  // انتظر التطبيق يبني نفسه كامل
-  Future.delayed(const Duration(milliseconds: 300), () async {
-    final uri = await _appLinks.getInitialAppLink();
-    print('🔗 Initial after delay: $uri');
-    if (uri != null && uri.scheme == 'waseed' && uri.host == 'frozen') {
-      pendingDeepLinkRoute = '/frozen';
-      pendingDeepLinkArgs = {'type': uri.queryParameters['type'] ?? 'email'};
-    }
-  });
+    // انتظر التطبيق يبني نفسه كامل
+    Future.delayed(const Duration(milliseconds: 300), () async {
+      final uri = await _appLinks.getInitialAppLink();
+      print('Initial after delay: $uri');
+      if (uri != null && uri.scheme == 'waseed' && uri.host == 'frozen') {
+        pendingDeepLinkRoute = '/frozen';
+        pendingDeepLinkArgs = {'type': uri.queryParameters['type'] ?? 'email'};
+      }
+    });
 
-  _appLinks.uriLinkStream.listen((uri) {
-    print('🔗 Stream: $uri');
-    if (uri.scheme == 'waseed' && uri.host == 'frozen') {
-      final type = uri.queryParameters['type'] ?? 'email';
-      navigatorKey.currentState?.pushNamedAndRemoveUntil(
-        '/frozen',
-        (route) => false,
-        arguments: {'type': type},
-      );
-    }
-  });
-}
+    _appLinks.uriLinkStream.listen((uri) {
+      print('Stream: $uri');
+      if (uri.scheme == 'waseed' && uri.host == 'frozen') {
+        final type = uri.queryParameters['type'] ?? 'email';
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/frozen',
+          (route) => false,
+          arguments: {'type': type},
+        );
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -134,7 +136,6 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -148,7 +149,6 @@ class _SplashScreenState extends State<SplashScreen>
     _checkAuthStatus();
   }
 
-
   @override
   void dispose() {
     _animationController.dispose();
@@ -158,14 +158,14 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _checkAuthStatus() async {
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
-  if (pendingDeepLinkRoute != null) {
-    final route = pendingDeepLinkRoute!;
-    final args = pendingDeepLinkArgs;
-    pendingDeepLinkRoute = null;
-    pendingDeepLinkArgs = null;
-    Navigator.of(context).pushReplacementNamed(route, arguments: args);
-    return;
-  }
+    if (pendingDeepLinkRoute != null) {
+      final route = pendingDeepLinkRoute!;
+      final args = pendingDeepLinkArgs;
+      pendingDeepLinkRoute = null;
+      pendingDeepLinkArgs = null;
+      Navigator.of(context).pushReplacementNamed(route, arguments: args);
+      return;
+    }
 
     try {
       print('Checking app state...');
@@ -210,7 +210,7 @@ class _SplashScreenState extends State<SplashScreen>
   ///  تهيئة MessagingService
   Future<void> _initializeMessaging() async {
     try {
-      print('🔌 Initializing MessagingService...');
+      print(' Initializing MessagingService...');
 
       final success = await MessagingService().initialize();
 
@@ -221,14 +221,13 @@ class _SplashScreenState extends State<SplashScreen>
         // لا نوقف التطبيق - يمكن إعادة المحاولة لاحقاً
       }
     } catch (e) {
-      print('❌ Error initializing MessagingService: $e');
+      print(' Error initializing MessagingService: $e');
       // لا نوقف التطبيق
     }
   }
 
   Future<void> clearOldKeys() async {
     final storage = FlutterSecureStorage();
-
 
     // حذف جميع المفاتيح
     final allKeys = await storage.readAll();
@@ -241,30 +240,29 @@ class _SplashScreenState extends State<SplashScreen>
           key.contains('session_') ||
           key.contains('peer_identity')) {
         await storage.delete(key: key);
-        print('🗑️ Deleted: $key');
+        print(' Deleted: $key');
       }
     }
-
   }
 
   /// تهيئة التشفير للمستخدم المسجل دخول
   Future<void> _initializeEncryption() async {
     try {
-      print('🔐 جاري تهيئة التشفير...');
+      print(' جاري تهيئة التشفير...');
 
       // 1. جلب userId أولاً
       final storage = const FlutterSecureStorage();
       final userDataStr = await storage.read(key: 'user_data');
 
       if (userDataStr == null) {
-        print('❌ لا توجد بيانات مستخدم');
+        print(' لا توجد بيانات مستخدم');
         return;
       }
 
       final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
       final userId = userData['id'] as String;
 
-      print('👤 User ID: $userId');
+      print(' User ID: $userId');
       final userEmail = userData['email'] as String;
       print('user email: $userEmail');
 
@@ -284,14 +282,14 @@ class _SplashScreenState extends State<SplashScreen>
         await signalManager.generateAndUploadKeys();
       }
     } catch (e) {
-      print('❌ خطأ في تهيئة التشفير: $e');
+      print(' خطأ في تهيئة التشفير: $e');
     }
   }
 
   /// تهيئة خدمة أمان WiFi
   Future<void> _initializeWifiSecurity() async {
     try {
-      print('📡 [3/3] Initializing WiFi Security Service...');
+      print(' [3/3] Initializing WiFi Security Service...');
       final success = await _wifiService.initialize();
       if (success) {
         print('WiFi Security Service initialized successfully');
@@ -315,11 +313,11 @@ class _SplashScreenState extends State<SplashScreen>
           break;
 
         case WifiCheckResultType.permissionDenied:
-          print('⚠️ Permissions denied');
+          print(' Permissions denied');
           // سيتم عرض dialog من Dashboard
           break;
         case WifiCheckResultType.userDeclined:
-          print('ℹ️ User declined WiFi check permanently - respecting choice');
+          print(' User declined WiFi check permanently - respecting choice');
           // المستخدم رفض نهائياً - لا نزعجه
           break;
 

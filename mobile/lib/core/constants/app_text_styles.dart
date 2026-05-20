@@ -56,7 +56,7 @@ class AppTextStyles {
     height: 1.5,
   );
 
-  // Body Medium - نصوص متوسطة (الأكثر استخداماً)
+  // Body Medium - نصوص متوسطة
   static TextStyle bodyMedium = GoogleFonts.almarai(
     fontSize: 14,
     fontWeight: FontWeight.normal,

@@ -42,7 +42,8 @@ class ChatScreen extends StatefulWidget {
   State<ChatScreen> createState() => _ChatScreenState();
 }
 
-class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+class _ChatScreenState extends State<ChatScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   // مكان كتابة الرسائل
   final _messageController = TextEditingController();
   final _messagingService = MessagingService();
@@ -210,7 +211,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   Future<void> _restoreRekeyState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final required = prefs.getBool('rekey_required_${widget.userId}') ?? false;
+      final required =
+          prefs.getBool('rekey_required_${widget.userId}') ?? false;
       if (!mounted) return;
       if (required) {
         _setRekeyRequired(true, showMessage: false);
@@ -266,18 +268,17 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
           _socketService.socket?.emit('screenshot:taken', {
             'targetUserId': widget.userId,
           });
-          print('📸 Screenshot taken - notification sent to ${widget.userId}');
+          print('Screenshot taken - notification sent to ${widget.userId}');
         }
       },
       onScreenRecordingChanged: (isRecording) {
         if (isRecording && !_peerAllowsMyScreenshots) {
-          print('🎥 Screen recording detected');
+          print('Screen recording detected');
         }
       },
     );
   }
 
-  
   //  دالة جلب السياسة من السيرفر
   Future<void> _loadScreenshotPolicyFromServer() async {
     try {
@@ -296,7 +297,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
           _peerAllowsMyScreenshots = result['peerPolicy'] ?? false;
         });
 
-        print('📷 Screenshot policies loaded:');
+        print('Screenshot policies loaded:');
         print('   My policy (I allow peer): $_myPolicyAllowsScreenshots');
         print('   Peer policy (allows me): $_peerAllowsMyScreenshots');
       } else {
@@ -307,7 +308,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         });
       }
     } catch (e) {
-      print('❌ Error loading screenshot policy: $e');
+      print('Error loading screenshot policy: $e');
       // في حالة الخطأ: منع اللقطات للأمان
       setState(() {
         _myPolicyAllowsScreenshots = false;
@@ -359,7 +360,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         });
       }
     } catch (e) {
-      print('❌ Error saving screenshot policy: $e');
+      print('Error saving screenshot policy: $e');
       _showMessage('حدث خطأ أثناء حفظ الإعداد', false);
     }
   }
@@ -375,7 +376,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         setState(() {
           currentDuration = duration;
         });
-        
+
         // إدارة Pulse Animation بناءً على وجود المدة
         if (duration != null) {
           // إيقاف Animation إذا كانت المدة موجودة
@@ -388,194 +389,197 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
             _pulseAnimationController.repeat(reverse: true);
           }
         }
-        
+
         print('⏱️ Duration loaded: ${duration}s');
       }
     } catch (e) {
-      print('❌ Error loading duration: $e');
+      print('Error loading duration: $e');
     }
   }
   //عرض إشعار تغيير السياسة:
 
   void _showPolicyChangeNotification(bool peerAllows) {
-  if (!mounted) return;
+    if (!mounted) return;
 
-  final overlay = Overlay.of(context);
-  late OverlayEntry entry;
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
 
-  entry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 70,
-      left: 16,
-      right: 16,
-      child: Material(
-        color: Colors.transparent,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          builder: (context, value, child) => Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, -20 * (1 - value)),
-              child: child,
-            ),
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: peerAllows ? Colors.green : Colors.red,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: (peerAllows ? Colors.green : Colors.red).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  peerAllows ? Icons.check_circle : Icons.block,
-                  color: Colors.white,
-                  size: 22,
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Text(
-                    peerAllows
-                        ? '${widget.name} سمح لك بلقطات الشاشة'
-                        : '${widget.name} منع لقطات الشاشة',
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      color: Colors.white,
-                      fontFamily: 'IBMPlexSansArabic',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-
-  overlay.insert(entry);
-
-  Future.delayed(const Duration(seconds: 3), () {
-    if (entry.mounted) {
-      entry.remove();
-    }
-  });
-}
-
-  void _showScreenshotTakenByPeerNotification(String peerName) {
-  if (!mounted) return;
-
-  final overlay = Overlay.of(context);
-  late OverlayEntry entry;
-
-  entry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 70,
-      left: 16,
-      right: 16,
-      child: Material(
-        color: Colors.transparent,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          builder: (context, value, child) {
-            // التأكد من أن القيمة دائماً بين 0 و 1
-            final clampedValue = value.clamp(0.0, 1.0);
-            return Opacity(
-              opacity: clampedValue,
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 70,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            builder: (context, value, child) => Opacity(
+              opacity: value,
               child: Transform.translate(
-                offset: Offset(0, -20 * (1 - clampedValue)),
+                offset: Offset(0, -20 * (1 - value)),
                 child: child,
               ),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [Colors.red.shade600, Colors.red.shade800],
-              ),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.red.withOpacity(0.4),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
             ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.25),
-                    shape: BoxShape.circle,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: peerAllows ? Colors.green : Colors.red,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: (peerAllows ? Colors.green : Colors.red).withOpacity(
+                      0.3,
+                    ),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
                   ),
-                  child: const Icon(
-                    Icons.camera_alt,
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    peerAllows ? Icons.check_circle : Icons.block,
                     color: Colors.white,
                     size: 22,
                   ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'تم التقاط الشاشة',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'IBMPlexSansArabic',
-                        ),
-                        textDirection: TextDirection.rtl,
+                  const SizedBox(width: 12),
+                  Flexible(
+                    child: Text(
+                      peerAllows
+                          ? '${widget.name} سمح لك بلقطات الشاشة'
+                          : '${widget.name} منع لقطات الشاشة',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: Colors.white,
+                        fontFamily: 'IBMPlexSansArabic',
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        '$peerName قام بالتقاط شاشة المحادثة',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.95),
-                          fontSize: 13,
-                          fontFamily: 'IBMPlexSansArabic',
-                        ),
-                        textDirection: TextDirection.rtl,
-                      ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
       ),
-    ),
-  );
+    );
 
-  overlay.insert(entry);
+    overlay.insert(entry);
 
-  Future.delayed(const Duration(seconds: 4), () {
-    if (entry.mounted) {
-      entry.remove();
-    }
-  });
-}
+    Future.delayed(const Duration(seconds: 3), () {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    });
+  }
+
+  void _showScreenshotTakenByPeerNotification(String peerName) {
+    if (!mounted) return;
+
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
+
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 70,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            builder: (context, value, child) {
+              // التأكد من أن القيمة دائماً بين 0 و 1
+              final clampedValue = value.clamp(0.0, 1.0);
+              return Opacity(
+                opacity: clampedValue,
+                child: Transform.translate(
+                  offset: Offset(0, -20 * (1 - clampedValue)),
+                  child: child,
+                ),
+              );
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.red.shade600, Colors.red.shade800],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.red.withOpacity(0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.25),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'تم التقاط الشاشة',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'IBMPlexSansArabic',
+                          ),
+                          textDirection: TextDirection.rtl,
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          '$peerName قام بالتقاط شاشة المحادثة',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.95),
+                            fontSize: 13,
+                            fontFamily: 'IBMPlexSansArabic',
+                          ),
+                          textDirection: TextDirection.rtl,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(seconds: 4), () {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    });
+  }
+
   void _listenToExpiredMessages() {
     _messageExpiredSubscription = _messagingService.onMessageExpired.listen((
       data,
@@ -593,103 +597,102 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   }
 
   Future<void> _selectDuration() async {
-  if (_conversationId == null) return;
+    if (_conversationId == null) return;
 
-  final selected = await DurationPickerSheet.show(
-    context,
-    currentDuration: currentDuration,
-  );
+    final selected = await DurationPickerSheet.show(
+      context,
+      currentDuration: currentDuration,
+    );
 
-  if (selected != null) {
-    try {
-      await _messagingService.setUserDuration(_conversationId!, selected);
+    if (selected != null) {
+      try {
+        await _messagingService.setUserDuration(_conversationId!, selected);
 
-      if (mounted) {
-        setState(() {
-          currentDuration = selected;
-        });
+        if (mounted) {
+          setState(() {
+            currentDuration = selected;
+          });
 
-        // إيقاف Pulse Animation عند اختيار المدة
-        if (_pulseAnimationController.isAnimating) {
-          _pulseAnimationController.stop();
-        }
+          // إيقاف Pulse Animation عند اختيار المدة
+          if (_pulseAnimationController.isAnimating) {
+            _pulseAnimationController.stop();
+          }
 
-        // إشعار محسّن في الأعلى
-        final overlay = Overlay.of(context);
-        late OverlayEntry entry;
+          // إشعار محسّن في الأعلى
+          final overlay = Overlay.of(context);
+          late OverlayEntry entry;
 
-        entry = OverlayEntry(
-          builder: (context) => Positioned(
-            top: MediaQuery.of(context).padding.top + 70,
-            left: 16,
-            right: 16,
-            child: Material(
-              color: Colors.transparent,
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0.0, end: 1.0),
-                duration: const Duration(milliseconds: 300),
-                curve: Curves.easeOut,
-                builder: (context, value, child) => Opacity(
-                  opacity: value,
-                  child: Transform.translate(
-                    offset: Offset(0, -20 * (1 - value)),
-                    child: child,
+          entry = OverlayEntry(
+            builder: (context) => Positioned(
+              top: MediaQuery.of(context).padding.top + 70,
+              left: 16,
+              right: 16,
+              child: Material(
+                color: Colors.transparent,
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: 1.0),
+                  duration: const Duration(milliseconds: 300),
+                  curve: Curves.easeOut,
+                  builder: (context, value, child) => Opacity(
+                    opacity: value,
+                    child: Transform.translate(
+                      offset: Offset(0, -20 * (1 - value)),
+                      child: child,
+                    ),
                   ),
-                ),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.green,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withOpacity(0.3),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.timer,
-                        color: Colors.white,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        'تم تحديد المدة: ${_formatDuration(selected)}',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                          fontFamily: 'IBMPlexSansArabic',
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 14,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.3),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.timer, color: Colors.white, size: 20),
+                        const SizedBox(width: 10),
+                        Text(
+                          'تم تحديد المدة: ${_formatDuration(selected)}',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 17,
+                            fontFamily: 'IBMPlexSansArabic',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        );
+          );
 
-        overlay.insert(entry);
+          overlay.insert(entry);
 
-        Future.delayed(const Duration(seconds: 2), () {
-          if (entry.mounted) {
-            entry.remove();
-          }
-        });
+          Future.delayed(const Duration(seconds: 2), () {
+            if (entry.mounted) {
+              entry.remove();
+            }
+          });
+        }
+      } catch (e) {
+        print('Error: $e');
       }
-    } catch (e) {
-      print('❌ Error: $e');
     }
   }
-}
 
   // تنسيق المدة
   String _formatDuration(int seconds) {
@@ -721,11 +724,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
     super.dispose();
   }
 
-  //  مراقبة lifecycle للتطبيق
+  //  مراقبة للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // print('🔄 App resumed - ensuring socket connection...');
+      // print('App resumed - ensuring socket connection...');
       _ensureSocketConnection();
     }
   }
@@ -733,12 +736,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
-        print('🔌 Socket not connected - initializing...');
+        print('Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
-          print('✅ Socket connected after resume');
+          print('Socket connected after resume');
         } else {
-          print('❌ Failed to connect socket after resume');
+          print('Failed to connect socket after resume');
           return;
         }
       }
@@ -747,7 +750,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
       // لأن السيرفر يحتاج أن يعرف أن المستخدم عاد online
       Future.delayed(Duration(milliseconds: 500), () {
         if (mounted) {
-          // print('🔄 Requesting user status after resume...');
+          // print('Requesting user status after resume...');
           _messagingService.requestUserStatus(widget.userId);
         }
       });
@@ -795,16 +798,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
           print('ℹNo encrypted messages to decrypt');
         }
       } else {
-        // ❌ فشل فك التشفير
+        // فشل فك التشفير
         final errorType = result['error'];
 
-        print('❌ Decryption failed: $errorType');
+        print('Decryption failed: $errorType');
 
         //  معالجة خاصة لـ InvalidSessionException
         if (errorType == 'InvalidSessionException' ||
             errorType == 'NoSessionException' ||
             errorType?.toString().contains('session') == true) {
-          print('⚠️ Session error detected - auto-recreating session');
+          print('Session error detected - auto-recreating session');
 
           // إنشاء session جديد تلقائياً بدون سؤال المستخدم
           await _autoRecreateSession();
@@ -812,12 +815,12 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         }
       }
     } catch (e) {
-      print('❌ Exception during decryption: $e');
+      print('Exception during decryption: $e');
 
-      // ✅ التحقق من نوع الاستثناء
+      // التحقق من نوع الاستثناء
       if (e.toString().contains('session') ||
           e.toString().contains('Session')) {
-        print('⚠️ Session exception caught - auto-recreating');
+        print('Session exception caught - auto-recreating');
         await _autoRecreateSession();
       } else {
         _showMessage('فشل فك تشفير الرسائل', false);
@@ -844,7 +847,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
         if (timeSince.inMinutes < 2) {
           print(
-            '⚠️ Session reset blocked - attempted ${timeSince.inSeconds}s ago',
+            'Session reset blocked - attempted ${timeSince.inSeconds}s ago',
           );
           _showMessage('يرجى الانتظار قبل إعادة المحاولة', false);
           return;
@@ -883,7 +886,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         // await Future.delayed(Duration(seconds: 1));
         // await _decryptAllMessages();
       } else {
-        print('❌ Failed to auto-create session');
+        print('Failed to auto-create session');
         _showMessage('فشل إصلاح جلسة التشفير', false);
 
         /* // إذا فشل الإنشاء التلقائي، عرض Dialog للمستخدم
@@ -893,7 +896,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         }*/
       }
     } catch (e) {
-      print('❌ Error in auto-recreate session: $e');
+      print('Error in auto-recreate session: $e');
       _showMessage('حدث خطأ أثناء إصلاح الجلسة', false);
 
       /* // في حالة الخطأ، عرض Dialog للمستخدم
@@ -924,16 +927,16 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
 
       //فك تشفير الرسائل بعد التهيئة مباشرة
       if (_conversationId != null) {
-      _showDecryptionDialog();
-      
-      await _decryptAllMessages();
-      
-      // إغلاق الـ dialog بعد الانتهاء
-      if (mounted) {
-        Navigator.of(context, rootNavigator: true).pop();
+        _showDecryptionDialog();
+
+        await _decryptAllMessages();
+
+        // إغلاق الـ dialog بعد الانتهاء
+        if (mounted) {
+          Navigator.of(context, rootNavigator: true).pop();
+        }
+        await _loadMessagesFromDatabase();
       }
-      await _loadMessagesFromDatabase();
-}
     } catch (e) {
       _showMessage('حدث خطأ في تهيئة المحادثة', false);
     } finally {
@@ -986,18 +989,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         }
       });
     } catch (e) {
-      print('❌ Error loading messages: $e');
+      print('Error loading messages: $e');
     }
   }
 
   void _subscribeToRealtimeUpdates() {
-    _newMessageSubscription = _messagingService.onNewMessage.listen((data) async {
-    if (data['conversationId'] == _conversationId) {
-      // Await decryption pipeline fully before reading the database row
-      await _decryptAllMessages();
-      await _loadMessagesFromDatabase();
-    }
-  });
+    _newMessageSubscription = _messagingService.onNewMessage.listen((
+      data,
+    ) async {
+      if (data['conversationId'] == _conversationId) {
+        // Await decryption pipeline fully before reading the database row
+        await _decryptAllMessages();
+        await _loadMessagesFromDatabase();
+      }
+    });
 
     _deleteSubscription = _messagingService.onMessageDeleted.listen((
       data,
@@ -1098,7 +1103,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         source: source,
         maxWidth: 1920,
         maxHeight: 1920,
-        imageQuality: 85, 
+        imageQuality: 85,
       );
 
       if (picked == null) return;
@@ -1107,9 +1112,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         _pendingImageFile = File(picked.path);
       });
 
-      print('✅ Image selected: ${picked.path}');
+      print('Image selected: ${picked.path}');
     } catch (e) {
-      print('❌ Pick image error: $e');
+      print('Pick image error: $e');
       _showMessage('تعذر اختيار الصورة', false);
     }
   }
@@ -1134,9 +1139,9 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         );
       });
 
-      print('✅ File selected: ${mediaResult.fileName}');
+      print('File selected: ${mediaResult.fileName}');
     } catch (e) {
-      print('❌ Pick file error: $e');
+      print('Pick file error: $e');
       _showMessage('تعذر اختيار الملف', false);
     }
   }
@@ -1533,214 +1538,220 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   }
 
   void _showMessage(String message, bool isSuccess) {
-  if (!mounted) return;
+    if (!mounted) return;
 
-  final overlay = Overlay.of(context);
-  late OverlayEntry entry;
+    final overlay = Overlay.of(context);
+    late OverlayEntry entry;
 
-  entry = OverlayEntry(
-    builder: (context) => Positioned(
-      top: MediaQuery.of(context).padding.top + 70,
-      left: 16,
-      right: 16,
-      child: Material(
-        color: Colors.transparent,
-        child: TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: const Duration(milliseconds: 300),
-          curve: Curves.easeOut,
-          builder: (context, value, child) => Opacity(
-            opacity: value,
-            child: Transform.translate(
-              offset: Offset(0, -20 * (1 - value)),
-              child: child,
-            ),
-          ),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            decoration: BoxDecoration(
-              color: isSuccess ? Colors.green : Colors.red,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: (isSuccess ? Colors.green : Colors.red).withOpacity(0.3),
-                  blurRadius: 12,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(
-                  isSuccess ? Icons.check_circle : Icons.error,
-                  color: Colors.white,
-                  size: 20,
-                ),
-                const SizedBox(width: 10),
-                Flexible(
-                  child: Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                      fontFamily: 'IBMPlexSansArabic',
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    ),
-  );
-
-  overlay.insert(entry);
-
-  Future.delayed(const Duration(seconds: 2), () {
-    if (entry.mounted) {
-      entry.remove();
-    }
-  });
-}
-
-  void _showDecryptionDialog() {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(20),
-      ),
-      backgroundColor: AppColors.primary,
-      child: Padding(
-        padding: const EdgeInsets.all(30),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-              strokeWidth: 3,
-            ),
-            SizedBox(height: 25),
-            Text(
-              'جاري فك تشفير المحادثة...',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontSize: 14,
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        top: MediaQuery.of(context).padding.top + 70,
+        left: 16,
+        right: 16,
+        child: Material(
+          color: Colors.transparent,
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0.0, end: 1.0),
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeOut,
+            builder: (context, value, child) => Opacity(
+              opacity: value,
+              child: Transform.translate(
+                offset: Offset(0, -20 * (1 - value)),
+                child: child,
               ),
             ),
-          ],
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: BoxDecoration(
+                color: isSuccess ? Colors.green : Colors.red,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: (isSuccess ? Colors.green : Colors.red).withOpacity(
+                      0.3,
+                    ),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    isSuccess ? Icons.check_circle : Icons.error,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontFamily: 'IBMPlexSansArabic',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+
+    overlay.insert(entry);
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (entry.mounted) {
+        entry.remove();
+      }
+    });
+  }
+
+  void _showDecryptionDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: AppColors.primary,
+        child: Padding(
+          padding: const EdgeInsets.all(30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                strokeWidth: 3,
+              ),
+              SizedBox(height: 25),
+              Text(
+                'جاري فك تشفير المحادثة...',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14,
+                  color: Colors.white,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final hasAttachment = _pendingImageFile != null || _pendingFile != null;
 
     return GestureDetector(
-    onTap: () {
-      // إخفاء الكيبورد عند النقر في أي مكان
-      FocusScope.of(context).unfocus();
-    },
-    child: Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
+      onTap: () {
+        // إخفاء الكيبورد عند النقر في أي مكان
+        FocusScope.of(context).unfocus();
+      },
+      child: Directionality(
+        textDirection: TextDirection.rtl,
+        child: Scaffold(
+          backgroundColor: AppColors.background,
 
-        appBar: AppBar(
-  backgroundColor: AppColors.primary,
-  elevation: 2,
-  leading: IconButton(
-    icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
-    onPressed: () => Navigator.pop(context),
-  ),
-  title: Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      // اسم المستخدم بخط أكبر
-      Text(
-        widget.name,
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.bold,
-          fontSize: 20, // كان 16-17، الآن 20
-          fontFamily: 'IBMPlexSansArabic',
-          letterSpacing: 0.3,
+          appBar: AppBar(
+            backgroundColor: AppColors.primary,
+            elevation: 2,
+            leading: IconButton(
+              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 26),
+              onPressed: () => Navigator.pop(context),
+            ),
+            title: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // اسم المستخدم بخط أكبر
+                Text(
+                  widget.name,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20, // كان 16-17، الآن 20
+                    fontFamily: 'IBMPlexSansArabic',
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                // حالة الاتصال بخط أكبر
+                Row(
+                  children: [
+                    Container(
+                      width: 10, // كان 8، الآن 10
+                      height: 10,
+                      decoration: BoxDecoration(
+                        color: _isOtherUserOnline
+                            ? Colors.greenAccent
+                            : Colors.grey.shade400,
+                        shape: BoxShape.circle,
+                        boxShadow: _isOtherUserOnline
+                            ? [
+                                BoxShadow(
+                                  color: Colors.greenAccent.withOpacity(0.5),
+                                  blurRadius: 4,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _isOtherUserOnline ? 'متصل الآن' : 'غير متصل',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.95),
+                        fontSize: 14, // كان 12، الآن 14
+                        fontWeight: FontWeight.w500,
+                        fontFamily: 'IBMPlexSansArabic',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            actions: [
+              IconButton(
+                icon: const Icon(
+                  Icons.more_vert,
+                  color: Colors.white,
+                  size: 26,
+                ),
+                tooltip: 'المزيد',
+                onPressed: _showOptionsDialog,
+              ),
+            ],
+            toolbarHeight: 70,
+          ),
+
+          body: _isLoadingScreenshotPolicy
+              ? Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )
+              : UnifiedScreenshotProtector(
+                  //  الحماية مفعلة إذا الطرف الآخر لم يسمح لي
+                  enabled: !_peerAllowsMyScreenshots,
+                  peerName: widget.name,
+                  onScreenshotAttempt: () {
+                    // إرسال إشعار للطرف الآخر أني التقطت
+                    _socketService.socket?.emit('screenshot:taken', {
+                      'targetUserId': widget.userId,
+                    });
+                  },
+                  child: _buildBody(hasAttachment),
+                ),
         ),
       ),
-      const SizedBox(height: 4),
-      // حالة الاتصال بخط أكبر
-      Row(
-        children: [
-          Container(
-            width: 10, // كان 8، الآن 10
-            height: 10,
-            decoration: BoxDecoration(
-              color: _isOtherUserOnline
-                  ? Colors.greenAccent
-                  : Colors.grey.shade400,
-              shape: BoxShape.circle,
-              boxShadow: _isOtherUserOnline
-                  ? [
-                      BoxShadow(
-                        color: Colors.greenAccent.withOpacity(0.5),
-                        blurRadius: 4,
-                        spreadRadius: 1,
-                      ),
-                    ]
-                  : null,
-            ),
-          ),
-          const SizedBox(width: 8),
-          Text(
-            _isOtherUserOnline ? 'متصل الآن' : 'غير متصل',
-            style: TextStyle(
-              color: Colors.white.withOpacity(0.95),
-              fontSize: 14, // كان 12، الآن 14
-              fontWeight: FontWeight.w500,
-              fontFamily: 'IBMPlexSansArabic',
-            ),
-          ),
-        ],
-      ),
-    ],
-  ),
-  actions: [
-    IconButton(
-      icon: const Icon(Icons.more_vert, color: Colors.white, size: 26),
-      tooltip: 'المزيد',
-      onPressed: _showOptionsDialog,
-    ),
-  ],
-  toolbarHeight: 70, // زيادة ارتفاع AppBar لاستيعاب النص الأكبر
-),
-
-        body: _isLoadingScreenshotPolicy
-            ? Center(child: CircularProgressIndicator(color: AppColors.primary))
-            : UnifiedScreenshotProtector(
-                //  الحماية مفعلة إذا الطرف الآخر لم يسمح لي
-                enabled: !_peerAllowsMyScreenshots,
-                peerName: widget.name,
-                onScreenshotAttempt: () {
-                  // إرسال إشعار للطرف الآخر أني التقطت
-                  _socketService.socket?.emit('screenshot:taken', {
-                    'targetUserId': widget.userId,
-                  });
-                },
-                child: _buildBody(hasAttachment),
-              ),
-      ),
-    )
     );
   }
 
@@ -2118,322 +2129,322 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
   }
 
   Widget _buildInputBar() {
-  final canSend = currentDuration != null &&
-      !_rekeyRequired &&
-      (_messageController.text.trim().isNotEmpty ||
-          _pendingImageFile != null ||
-          _pendingFile != null);
+    final canSend =
+        currentDuration != null &&
+        !_rekeyRequired &&
+        (_messageController.text.trim().isNotEmpty ||
+            _pendingImageFile != null ||
+            _pendingFile != null);
 
-  final isEnabled = currentDuration != null && !_rekeyRequired;
+    final isEnabled = currentDuration != null && !_rekeyRequired;
 
-  return Container(
-    padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.08),
-          blurRadius: 12,
-          offset: const Offset(0, -2),
-        ),
-      ],
-    ),
-    child: SafeArea(
-      top: false,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // شريط المدة في الأعلى
-          if (currentDuration == null)
-            Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.orange.shade50,
-                    Colors.orange.shade100,
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: Colors.orange.shade200,
-                  width: 1.5,
-                ),
-              ),
-              child: Row(
-                children: [
-                  AnimatedBuilder(
-                    animation: _pulseAnimation,
-                    builder: (context, child) {
-                      return Transform.scale(
-                        scale: _pulseAnimation.value,
-                        child: Icon(
-                          Icons.info_outline,
-                          color: Colors.orange.shade700,
-                          size: 20,
-                        ),
-                      );
-                    },
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'اختر مدة اختفاء الرسائل من أيقونة الساعة',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.orange.shade900,
-                        fontWeight: FontWeight.w600,
-                        fontFamily: 'IBMPlexSansArabic',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-          // الصف الرئيسي للإدخال
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              // أيقونة المدة
-              GestureDetector(
-                onTap: _selectDuration,
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: currentDuration != null
-                        ? AppColors.primary.withOpacity(0.1)
-                        : Colors.orange.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: currentDuration != null
-                          ? AppColors.primary.withOpacity(0.3)
-                          : Colors.orange.shade300,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      if (currentDuration == null)
-                        AnimatedBuilder(
-                          animation: _pulseAnimation,
-                          builder: (context, child) {
-                            return Transform.scale(
-                              scale: _pulseAnimation.value,
-                              child: Icon(
-                                Icons.timer_outlined,
-                                color: Colors.orange.shade700,
-                                size: 20,
-                              ),
-                            );
-                          },
-                        )
-                      else
-                        Icon(
-                          Icons.timer,
-                          color: AppColors.primary,
-                          size: 18,
-                        ),
-                      if (currentDuration != null)
-                        Text(
-                          _formatDuration(currentDuration!),
-                          style: TextStyle(
-                            fontSize: 9,
-                            color: AppColors.primary,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'IBMPlexSansArabic',
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // أيقونة المرفقات
-              GestureDetector(
-                onTap: isEnabled ? _showAttachmentOptions : null,
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: isEnabled
-                        ? AppColors.primary.withOpacity(0.1)
-                        : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isEnabled
-                          ? AppColors.primary.withOpacity(0.3)
-                          : Colors.grey.shade300,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Icon(
-                    Icons.attach_file_rounded,
-                    color: isEnabled ? AppColors.primary : Colors.grey.shade400,
-                    size: 22,
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // حقل الإدخال المودرن
-              Expanded(
-                child: Container(
-                  constraints: const BoxConstraints(
-                    minHeight: 48,
-                    maxHeight: 120,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isEnabled ? Colors.grey.shade50 : Colors.grey.shade100,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: isEnabled
-                          ? AppColors.primary.withOpacity(0.2)
-                          : Colors.grey.shade300,
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      // حقل النص
-                      Expanded(
-                        child: TextField(
-                          controller: _messageController,
-                          enabled: isEnabled && !_isSending,
-                          maxLines: null,
-                          textDirection: TextDirection.rtl,
-                          textInputAction: TextInputAction.newline,
-                          style: TextStyle(
-                            fontSize: 17,
-                            height: 1.4,
-                            color: AppColors.textPrimary,
-                            fontFamily: 'IBMPlexSansArabic',
-                          ),
-                          decoration: InputDecoration(
-                            hintText: isEnabled
-                                ? 'اكتب رسالتك هنا...'
-                                : (_rekeyRequired
-                                      ? 'جاري إعادة تهيئة التشفير...'
-                                      : 'اختر المدة أولاً'),
-                            hintStyle: TextStyle(
-                              color: AppColors.textHint,
-                              fontSize: 17,
-                              fontFamily: 'IBMPlexSansArabic',
-                            ),
-                            border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 14,
-                            ),
-                            isDense: true,
-                          ),
-                          onSubmitted: canSend && !_isSending
-                              ? (_) => _sendMessage()
-                              : null,
-                          onChanged: (_) {
-                            // تحديث خفيف فقط لزر الإرسال
-                            setState(() {});
-                          },
-                        ),
-                      ),
-
-                      // زر إخفاء الكيبورد (يظهر فقط عند الكتابة)
-                      if (_messageController.text.isNotEmpty)
-                        GestureDetector(
-                          onTap: () {
-                            FocusScope.of(context).unfocus();
-                          },
-                          child: Padding(
-                            padding: const EdgeInsets.only(
-                              left: 8,
-                              right: 4,
-                              bottom: 10,
-                            ),
-                            child: Icon(
-                              Icons.keyboard_hide,
-                              color: AppColors.textHint,
-                              size: 20,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-
-              const SizedBox(width: 8),
-
-              // زر الإرسال المودرن
-              GestureDetector(
-                onTap: canSend && !_isSending ? _sendMessage : null,
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    gradient: canSend && !_isSending
-                        ? LinearGradient(
-                            colors: [
-                              AppColors.primary,
-                              AppColors.primary.withOpacity(0.8),
-                            ],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          )
-                        : null,
-                    color: !canSend || _isSending
-                        ? Colors.grey.shade300
-                        : null,
-                    borderRadius: BorderRadius.circular(12),
-                    boxShadow: canSend && !_isSending
-                        ? [
-                            BoxShadow(
-                              color: AppColors.primary.withOpacity(0.3),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ]
-                        : null,
-                  ),
-                  child: Center(
-                    child: _isSending
-                        ? SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
-                            ),
-                          )
-                        : Icon(
-                            Icons.send_rounded,
-                            color: canSend ? Colors.white : Colors.grey.shade500,
-                            size: 22,
-                          ),
-                  ),
-                ),
-              ),
-            ],
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 12,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
-    ),
-  );
-}
+      child: SafeArea(
+        top: false,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // شريط المدة في الأعلى
+            if (currentDuration == null)
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [Colors.orange.shade50, Colors.orange.shade100],
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.orange.shade200, width: 1.5),
+                ),
+                child: Row(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _pulseAnimation,
+                      builder: (context, child) {
+                        return Transform.scale(
+                          scale: _pulseAnimation.value,
+                          child: Icon(
+                            Icons.info_outline,
+                            color: Colors.orange.shade700,
+                            size: 20,
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'اختر مدة اختفاء الرسائل من أيقونة الساعة',
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: Colors.orange.shade900,
+                          fontWeight: FontWeight.w600,
+                          fontFamily: 'IBMPlexSansArabic',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // الصف الرئيسي للإدخال
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                // أيقونة المدة
+                GestureDetector(
+                  onTap: _selectDuration,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: currentDuration != null
+                          ? AppColors.primary.withOpacity(0.1)
+                          : Colors.orange.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: currentDuration != null
+                            ? AppColors.primary.withOpacity(0.3)
+                            : Colors.orange.shade300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (currentDuration == null)
+                          AnimatedBuilder(
+                            animation: _pulseAnimation,
+                            builder: (context, child) {
+                              return Transform.scale(
+                                scale: _pulseAnimation.value,
+                                child: Icon(
+                                  Icons.timer_outlined,
+                                  color: Colors.orange.shade700,
+                                  size: 20,
+                                ),
+                              );
+                            },
+                          )
+                        else
+                          Icon(Icons.timer, color: AppColors.primary, size: 18),
+                        if (currentDuration != null)
+                          Text(
+                            _formatDuration(currentDuration!),
+                            style: TextStyle(
+                              fontSize: 9,
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'IBMPlexSansArabic',
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // أيقونة المرفقات
+                GestureDetector(
+                  onTap: isEnabled ? _showAttachmentOptions : null,
+                  child: Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: isEnabled
+                          ? AppColors.primary.withOpacity(0.1)
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: isEnabled
+                            ? AppColors.primary.withOpacity(0.3)
+                            : Colors.grey.shade300,
+                        width: 1.5,
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.attach_file_rounded,
+                      color: isEnabled
+                          ? AppColors.primary
+                          : Colors.grey.shade400,
+                      size: 22,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // حقل الإدخال
+                Expanded(
+                  child: Container(
+                    constraints: const BoxConstraints(
+                      minHeight: 48,
+                      maxHeight: 120,
+                    ),
+                    decoration: BoxDecoration(
+                      color: isEnabled
+                          ? Colors.grey.shade50
+                          : Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: isEnabled
+                            ? AppColors.primary.withOpacity(0.2)
+                            : Colors.grey.shade300,
+                        width: 1.5,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.05),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // حقل النص
+                        Expanded(
+                          child: TextField(
+                            controller: _messageController,
+                            enabled: isEnabled && !_isSending,
+                            maxLines: null,
+                            textDirection: TextDirection.rtl,
+                            textInputAction: TextInputAction.newline,
+                            style: TextStyle(
+                              fontSize: 17,
+                              height: 1.4,
+                              color: AppColors.textPrimary,
+                              fontFamily: 'IBMPlexSansArabic',
+                            ),
+                            decoration: InputDecoration(
+                              hintText: isEnabled
+                                  ? 'اكتب رسالتك هنا...'
+                                  : (_rekeyRequired
+                                        ? 'جاري إعادة تهيئة التشفير...'
+                                        : 'اختر المدة أولاً'),
+                              hintStyle: TextStyle(
+                                color: AppColors.textHint,
+                                fontSize: 17,
+                                fontFamily: 'IBMPlexSansArabic',
+                              ),
+                              border: InputBorder.none,
+                              contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 20,
+                                vertical: 14,
+                              ),
+                              isDense: true,
+                            ),
+                            onSubmitted: canSend && !_isSending
+                                ? (_) => _sendMessage()
+                                : null,
+                            onChanged: (_) {
+                              setState(() {});
+                            },
+                          ),
+                        ),
+
+                        // زر إخفاء الكيبورد (يظهر فقط عند الكتابة)
+                        if (_messageController.text.isNotEmpty)
+                          GestureDetector(
+                            onTap: () {
+                              FocusScope.of(context).unfocus();
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                left: 8,
+                                right: 4,
+                                bottom: 10,
+                              ),
+                              child: Icon(
+                                Icons.keyboard_hide,
+                                color: AppColors.textHint,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // زر الإرسال
+                GestureDetector(
+                  onTap: canSend && !_isSending ? _sendMessage : null,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      gradient: canSend && !_isSending
+                          ? LinearGradient(
+                              colors: [
+                                AppColors.primary,
+                                AppColors.primary.withOpacity(0.8),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            )
+                          : null,
+                      color: !canSend || _isSending
+                          ? Colors.grey.shade300
+                          : null,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: canSend && !_isSending
+                          ? [
+                              BoxShadow(
+                                color: AppColors.primary.withOpacity(0.3),
+                                blurRadius: 12,
+                                offset: const Offset(0, 4),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Center(
+                      child: _isSending
+                          ? SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.5,
+                              ),
+                            )
+                          : Icon(
+                              Icons.send_rounded,
+                              color: canSend
+                                  ? Colors.white
+                                  : Colors.grey.shade500,
+                              size: 22,
+                            ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(Map<String, dynamic> message) {
     final isMine = message['isMine'] == 1;
     final isLocked = false;
@@ -2498,14 +2509,14 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
               if (hasAttachment && !isLocked) ...[
                 if (attachmentType == 'image')
                   ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.memory(
-                        base64Decode(attachmentData),
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        cacheWidth: 800, // تحسين الأداء
-                        gaplessPlayback: true, // منع الوميض
-                        errorBuilder: (context, error, stackTrace) {
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.memory(
+                      base64Decode(attachmentData),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      cacheWidth: 800, // تحسين الأداء
+                      gaplessPlayback: true, // منع الوميض
+                      errorBuilder: (context, error, stackTrace) {
                         return Container(
                           height: 200,
                           color: Colors.grey.shade300,
@@ -2570,8 +2581,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
                   style: AppTextStyles.bodyMedium.copyWith(
                     color: isMine ? Colors.white : AppColors.textPrimary,
                     fontSize: 18,
-                     height: 1.5,
-                     fontFamily: 'IBMPlexSansArabic'
+                    height: 1.5,
+                    fontFamily: 'IBMPlexSansArabic',
                   ),
                 ),
 
@@ -2704,7 +2715,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         Uint8List bytes;
 
         bytes = base64Decode(data);
-        print('✅ File decoded: ${bytes.length} bytes');
+        print('File decoded: ${bytes.length} bytes');
 
         final tempDir = await getTemporaryDirectory();
         final fileName =
@@ -2712,7 +2723,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         final tempFile = File('${tempDir.path}/$fileName');
 
         await tempFile.writeAsBytes(bytes);
-        print('✅ File saved to: ${tempFile.path}');
+        print('File saved to: ${tempFile.path}');
 
         final result = await OpenFilex.open(tempFile.path);
 
@@ -2723,7 +2734,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver, Si
         }
       }
     } catch (e, stackTrace) {
-      print('❌ Open attachment error: $e');
+      print('Open attachment error: $e');
       print('Stack trace: $stackTrace');
       _showMessage('فشل فتح المرفق: $e', false);
     }

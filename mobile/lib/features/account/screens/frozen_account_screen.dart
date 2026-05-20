@@ -14,44 +14,50 @@ class FrozenAccountScreen extends StatefulWidget {
 class _FrozenAccountScreenState extends State<FrozenAccountScreen>
     with TickerProviderStateMixin {
   final _emailController = TextEditingController();
-  final _codeController  = TextEditingController();
-  final _api             = ApiService();
-  bool   _loading        = false;
-  String _freezeType     = 'email';
+  final _codeController = TextEditingController();
+  final _api = ApiService();
+  bool _loading = false;
+  String _freezeType = 'email';
 
   late AnimationController _entranceCtrl;
   late AnimationController _pulseCtrl;
-  late Animation<double>   _fadeAnim;
-  late Animation<Offset>   _slideAnim;
-  late Animation<double>   _pulseAnim;
+  late Animation<double> _fadeAnim;
+  late Animation<Offset> _slideAnim;
+  late Animation<double> _pulseAnim;
 
-  static const _bg         = Color(0xFFFCF9F9);
-  static const _surface    = Colors.white;
+  static const _bg = Color(0xFFFCF9F9);
+  static const _surface = Colors.white;
   static const _surfaceAlt = Color(0xFFF5F3F8);
-  static const _red        = Color(0xFFB03030);
-  static const _redLight   = Color(0xFFFDF0F0);
-  static const _brand      = Color(0xFF2D1B69);
-  static const _textPri    = Color(0xFF1A0A0A);
-  static const _textSec    = Color(0xFF5A5060);
-  static const _textMuted  = Color(0xFFA09AAD);
-  static const _textOnBtn  = Colors.white;
-  // ───────────────────────────────────────────────────────────
+  static const _red = Color(0xFFB03030);
+  static const _redLight = Color(0xFFFDF0F0);
+  static const _brand = Color(0xFF2D1B69);
+  static const _textPri = Color(0xFF1A0A0A);
+  static const _textSec = Color(0xFF5A5060);
+  static const _textMuted = Color(0xFFA09AAD);
+  static const _textOnBtn = Colors.white;
 
   @override
   void initState() {
     super.initState();
 
     _entranceCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 850));
-    _fadeAnim  = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
+      vsync: this,
+      duration: const Duration(milliseconds: 850),
+    );
+    _fadeAnim = CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOut);
     _slideAnim = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic));
+        .animate(
+          CurvedAnimation(parent: _entranceCtrl, curve: Curves.easeOutCubic),
+        );
 
     _pulseCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1800))
-      ..repeat(reverse: true);
-    _pulseAnim = Tween<double>(begin: 0.88, end: 1.0)
-        .animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat(reverse: true);
+    _pulseAnim = Tween<double>(
+      begin: 0.88,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut));
 
     _entranceCtrl.forward();
   }
@@ -78,11 +84,11 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
       _snack('الرجاء إدخال البريد والرمز كاملاً', isError: false);
       return;
     }
-    
+
     setState(() => _loading = true);
     final result = await _api.unfreezeAccount(
       email: _emailController.text.trim(),
-      code:  _codeController.text.trim(),
+      code: _codeController.text.trim(),
     );
     setState(() => _loading = false);
     if (!mounted) return;
@@ -94,11 +100,15 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
         Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
-              builder: (_) => const ResetPasswordScreen(isFromFrozen: true)),
+            builder: (_) => const ResetPasswordScreen(isFromFrozen: true),
+          ),
           (r) => false,
         );
       } else {
-        navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (r) => false);
+        navigatorKey.currentState?.pushNamedAndRemoveUntil(
+          '/login',
+          (r) => false,
+        );
       }
     } else {
       _snack(result['message'] ?? 'حدث خطأ', isError: true);
@@ -106,15 +116,21 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
   }
 
   void _snack(String msg, {required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg,
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          msg,
           style: const TextStyle(
-              fontFamily: 'IBMPlexSansArabic', color: _textOnBtn)),
-      backgroundColor: isError ? _red : _brand,
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      margin: const EdgeInsets.all(16),
-    ));
+            fontFamily: 'IBMPlexSansArabic',
+            color: _textOnBtn,
+          ),
+        ),
+        backgroundColor: isError ? _red : _brand,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   Future<void> _showSuccessDialog() async {
@@ -126,7 +142,9 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
         textDirection: TextDirection.rtl,
         child: Dialog(
           backgroundColor: _surface,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Container(
             padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
@@ -138,24 +156,32 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 76, height: 76,
+                  width: 76,
+                  height: 76,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.green.shade50,
                     border: Border.all(
-                        color: Colors.green.shade300, width: 1.5),
+                      color: Colors.green.shade300,
+                      width: 1.5,
+                    ),
                   ),
-                  child: Icon(Icons.lock_open_rounded,
-                      color: Colors.green.shade600, size: 36),
+                  child: Icon(
+                    Icons.lock_open_rounded,
+                    color: Colors.green.shade600,
+                    size: 36,
+                  ),
                 ),
                 const SizedBox(height: 20),
-                const Text('تم فك التجميد بنجاح',
-                    style: TextStyle(
-                      fontFamily: 'IBMPlexSansArabic',
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: _textPri,
-                    )),
+                const Text(
+                  'تم فك التجميد بنجاح',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: _textPri,
+                  ),
+                ),
                 const SizedBox(height: 10),
                 Text(
                   _freezeType == 'password'
@@ -177,17 +203,20 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _brand,
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       elevation: 0,
                     ),
-                    child: const Text('حسناً',
-                        style: TextStyle(
-                          fontFamily: 'IBMPlexSansArabic',
-                          color: _textOnBtn,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        )),
+                    child: const Text(
+                      'حسناً',
+                      style: TextStyle(
+                        fontFamily: 'IBMPlexSansArabic',
+                        color: _textOnBtn,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -207,8 +236,10 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
         body: Stack(
           children: [
             CustomPaint(
-              size: Size(MediaQuery.of(context).size.width,
-                  MediaQuery.of(context).size.height),
+              size: Size(
+                MediaQuery.of(context).size.width,
+                MediaQuery.of(context).size.height,
+              ),
               painter: _TrianglePainter(),
             ),
             SafeArea(
@@ -218,7 +249,9 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
                   position: _slideAnim,
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 24, vertical: 20),
+                      horizontal: 24,
+                      vertical: 20,
+                    ),
                     child: Column(
                       children: [
                         const SizedBox(height: 16),
@@ -254,16 +287,17 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
           Transform.scale(
             scale: _pulseAnim.value,
             child: Container(
-              width: 90, height: 90,
+              width: 90,
+              height: 90,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                    color: _red.withOpacity(0.2), width: 1.5),
+                border: Border.all(color: _red.withOpacity(0.2), width: 1.5),
               ),
             ),
           ),
           Container(
-            width: 68, height: 68,
+            width: 68,
+            height: 68,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               color: _redLight,
@@ -279,14 +313,16 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
   Widget _buildTitles() {
     return Column(
       children: [
-        const Text('تم تجميد حسابك',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 23,
-              fontWeight: FontWeight.bold,
-              color: _textPri,
-            )),
+        const Text(
+          'تم تجميد حسابك',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 23,
+            fontWeight: FontWeight.bold,
+            color: _textPri,
+          ),
+        ),
         const SizedBox(height: 7),
         Text(
           _freezeType == 'password'
@@ -304,46 +340,50 @@ class _FrozenAccountScreenState extends State<FrozenAccountScreen>
     );
   }
 
-Widget _buildWarningBanner() {
-  return Container(
-    width: double.infinity,
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-    decoration: BoxDecoration(
-      color: _red.withOpacity(0.06),
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: _red.withOpacity(0.2), width: 1),
-    ),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-         Container(
-          width: 34, height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: _red.withOpacity(0.08),
-          ),
-          child: const Icon(Icons.warning_amber_rounded, color: _red, size: 18),
-        ),
-        Expanded(
-          child: Text(
-            _freezeType == 'password'
-                ? 'أدخل بريدك الإلكتروني ورمز فك التجميد المُرسل إليك لاستعادة حسابك.'
-                : 'أدخل بريدك الإلكتروني القديم ورمز فك التجميد المُرسل إليك لاستعادة حسابك.',
-            textAlign: TextAlign.right,   
-            style: const TextStyle(
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 12.5,
+  Widget _buildWarningBanner() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: _red.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _red.withOpacity(0.2), width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _red.withOpacity(0.08),
+            ),
+            child: const Icon(
+              Icons.warning_amber_rounded,
               color: _red,
-              height: 1.65,
+              size: 18,
             ),
           ),
-        ),
-        const SizedBox(width: 10),
-       
-      ],
-    ),
-  );
-}
+          Expanded(
+            child: Text(
+              _freezeType == 'password'
+                  ? 'أدخل بريدك الإلكتروني ورمز فك التجميد المُرسل إليك لاستعادة حسابك.'
+                  : 'أدخل بريدك الإلكتروني القديم ورمز فك التجميد المُرسل إليك لاستعادة حسابك.',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                fontSize: 12.5,
+                color: _red,
+                height: 1.65,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
+    );
+  }
 
   Widget _buildCard() {
     return Container(
@@ -362,7 +402,7 @@ Widget _buildWarningBanner() {
         ],
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start, 
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _buildField(
             controller: _emailController,
@@ -399,27 +439,33 @@ Widget _buildWarningBanner() {
           backgroundColor: _red,
           disabledBackgroundColor: _surfaceAlt,
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
           elevation: 0,
         ),
         child: _loading
             ? const SizedBox(
-                width: 22, height: 22,
+                width: 22,
+                height: 22,
                 child: CircularProgressIndicator(
-                    color: _textOnBtn, strokeWidth: 2.5))
+                  color: _textOnBtn,
+                  strokeWidth: 2.5,
+                ),
+              )
             : const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('فك التجميد',
-                      style: TextStyle(
-                        fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 16,
-                        color: _textOnBtn,
-                        fontWeight: FontWeight.bold,
-                      )),
+                  Text(
+                    'فك التجميد',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 16,
+                      color: _textOnBtn,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                   SizedBox(width: 10),
-                  Icon(Icons.lock_open_rounded,
-                      color: _textOnBtn, size: 20),
+                  Icon(Icons.lock_open_rounded, color: _textOnBtn, size: 20),
                 ],
               ),
       ),
@@ -458,13 +504,15 @@ Widget _buildWarningBanner() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label,
-            style: const TextStyle(
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 12.5,
-              color: _textSec,
-              fontWeight: FontWeight.w500,
-            )),
+        Text(
+          label,
+          style: const TextStyle(
+            fontFamily: 'IBMPlexSansArabic',
+            fontSize: 12.5,
+            color: _textSec,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
         const SizedBox(height: 7),
         TextField(
           controller: controller,
@@ -487,22 +535,21 @@ Widget _buildWarningBanner() {
               fontSize: isCode ? 18 : 13,
               letterSpacing: isCode ? 8.0 : 0,
             ),
-            suffixIcon:
-                isCode ? null : Icon(icon, color: _textMuted, size: 18),
+            suffixIcon: isCode ? null : Icon(icon, color: _textMuted, size: 18),
             counterText: '',
             filled: true,
             fillColor: _surfaceAlt,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: Colors.black.withOpacity(0.07)),
+              borderSide: BorderSide(color: Colors.black.withOpacity(0.07)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide:
-                  BorderSide(color: Colors.black.withOpacity(0.07)),
+              borderSide: BorderSide(color: Colors.black.withOpacity(0.07)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -522,23 +569,35 @@ class _TrianglePainter extends CustomPainter {
     final h = size.height;
 
     void tri(List<Offset> pts, Color color) {
-      canvas.drawPath(
-        Path()..addPolygon(pts, true),
-        Paint()..color = color,
-      );
+      canvas.drawPath(Path()..addPolygon(pts, true), Paint()..color = color);
     }
 
-    tri([Offset(w, 0), Offset(w * 0.42, 0), Offset(w, h * 0.24)],
-        const Color(0xFFB03030).withOpacity(0.09));
-    tri([Offset(w, 0), Offset(w * 0.65, 0), Offset(w, h * 0.12)],
-        const Color(0xFFB03030).withOpacity(0.06));
-    tri([Offset(0, 0), Offset(w * 0.22, 0), Offset(0, h * 0.14)],
-        const Color(0xFFB03030).withOpacity(0.04));
+    tri([
+      Offset(w, 0),
+      Offset(w * 0.42, 0),
+      Offset(w, h * 0.24),
+    ], const Color(0xFFB03030).withOpacity(0.09));
+    tri([
+      Offset(w, 0),
+      Offset(w * 0.65, 0),
+      Offset(w, h * 0.12),
+    ], const Color(0xFFB03030).withOpacity(0.06));
+    tri([
+      Offset(0, 0),
+      Offset(w * 0.22, 0),
+      Offset(0, h * 0.14),
+    ], const Color(0xFFB03030).withOpacity(0.04));
 
-    tri([Offset(0, h), Offset(0, h * 0.65), Offset(w * 0.60, h)],
-        const Color(0xFF2D1B69).withOpacity(0.12));
-    tri([Offset(0, h), Offset(0, h * 0.80), Offset(w * 0.34, h)],
-        const Color(0xFF2D1B69).withOpacity(0.08));
+    tri([
+      Offset(0, h),
+      Offset(0, h * 0.65),
+      Offset(w * 0.60, h),
+    ], const Color(0xFF2D1B69).withOpacity(0.12));
+    tri([
+      Offset(0, h),
+      Offset(0, h * 0.80),
+      Offset(w * 0.34, h),
+    ], const Color(0xFF2D1B69).withOpacity(0.08));
   }
 
   @override

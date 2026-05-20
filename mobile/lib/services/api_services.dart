@@ -26,21 +26,6 @@ class ApiService {
   static String _hibpApiKey = AppConfig.hibpApikey;
   static const String _hibpBaseUrl = 'https://haveibeenpwned.com/api/v3';
 
-  // Base URL بحسب المنصة
-  // ============================
-
-  /*
-  static String get baseUrl {
-    if (Platform.isAndroid) {
-      // Android Emulator -> يصل للـ localhost على المضيف عبر 10.0.2.2
-      return 'http://10.0.2.2:3000/api';
-    } else if (Platform.isIOS) {
-      // iOS Simulator -> يتصل مباشرة على نفس الجهاز
-      return 'http://localhost:3000/api';
-    } else {
-      return 'http://localhost:3000/api';
-    }
-  }*/
   ApiService._internal();
   static final ApiService instance = ApiService._internal();
   factory ApiService() => instance;
@@ -531,25 +516,25 @@ class ApiService {
 
   Future<Map<String, String>> _authHeaders() async {
     final token = await _storage.read(key: 'access_token');
- String deviceName = '';
-  try {
-    DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
-    if (Platform.isAndroid) {
-      AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
-      deviceName = "${androidInfo.manufacturer} ${androidInfo.model}";
-    } else if (Platform.isIOS) {
-      IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
-      deviceName = iosInfo.name;
-    }
-  } catch (_) {}
+    String deviceName = '';
+    try {
+      DeviceInfoPlugin deviceInfo = DeviceInfoPlugin();
+      if (Platform.isAndroid) {
+        AndroidDeviceInfo androidInfo = await deviceInfo.androidInfo;
+        deviceName = "${androidInfo.manufacturer} ${androidInfo.model}";
+      } else if (Platform.isIOS) {
+        IosDeviceInfo iosInfo = await deviceInfo.iosInfo;
+        deviceName = iosInfo.name;
+      }
+    } catch (_) {}
 
-  return {
-    'Content-Type': 'application/json',
-    'Accept': 'application/json',
-    if (token != null) 'Authorization': 'Bearer $token',
-    if (deviceName.isNotEmpty) 'x-device-name': deviceName,
-  };
-}
+    return {
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      if (token != null) 'Authorization': 'Bearer $token',
+      if (deviceName.isNotEmpty) 'x-device-name': deviceName,
+    };
+  }
 
   // البحث عن مستخدم (username أو phone)
   Future<Map<String, dynamic>> searchContact(String searchQuery) async {
@@ -1218,25 +1203,27 @@ class ApiService {
     }
   }
 
-   Future<Map<String, dynamic>> getPasswordExpDate() async {
-  try {
-    final response = await http.get(
-      Uri.parse('$baseUrl/user/password-exp-date'),
-      headers: await _getAuthHeaders(),
-    );
+  Future<Map<String, dynamic>> getPasswordExpDate() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/user/password-exp-date'),
+        headers: await _getAuthHeaders(),
+      );
 
-    final data = jsonDecode(response.body);
+      final data = jsonDecode(response.body);
 
-    if (response.statusCode == 200) {
-      return data;
-    } else {
-      return {'success': false, 'message': data['message'] ?? 'خطأ في السيرفر'};
+      if (response.statusCode == 200) {
+        return data;
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'خطأ في السيرفر',
+        };
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'تعذر الاتصال بالسيرفر'};
     }
-  } catch (e) {
-    return {'success': false, 'message': 'تعذر الاتصال بالسيرفر'};
   }
-}
-
 
   // ===================================
   //  التحقق من عدد PreKeys
@@ -1534,26 +1521,29 @@ class ApiService {
       return {'success': false, 'message': 'فشل جلب نصيحة اليوم: $e'};
     }
   }
-  Future<Map<String, dynamic>> sendSupportRequest({
-  required String type,
-  required String subject,
-  required String message,
-}) async {
-  try {
-    final headers = await _authHeaders();
-    final response = await http.post(
-      Uri.parse('$baseUrl/support/contact'),
-      headers: headers,
-      body: jsonEncode({
-        'type': type,
-        'subject': subject,
-        'message': message,
-      }),
-    ).timeout(const Duration(seconds: 15));
 
-    return jsonDecode(response.body);
-  } catch (e) {
-    return {'success': false, 'message': 'خطأ في الاتصال'};
+  Future<Map<String, dynamic>> sendSupportRequest({
+    required String type,
+    required String subject,
+    required String message,
+  }) async {
+    try {
+      final headers = await _authHeaders();
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl/support/contact'),
+            headers: headers,
+            body: jsonEncode({
+              'type': type,
+              'subject': subject,
+              'message': message,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+
+      return jsonDecode(response.body);
+    } catch (e) {
+      return {'success': false, 'message': 'خطأ في الاتصال'};
+    }
   }
-}
 }

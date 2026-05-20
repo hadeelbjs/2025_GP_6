@@ -23,7 +23,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
   final _apiService = ApiService();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _isLoading = false;
 
   @override
@@ -105,14 +105,14 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 130),
-                      
+
                       const Icon(
                         Icons.lock_open,
                         size: 80,
                         color: Color(0xFF2D1B69),
                       ),
                       const SizedBox(height: 24),
-                      
+
                       const Text(
                         'إنشاء كلمة مرور جديدة',
                         textAlign: TextAlign.center,
@@ -124,7 +124,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Text(
                         'أدخل كلمة المرور الجديدة',
                         textAlign: TextAlign.center,
@@ -135,7 +135,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 40),
-                      
+
                       CustomTextField(
                         controller: _passwordController,
                         label: 'كلمة المرور الجديدة',
@@ -154,7 +154,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
+
                       CustomTextField(
                         controller: _confirmPasswordController,
                         label: 'تأكيد كلمة المرور',
@@ -173,7 +173,7 @@ class _NewPasswordScreenState extends State<NewPasswordScreen> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      
+
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleResetPassword,
                         style: ElevatedButton.styleFrom(

@@ -29,17 +29,13 @@ class HeaderWidget extends StatelessWidget {
         clipBehavior: Clip.none,
         children: [
           // Background color
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.background,
-            ),
-          ),
+          Container(decoration: BoxDecoration(color: AppColors.background)),
 
           // Decorative background shapes (NOW NON-CLICKABLE)
           if (showBackground) ...[
             Align(
               alignment: Alignment.topCenter,
-              child: IgnorePointer( // ✅ FIX
+              child: IgnorePointer(
                 child: Transform.translate(
                   offset: Offset(-30, (-0.6 * h)),
                   child: Image.asset(
@@ -53,7 +49,7 @@ class HeaderWidget extends StatelessWidget {
             Positioned(
               top: -0.60 * h,
               right: 0.50 * w,
-              child: IgnorePointer( // ✅ FIX
+              child: IgnorePointer(
                 child: Image.asset(
                   'assets/images/Rectangle 14.png',
                   width: w * 0.58,

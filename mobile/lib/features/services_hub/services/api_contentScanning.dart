@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:flutter_heic_to_jpg/flutter_heic_to_jpg.dart';
 import '../../../services/api_services.dart';
+
 class ApiContentService {
   static String virustotalURL = 'https://www.virustotal.com/api/v3/files';
   Map<String, dynamic>? lastResult;
@@ -18,8 +19,7 @@ class ApiContentService {
   static ScanStats fileStats = ScanStats();
   ApiService _apiService = ApiService();
   int _uploadedWidth = 0;
-int _uploadedHeight = 0;
-
+  int _uploadedHeight = 0;
 
   Future<ScanResult> scanURL(String url) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/urls');
@@ -57,62 +57,60 @@ int _uploadedHeight = 0;
       final analysisData = json.decode(analysisResponse.body);
       print(analysisData);
       ScanResult scanResult = ScanResult.fromJson(analysisData);
-      if(scanResult.isSafe){linkStats.recordSafe();
-      await updateScanStats('link', false);
+      if (scanResult.isSafe) {
+        linkStats.recordSafe();
+        await updateScanStats('link', false);
+      } else {
+        linkStats.recordVuln();
+        await updateScanStats('link', true);
       }
-        
-      else {linkStats.recordVuln();
-        await updateScanStats('link', true);}
-        
-      return scanResult;
 
+      return scanResult;
     } catch (e) {
       throw Exception('Error scanning URL: $e');
     }
   }
+
   Future<void> updateScanStats(String type, bool isVulnerable) async {
-  try {
-    final response = await http.post(
-      Uri.parse('$apiBaseUrl/content-scanning-stats/update-$type-stats'),
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ${await _apiService.getAccessToken()}',
-      },
-      body: jsonEncode({ 'isVulnerable': isVulnerable }),
-    );
+    try {
+      final response = await http.post(
+        Uri.parse('$apiBaseUrl/content-scanning-stats/update-$type-stats'),
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ${await _apiService.getAccessToken()}',
+        },
+        body: jsonEncode({'isVulnerable': isVulnerable}),
+      );
 
-    if (response.statusCode != 200) {
-      throw Exception('Failed to update $type stats');
-      
+      if (response.statusCode != 200) {
+        throw Exception('Failed to update $type stats');
+      }
+    } catch (e) {
+      debugPrint('updateScanStats error: $e');
+      rethrow;
     }
-
-  } catch (e) {
-    debugPrint('updateScanStats error: $e');
-    rethrow;
   }
-}
 
-Future<Map<String, dynamic>> getAllStats() async {
-  try {
-    final response = await http.get(
-      Uri.parse('$apiBaseUrl/content-scanning-stats/all-stats'),
-      headers: {
-        'Authorization': 'Bearer ${await _apiService.getAccessToken()}',
-      },
-    );
+  Future<Map<String, dynamic>> getAllStats() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$apiBaseUrl/content-scanning-stats/all-stats'),
+        headers: {
+          'Authorization': 'Bearer ${await _apiService.getAccessToken()}',
+        },
+      );
 
-    if (response.statusCode == 200) {
-      print(response.body);
-      return jsonDecode(response.body);
+      if (response.statusCode == 200) {
+        print(response.body);
+        return jsonDecode(response.body);
+      }
+
+      throw Exception('Failed to fetch stats');
+    } catch (e) {
+      debugPrint('getAllStats error: $e');
+      rethrow;
     }
-
-    throw Exception('Failed to fetch stats');
-
-  } catch (e) {
-    debugPrint('getAllStats error: $e');
-    rethrow;
   }
-}
 
   Future<ScanResult> scanFile(String hash) async {
     final uri = Uri.parse('https://www.virustotal.com/api/v3/files/$hash');
@@ -124,16 +122,16 @@ Future<Map<String, dynamic>> getAllStats() async {
       if (response.statusCode == 200) {
         final jsonResponse = json.decode(response.body);
 
-          ScanResult scanResult = ScanResult.fromJson(jsonResponse);
-          if(scanResult.isSafe){fileStats.recordSafe();
-            await updateScanStats('file', false);
-          }
-            
-          else {fileStats.recordVuln();
-          await updateScanStats('file', true);}
-            
-        return scanResult;
+        ScanResult scanResult = ScanResult.fromJson(jsonResponse);
+        if (scanResult.isSafe) {
+          fileStats.recordSafe();
+          await updateScanStats('file', false);
+        } else {
+          fileStats.recordVuln();
+          await updateScanStats('file', true);
+        }
 
+        return scanResult;
       } else if (response.statusCode == 404) {
         return ScanResult(
           isSafe: true,
@@ -154,7 +152,6 @@ Future<Map<String, dynamic>> getAllStats() async {
     final bytes = await imageFile.readAsBytes();
     final extension = imageFile.path.split('.').last.toLowerCase();
 
- 
     const needsConversion = [
       'heic',
       'heif',
@@ -183,7 +180,6 @@ Future<Map<String, dynamic>> getAllStats() async {
         width: image.width > image.height ? 1280 : null,
         height: image.height >= image.width ? 1280 : null,
       );
-     
     }
 
     final fileSizeKB = bytes.length / 1024;
@@ -201,55 +197,58 @@ Future<Map<String, dynamic>> getAllStats() async {
   }
 
   Future<Map<String, dynamic>?> scanImage(File? imageFile) async {
-  if (imageFile == null) return null;
+    if (imageFile == null) return null;
 
-  try {
-    final compressedFile = await _compressImage(imageFile);
+    try {
+      final compressedFile = await _compressImage(imageFile);
 
-    final bytes = await compressedFile.readAsBytes();
-    final decoded = await decodeImageFromList(bytes);
-    _uploadedWidth = decoded.width;
-    _uploadedHeight = decoded.height;
+      final bytes = await compressedFile.readAsBytes();
+      final decoded = await decodeImageFromList(bytes);
+      _uploadedWidth = decoded.width;
+      _uploadedHeight = decoded.height;
 
-    var request = http.MultipartRequest(
-      'POST',
-      Uri.parse('$apiBaseUrl/content-scanning-stats/scan-image'),
-    );
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('$apiBaseUrl/content-scanning-stats/scan-image'),
+      );
 
-    request.headers['Authorization'] =
-        'Bearer ${await _apiService.getAccessToken()}';
+      request.headers['Authorization'] =
+          'Bearer ${await _apiService.getAccessToken()}';
 
-    request.files.add(
-      await http.MultipartFile.fromPath('file', compressedFile.path),
-    );
+      request.files.add(
+        await http.MultipartFile.fromPath('file', compressedFile.path),
+      );
 
-    var streamedResponse = await request.send();
-    var response = await http.Response.fromStream(streamedResponse);
+      var streamedResponse = await request.send();
+      var response = await http.Response.fromStream(streamedResponse);
 
-    if (response.statusCode == 200) {
-      var jsonData = json.decode(response.body);
-      lastResult = jsonData;
+      if (response.statusCode == 200) {
+        var jsonData = json.decode(response.body);
+        lastResult = jsonData;
 
-      if (jsonData['annotated_image_base64'] != null) {
-        try {
-          annotatedImageBytes = base64Decode(jsonData['annotated_image_base64']);
-        } catch (e) {
-          print('فشل فك تشفير الصورة: $e');
+        if (jsonData['annotated_image_base64'] != null) {
+          try {
+            annotatedImageBytes = base64Decode(
+              jsonData['annotated_image_base64'],
+            );
+          } catch (e) {
+            print('فشل فك تشفير الصورة: $e');
+          }
         }
-      }
 
-      return jsonData;
-    } else {
-      print('خطأ: ${response.statusCode} — ${response.body}');
+        return jsonData;
+      } else {
+        print('خطأ: ${response.statusCode} — ${response.body}');
+        return null;
+      }
+    } catch (e) {
+      print('scan error: $e');
       return null;
     }
-  } catch (e) {
-    print('scan error: $e');
-    return null;
   }
-}
-int get uploadedWidth => _uploadedWidth;
-int get uploadedHeight => _uploadedHeight;
+
+  int get uploadedWidth => _uploadedWidth;
+  int get uploadedHeight => _uploadedHeight;
   // الحصول على الصورة مع البوكسات
   Uint8List? getAnnotatedImage() {
     return annotatedImageBytes;
@@ -457,25 +456,23 @@ int get uploadedHeight => _uploadedHeight;
 
   // ترجمة أسماء الوثائق من الإنجليزي للعربي
   String _translateDocumentClass(String docClass) {
-  Map<String, String> translations = {
-    'credit_card': 'بطاقة ائتمانية',
-    'bank_card': 'بطاقة بنكية',
-    'id_card': 'بطاقة هوية',
-    'passport': 'جواز سفر',
-    'car_plate': 'لوحة سيارة',
-  };
+    Map<String, String> translations = {
+      'credit_card': 'بطاقة ائتمانية',
+      'bank_card': 'بطاقة بنكية',
+      'id_card': 'بطاقة هوية',
+      'passport': 'جواز سفر',
+      'car_plate': 'لوحة سيارة',
+    };
 
-  String normalized = docClass
-      .toLowerCase()
-      .replaceAll(' ', '_');
+    String normalized = docClass.toLowerCase().replaceAll(' ', '_');
 
-  // تحويل الجمع إلى مفرد
-  if (normalized.endsWith('s')) {
-    normalized = normalized.substring(0, normalized.length - 1);
+    // تحويل الجمع إلى مفرد
+    if (normalized.endsWith('s')) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+
+    return translations[normalized] ?? docClass;
   }
-
-  return translations[normalized] ?? docClass;
-}
 
   String _getIconForType(String type) {
     Map<String, String> icons = {
@@ -574,13 +571,12 @@ class ScanStats {
 
   ScanStats({this.safe = 0, this.vuln = 0, this.total = 0});
 
-  recordSafe(){
+  recordSafe() {
     safe++;
     total++;
-
   }
 
-  recordVuln(){
+  recordVuln() {
     vuln++;
     total++;
   }

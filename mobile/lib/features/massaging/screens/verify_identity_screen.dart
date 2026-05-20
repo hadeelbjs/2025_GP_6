@@ -60,7 +60,6 @@ class _VerifyIdentityScreenState extends State<VerifyIdentityScreen> {
                 alignTitleRight: true,
               ),
 
-              // المحتوى السابق كما هو
               Expanded(
                 child: Center(
                   child: Padding(
@@ -124,65 +123,4 @@ class _VerifyIdentityScreenState extends State<VerifyIdentityScreen> {
       ),
     );
   }
-
-  /**Widget build(BuildContext context) {
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        backgroundColor: Colors.white,
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'تحقّق من الهوية\nللمشاهدة',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.h2.copyWith(color: AppColors.primary),
-                  ),
-                  const SizedBox(height: 30),
-                  Container(
-                    width: 180,
-                    height: 180,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: AppColors.primary, width: 3),
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                    child: Icon(
-                      Icons.fingerprint,
-                      size: 120,
-                      color: AppColors.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  if (_busy)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8),
-                      child: CircularProgressIndicator(
-                        color: AppColors.primary,
-                      ),
-                    ),
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(
-                      _error!,
-                      textAlign: TextAlign.center,
-                      style: AppTextStyles.error.copyWith(fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton(
-                      onPressed: _busy ? null : _verify,
-                      child: const Text('إعادة المحاولة'),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }**/
 }

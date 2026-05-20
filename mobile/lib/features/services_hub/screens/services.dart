@@ -57,7 +57,8 @@ class _ServicesScreenState extends State<ServicesScreen>
     },
     {
       'title': 'قوانين الجرائم الإلكترونية',
-      'description': 'تعرّف على حقوقك وما يُعدّ جريمة إلكترونية في النظام السعودي',
+      'description':
+          'تعرّف على حقوقك وما يُعدّ جريمة إلكترونية في النظام السعودي',
       'icons': [Icons.gavel_rounded],
       'color': const Color.fromARGB(198, 40, 27, 103),
       'route': '/laws',
@@ -80,14 +81,14 @@ class _ServicesScreenState extends State<ServicesScreen>
     super.dispose();
   }
 
-  //  مراقبة lifecycle للتطبيق
+  //  مراقبة للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      print('🔄 App resumed from Services - reconnecting socket...');
+      print('App resumed from Services - reconnecting socket...');
       _ensureSocketConnection();
     } else if (state == AppLifecycleState.paused) {
-      print('⏸️ App paused from Services');
+      print('⏸App paused from Services');
     }
   }
 
@@ -95,20 +96,20 @@ class _ServicesScreenState extends State<ServicesScreen>
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
-        print('🔌 Socket not connected - initializing...');
+        print('Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
-          print('✅ Socket connected after resume');
+          print('Socket connected after resume');
           await _requestAllContactsStatus();
         } else {
-          print('❌ Failed to connect socket after resume');
+          print('Failed to connect socket after resume');
         }
       } else {
-        print('✅ Socket already connected');
+        print('Socket already connected');
         await _requestAllContactsStatus();
       }
     } catch (e) {
-      print('❌ Error ensuring socket connection: $e');
+      print('Error ensuring socket connection: $e');
     }
   }
 
@@ -118,7 +119,7 @@ class _ServicesScreenState extends State<ServicesScreen>
       await Future.delayed(const Duration(milliseconds: 500));
 
       if (!_messagingService.isConnected) {
-        print('⚠️ Socket not connected, skipping status requests');
+        print('Socket not connected, skipping status requests');
         return;
       }
 
@@ -135,10 +136,10 @@ class _ServicesScreenState extends State<ServicesScreen>
           }
         }
 
-        print('✅ Status requests sent for all contacts');
+        print('Status requests sent for all contacts');
       }
     } catch (e) {
-      print('❌ Error requesting contacts status: $e');
+      print('Error requesting contacts status: $e');
     }
   }
 

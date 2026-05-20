@@ -4,13 +4,11 @@ import '../widgets/custom-text-field.dart';
 import '../../../services/api_services.dart';
 import 'verify_reset_code.dart';
 import 'login_screen.dart';
-class ResetPasswordScreen extends StatefulWidget {
-final bool isFromFrozen;
 
-  const ResetPasswordScreen({
-    super.key,
-    this.isFromFrozen = false,
-  });
+class ResetPasswordScreen extends StatefulWidget {
+  final bool isFromFrozen;
+
+  const ResetPasswordScreen({super.key, this.isFromFrozen = false});
 
   @override
   State<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -20,7 +18,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
   final _emailController = TextEditingController();
-  
+
   bool _isLoading = false;
 
   @override
@@ -57,9 +55,8 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => VerifyResetCodeScreen(
-            email: _emailController.text.trim(),
-          ),
+          builder: (_) =>
+              VerifyResetCodeScreen(email: _emailController.text.trim()),
         ),
       );
     } else {
@@ -102,16 +99,18 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       const SizedBox(height: 130),
-                      
+
                       const Icon(
                         Icons.lock_reset,
                         size: 80,
                         color: Color(0xFF2D1B69),
                       ),
                       const SizedBox(height: 24),
-                      
-                       Text(
-                        widget.isFromFrozen ? 'إعادة ضبط كلمة المرور' : 'نسيت كلمة المرور؟',
+
+                      Text(
+                        widget.isFromFrozen
+                            ? 'إعادة ضبط كلمة المرور'
+                            : 'نسيت كلمة المرور؟',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 31.44,
@@ -121,11 +120,11 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       Text(
-                        widget.isFromFrozen 
-                        ? 'يرجى إدخال بريدك الإلكتروني لتعيين كلمة مرور جديدة وتأمين حسابك بعد فك التجميد'
-                        : 'أدخل بريدك الإلكتروني وسنرسل لك رمز التحقق',
+                        widget.isFromFrozen
+                            ? 'يرجى إدخال بريدك الإلكتروني لتعيين كلمة مرور جديدة وتأمين حسابك بعد فك التجميد'
+                            : 'أدخل بريدك الإلكتروني وسنرسل لك رمز التحقق',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 14,
@@ -134,7 +133,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         ),
                       ),
                       const SizedBox(height: 40),
-                      
+
                       CustomTextField(
                         controller: _emailController,
                         label: 'البريد الإلكتروني',
@@ -147,7 +146,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                           }
                           final email = value.trim();
                           final emailRegex = RegExp(
-                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
+                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
                           );
                           if (!emailRegex.hasMatch(email)) {
                             return 'الرجاء إدخال بريد إلكتروني صالح';
@@ -156,7 +155,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                         },
                       ),
                       const SizedBox(height: 24),
-                      
+
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleSendCode,
                         style: ElevatedButton.styleFrom(
@@ -187,14 +186,16 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
                               ),
                       ),
                       const SizedBox(height: 16),
-                      
+
                       TextButton(
                         onPressed: _isLoading
                             ? null
                             : () {
                                 Navigator.pushReplacement(
                                   context,
-                                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                                  MaterialPageRoute(
+                                    builder: (_) => const LoginScreen(),
+                                  ),
                                 );
                               },
                         child: const Text(

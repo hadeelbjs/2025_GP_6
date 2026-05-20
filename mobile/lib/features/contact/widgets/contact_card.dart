@@ -37,13 +37,12 @@ class ContactCard extends StatelessWidget {
           ),
           child: Row(
             children: [
-              //  الصورة الشخصية ( افتراضية)
+              //  الصورة الشخصية (افتراضية)
               const CircleAvatar(
                 radius: 28,
                 backgroundImage: AssetImage(
                   'assets/images/default_profile.png',
                 ),
-                // TODO: لاحقاً استبدلها بـ NetworkImage(imageUrlFromDatabase)
               ),
 
               const SizedBox(width: 12),
@@ -59,7 +58,7 @@ class ContactCard extends StatelessWidget {
 
               // زر الحذف
               IconButton(
-                onPressed:() {
+                onPressed: () {
                   onDelete();
                 },
                 icon: const Icon(Icons.delete_outline),

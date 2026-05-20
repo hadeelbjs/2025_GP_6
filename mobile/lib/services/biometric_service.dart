@@ -4,12 +4,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_settings/app_settings.dart';
 
-
-
 class BiometricService {
   static final LocalAuthentication _localAuth = LocalAuthentication();
   static const FlutterSecureStorage _storage = FlutterSecureStorage();
-  
+
   // Keys للتخزين الآمن
   static const String _biometricEnabledKey = 'biometric_enabled';
   static const String _biometricUserKey = 'biometric_user_email';
@@ -23,9 +21,11 @@ class BiometricService {
       return false;
     }
   }
-static void openBiometricSettings() {
-  AppSettings.openAppSettings(type: AppSettingsType.security);
-}
+
+  static void openBiometricSettings() {
+    AppSettings.openAppSettings(type: AppSettingsType.security);
+  }
+
   /// التحقق من توفر البصمات في الجهاز
   static Future<bool> canCheckBiometrics() async {
     try {
@@ -36,7 +36,7 @@ static void openBiometricSettings() {
     }
   }
 
-   ///  دالة جديدة: التحقق من وجود بصمات مسجلة فعلياً في الجهاز
+  ///   التحقق من وجود بصمات مسجلة فعلياً في الجهاز
   static Future<bool> hasEnrolledBiometrics() async {
     try {
       final availableBiometrics = await _localAuth.getAvailableBiometrics();
@@ -54,15 +54,15 @@ static void openBiometricSettings() {
       if (!canUse) return false;
 
       final success = await authenticateWithBiometrics(
-        reason: 'تأكيد تفعيل البصمة لحسابك'
+        reason: 'تأكيد تفعيل البصمة لحسابك',
       );
-      
+
       if (success) {
         await _storage.write(key: _biometricEnabledKey, value: 'true');
         await _storage.write(key: _biometricUserKey, value: userEmail);
         return true;
       }
-      
+
       return false;
     } catch (e) {
       debugPrint('خطأ في تفعيل البصمة: $e');
@@ -102,7 +102,7 @@ static void openBiometricSettings() {
   /// التحقق من البصمة
   static Future<bool> authenticateWithBiometrics({
     String? reason,
-    bool biometricOnly = false, 
+    bool biometricOnly = false,
   }) async {
     try {
       final isSupported = await isDeviceSupported();
@@ -120,7 +120,6 @@ static void openBiometricSettings() {
           stickyAuth: true,
         ),
       );
-
     } catch (e) {
       debugPrint('خطأ في التحقق من البصمة: $e');
       return false;
@@ -128,14 +127,14 @@ static void openBiometricSettings() {
   }
 
   // حفظ علامة إن المستخدم للتو سوى logout
-static Future<void> setJustLoggedOut(bool value) async {
-  final prefs = await SharedPreferences.getInstance();
-  await prefs.setBool('just_logged_out', value);
-}
+  static Future<void> setJustLoggedOut(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('just_logged_out', value);
+  }
 
-// فحص إذا المستخدم للتو سوى logout
-static Future<bool> getJustLoggedOut() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getBool('just_logged_out') ?? false;
-}
+  // فحص إذا المستخدم للتو سوى logout
+  static Future<bool> getJustLoggedOut() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('just_logged_out') ?? false;
+  }
 }

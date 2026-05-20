@@ -10,6 +10,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'dart:io';
+
 class VerifyEmailScreen extends StatefulWidget {
   final String email;
   final String? fullName;
@@ -35,7 +36,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
   final _codeControllers = List.generate(6, (_) => TextEditingController());
   final _focusNodes = List.generate(6, (_) => FocusNode());
   final _previousValues = List.generate(6, (_) => '');
-  
+
   bool _isLoading = false;
   bool _isResending = false;
   int _resendTimer = 60;
@@ -53,7 +54,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
       _codeControllers[i].addListener(() {
         final currentValue = _codeControllers[i].text;
         final previousValue = _previousValues[i];
-        
+
         if (currentValue.isEmpty && previousValue.isNotEmpty) {
           if (i > 0) {
             Future.delayed(const Duration(milliseconds: 50), () {
@@ -61,7 +62,7 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
             });
           }
         }
-        
+
         _previousValues[i] = currentValue;
       });
     }
@@ -100,39 +101,41 @@ class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
     }
 
     setState(() => _isLoading = true);
-String? deviceName;
+    String? deviceName;
 
     try {
-         try {
-            final deviceInfo = DeviceInfoPlugin();
-            if (Platform.isAndroid) {
-              final info = await deviceInfo.androidInfo;
-              deviceName = '${info.manufacturer} ${info.model}';
-            } else if (Platform.isIOS) {
-              final info = await deviceInfo.iosInfo;
-              deviceName = info.name;
-            }
-          } catch (_) {}
-          
-          final result = widget.is2FA
+      try {
+        final deviceInfo = DeviceInfoPlugin();
+        if (Platform.isAndroid) {
+          final info = await deviceInfo.androidInfo;
+          deviceName = '${info.manufacturer} ${info.model}';
+        } else if (Platform.isIOS) {
+          final info = await deviceInfo.iosInfo;
+          deviceName = info.name;
+        }
+      } catch (_) {}
+
+      final result = widget.is2FA
           ? await _apiService.verify2FA(
               email: widget.email,
               code: code,
               deviceName: deviceName,
             )
-          : await _apiService.verifyEmailAndCreate(code: code, newRegistrationId: widget.newRegistrationId!,);
+          : await _apiService.verifyEmailAndCreate(
+              code: code,
+              newRegistrationId: widget.newRegistrationId!,
+            );
 
-    
       if (!mounted) return;
 
       if (result['success']) {
         _showMessage(
-          widget.is2FA 
-            ? 'تم تسجيل الدخول بنجاح!' 
-            : 'تم تأكيد البريد الإلكتروني بنجاح!',
-          isError: false
+          widget.is2FA
+              ? 'تم تسجيل الدخول بنجاح!'
+              : 'تم تأكيد البريد الإلكتروني بنجاح!',
+          isError: false,
         );
-        
+
         // إذا كان 2FA (تسجيل دخول)، نجلب المفاتيح
         if (widget.is2FA) {
           await _initializeEncryption();
@@ -140,10 +143,14 @@ String? deviceName;
 
           // حفظ وقت تسجيل الدخول
           final prefs = await SharedPreferences.getInstance();
-          await prefs.setString('last_login_time', DateTime.now().toIso8601String());
+          await prefs.setString(
+            'last_login_time',
+            DateTime.now().toIso8601String(),
+          );
 
           // التحقق من وضع الطوارئ
-          final emergencyModeActivated = result['emergencyModeActivated'] == true;
+          final emergencyModeActivated =
+              result['emergencyModeActivated'] == true;
 
           await Future.delayed(const Duration(milliseconds: 500));
           if (!mounted) return;
@@ -163,7 +170,7 @@ String? deviceName;
           // المفاتيح ستتولد في verify_phone أو skip_phone
           await Future.delayed(const Duration(milliseconds: 500));
           if (!mounted) return;
-          
+
           Navigator.pop(context, true);
         }
       } else {
@@ -186,7 +193,9 @@ String? deviceName;
       builder: (ctx) => Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
               Icon(Icons.shield_outlined, color: Colors.deepOrange, size: 28),
@@ -213,7 +222,9 @@ String? deviceName;
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepOrange,
                 foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               child: const Text(
                 'حسناً',
@@ -227,82 +238,78 @@ String? deviceName;
   }
 
   // تهيئة التشفير (فقط عند 2FA - تسجيل دخول)
-Future<void> _initializeEncryption() async {
-  try {
-    print('Checking encryption keys availability');
-    
-    // 1. جلب userId
-    final storage = const FlutterSecureStorage();
-    final userDataStr = await storage.read(key: 'user_data');
-    
-    if (userDataStr == null) {
-      print('User data is missing');
-      return;
-    }
-    
-    final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
-    final userId = userData['id'] as String;
-        
-    // 2. تهيئة SignalProtocolManager
-    final signalManager = SignalProtocolManager();
-    await signalManager.initialize(userId: userId);
-    
-    
-    // 3. الفحص باستخدام userId
-    final userIdentityKey = await storage.read(key: '${userId}_identity_key');
+  Future<void> _initializeEncryption() async {
+    try {
+      print('Checking encryption keys availability');
 
-    
-    if (userIdentityKey != null) {
-      print('Keys Exist');
+      // 1. جلب userId
+      final storage = const FlutterSecureStorage();
+      final userDataStr = await storage.read(key: 'user_data');
 
-      await signalManager.checkAndRefreshPreKeys();
-      await signalManager.ensureSignedPreKeyRotation(userId);
-      KeysStatus keysStatus = await signalManager.checkKeysStatus();
-      if(keysStatus.needsGeneration){
-        print('Keys need regeneration');
+      if (userDataStr == null) {
+        print('User data is missing');
+        return;
+      }
+
+      final userData = jsonDecode(userDataStr) as Map<String, dynamic>;
+      final userId = userData['id'] as String;
+
+      // 2. تهيئة SignalProtocolManager
+      final signalManager = SignalProtocolManager();
+      await signalManager.initialize(userId: userId);
+
+      // 3. الفحص باستخدام userId
+      final userIdentityKey = await storage.read(key: '${userId}_identity_key');
+
+      if (userIdentityKey != null) {
+        print('Keys Exist');
+
+        await signalManager.checkAndRefreshPreKeys();
+        await signalManager.ensureSignedPreKeyRotation(userId);
+        KeysStatus keysStatus = await signalManager.checkKeysStatus();
+        if (keysStatus.needsGeneration) {
+          print('Keys need regeneration');
+          final success = await signalManager.generateAndUploadKeys();
+          if (success) {
+            print('Keys regenerated and uploaded successfully');
+          } else {
+            print('Error regenerating keys and uploading to server');
+          }
+        } else if (keysStatus.needsSync) {
+          print('Keys need upload');
+        } else {
+          print('Keys are up-to-date');
+        }
+      } else {
+        print('Generating new keys');
         final success = await signalManager.generateAndUploadKeys();
         if (success) {
-          print('Keys regenerated and uploaded successfully');
+          print('Keys uploaded successfully');
         } else {
-          print('Error regenerating keys and uploading to server');
+          print('Error uploading keys to server');
         }
-      } else if (keysStatus.needsSync) {
-        print('Keys need upload');
-        
-      } else {
-        print('Keys are up-to-date');
       }
-    } else {
-      print('Generating new keys');
-      final success = await signalManager.generateAndUploadKeys();
-      if (success) {
-        print('Keys uploaded successfully');
-      } else {
-        print('Error uploading keys to server');
-      }
-    } 
-  } catch (e) {
-    print('Keys initalization error: $e');
+    } catch (e) {
+      print('Keys initalization error: $e');
+    }
   }
-}
 
   // تهيئة MessagingService (Socket + Listeners)
-Future<void> _initializeMessaging() async {
-  try {
-    print('🔌 [2FA] Initializing MessagingService...');
-    
-    final success = await MessagingService().initialize();
-    
-    if (success) {
-      print('[2FA] MessagingService initialized successfully');
-    } else {
-      print('[2FA] MessagingService initialization failed');
+  Future<void> _initializeMessaging() async {
+    try {
+      print('🔌 [2FA] Initializing MessagingService...');
+
+      final success = await MessagingService().initialize();
+
+      if (success) {
+        print('[2FA] MessagingService initialized successfully');
+      } else {
+        print('[2FA] MessagingService initialization failed');
+      }
+    } catch (e) {
+      print('[2FA] Error initializing MessagingService: $e');
     }
-    
-  } catch (e) {
-    print('[2FA] Error initializing MessagingService: $e');
   }
-}
 
   Future<void> _resendCode() async {
     if (_resendTimer > 0) return;
@@ -311,9 +318,11 @@ Future<void> _initializeMessaging() async {
 
     try {
       final result = widget.is2FA
-          ? await _apiService.resend2FACode(widget.email) 
-          : await _apiService.resendRegistrationCode(newRegistrationId: widget.newRegistrationId!);
-;
+          ? await _apiService.resend2FACode(widget.email)
+          : await _apiService.resendRegistrationCode(
+              newRegistrationId: widget.newRegistrationId!,
+            );
+      ;
 
       setState(() => _isResending = false);
 
@@ -381,9 +390,7 @@ Future<void> _initializeMessaging() async {
         backgroundColor: isError ? Colors.red.shade700 : Colors.green.shade700,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 3),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
       ),
     );
@@ -409,7 +416,7 @@ Future<void> _initializeMessaging() async {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 20),
-              
+
               Center(
                 child: Container(
                   width: 100,
@@ -426,7 +433,7 @@ Future<void> _initializeMessaging() async {
                 ),
               ),
               const SizedBox(height: 30),
-              
+
               Text(
                 widget.is2FA ? 'التحقق بخطوتين' : 'تأكيد البريد الإلكتروني',
                 textAlign: TextAlign.center,
@@ -438,7 +445,7 @@ Future<void> _initializeMessaging() async {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               Text(
                 'تم إرسال رمز التحقق المكون من 6 أرقام إلى',
                 textAlign: TextAlign.center,
@@ -460,7 +467,7 @@ Future<void> _initializeMessaging() async {
                 ),
               ),
               const SizedBox(height: 40),
-              
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 textDirection: TextDirection.ltr,
@@ -514,7 +521,7 @@ Future<void> _initializeMessaging() async {
                           ],
                           onChanged: (value) {
                             setState(() {});
-                            
+
                             if (value.isNotEmpty && index < 5) {
                               _focusNodes[index + 1].requestFocus();
                             } else if (value.isNotEmpty && index == 5) {
@@ -540,7 +547,7 @@ Future<void> _initializeMessaging() async {
                 }),
               ),
               const SizedBox(height: 40),
-              
+
               ElevatedButton(
                 onPressed: _isLoading ? null : _verifyCodeAndReturn,
                 style: ElevatedButton.styleFrom(
@@ -549,7 +556,9 @@ Future<void> _initializeMessaging() async {
                     borderRadius: BorderRadius.circular(12.0),
                   ),
                   backgroundColor: const Color(0xFF2D1B69),
-                  disabledBackgroundColor: const Color(0xFF2D1B69).withOpacity(0.5),
+                  disabledBackgroundColor: const Color(
+                    0xFF2D1B69,
+                  ).withOpacity(0.5),
                 ),
                 child: _isLoading
                     ? const SizedBox(
@@ -571,7 +580,7 @@ Future<void> _initializeMessaging() async {
                       ),
               ),
               const SizedBox(height: 20),
-              
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

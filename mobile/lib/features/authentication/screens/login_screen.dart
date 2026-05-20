@@ -3,13 +3,13 @@ import 'package:flutter_svg/flutter_svg.dart';
 import '../widgets/custom-text-field.dart';
 import '../../../services/api_services.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
-import 'verify-email.dart'; 
+import 'verify-email.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'register_screen.dart';
 import 'reset_password.dart';
 import '../../../services/biometric_service.dart';
 import '../../dashboard/screens/main_dashboard.dart';
-import '../../../services/messaging_service.dart'; 
+import '../../../services/messaging_service.dart';
 import '../widgets/MessageDialog.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -22,13 +22,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _apiService = ApiService();
-  
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  
+
   bool _isLoading = false;
   bool _obscurePassword = true;
-
 
   @override
   void dispose() {
@@ -41,10 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return MessageDialog(
-          message: message,
-          isError: isError,
-        );
+        return MessageDialog(message: message, isError: isError);
       },
     );
   }
@@ -52,29 +48,28 @@ class _LoginScreenState extends State<LoginScreen> {
   // معالجة تسجيل الدخول العادي
   Future<void> _handleLogin() async {
     bool isValid = _formKey.currentState!.validate();
-    
+
     if (!isValid) {
       return;
     }
-    
+
     setState(() => _isLoading = true);
 
     final result = await _apiService.login(
       email: _emailController.text.trim(),
       password: _passwordController.text,
     );
-    
-    setState(() => _isLoading = false);
-    if (!mounted) return; 
-    
-    if (result['success']) {
 
+    setState(() => _isLoading = false);
+    if (!mounted) return;
+
+    if (result['success']) {
       Navigator.push(
         context,
         MaterialPageRoute(
           builder: (_) => VerifyEmailScreen(
             email: _emailController.text.trim(),
-            is2FA: true, 
+            is2FA: true,
           ),
         ),
       );
@@ -85,21 +80,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _initializeMessagingAfterLogin() async {
     try {
-      print('🔌 [LOGIN] Initializing MessagingService...');
-      
+      print('[LOGIN] Initializing MessagingService...');
+
       // تهيئة Signal Protocol
       await SignalProtocolManager().initialize();
       print('[LOGIN] Signal Protocol initialized');
-      
+
       // تهيئة MessagingService (Socket)
       final success = await MessagingService().initialize();
-      
+
       if (success) {
         print('[LOGIN] MessagingService initialized successfully');
       } else {
         print('[LOGIN] MessagingService initialization failed');
       }
-      
     } catch (e) {
       print('[LOGIN] Error initializing MessagingService: $e');
     }
@@ -109,9 +103,12 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleBiometricLogin() async {
     // 1 - الحصول على إيميل المستخدم المحفوظ
     final biometricUser = await BiometricService.getBiometricUser();
-    
+
     if (biometricUser == null) {
-      _showMessage('لم يتم العثور على بيانات بصمة مسجلة. الرجاء تسجيل الدخول أولاً.', isError: true);
+      _showMessage(
+        'لم يتم العثور على بيانات بصمة مسجلة. الرجاء تسجيل الدخول أولاً.',
+        isError: true,
+      );
       return;
     }
 
@@ -127,9 +124,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
     // 3 - تسجيل الدخول
     setState(() => _isLoading = true);
-    
+
     final result = await _apiService.biometricLogin(biometricUser);
-    
+
     setState(() => _isLoading = false);
 
     if (!mounted) return;
@@ -137,7 +134,7 @@ class _LoginScreenState extends State<LoginScreen> {
     if (result['success']) {
       // توليد/تحديث المفاتيح
       await _initializeEncryption();
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('تم تسجيل الدخول بنجاح'),
@@ -163,26 +160,32 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _initializeEncryption() async {
     try {
       print('جاري التحقق من مفاتيح التشفير...');
-      
+
       final signalManager = SignalProtocolManager();
       await signalManager.initialize();
-      
+
       // التحقق من وجود المفاتيح
       const storage = FlutterSecureStorage();
       final identityKey = await storage.read(key: 'identity_key');
       final registrationId = await storage.read(key: 'registration_id');
       final signedPreKeyId = await storage.read(key: 'signed_pre_key_id');
       final signedPreKey = await storage.read(key: 'signed_pre_key');
-      final signedPreKeySignature = await storage.read(key: 'signed_pre_key_signature');
+      final signedPreKeySignature = await storage.read(
+        key: 'signed_pre_key_signature',
+      );
       final preKeys = await storage.read(key: 'pre_keys');
       final preKeyId = await storage.read(key: 'pre_key_id');
 
-      if (identityKey == null || registrationId == null ||
-          signedPreKeyId == null || signedPreKey == null || signedPreKeySignature == null ||
-          preKeys == null || preKeyId == null) {
+      if (identityKey == null ||
+          registrationId == null ||
+          signedPreKeyId == null ||
+          signedPreKey == null ||
+          signedPreKeySignature == null ||
+          preKeys == null ||
+          preKeyId == null) {
         print(' لا توجد مفاتيح - جاري التوليد...');
         final success = await signalManager.generateAndUploadKeys();
-        
+
         if (success) {
           print(' تم توليد ورفع المفاتيح بنجاح');
         } else {
@@ -246,7 +249,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 32),
-                      
+
                       // البريد الإلكتروني
                       CustomTextField(
                         controller: _emailController,
@@ -260,7 +263,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           }
                           final email = value.trim();
                           final emailRegex = RegExp(
-                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+                            r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
                           );
                           if (!emailRegex.hasMatch(email)) {
                             return 'الرجاء إدخال بريد إلكتروني صالح';
@@ -269,7 +272,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
+
                       // كلمة المرور
                       CustomTextField(
                         controller: _passwordController,
@@ -280,12 +283,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         obscureText: _obscurePassword,
                         enabled: !_isLoading,
                         suffixIcon: IconButton(
-                        icon: Icon(
-                          !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          color: Colors.grey.shade600,
+                          icon: Icon(
+                            !_obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                            color: Colors.grey.shade600,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
                             return 'الرجاء إدخال كلمة المرور';
@@ -304,8 +311,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? null
                               : () {
                                   Navigator.pushReplacement(
-                                    context, 
-                                    MaterialPageRoute(builder: (_) => const ResetPasswordScreen())
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const ResetPasswordScreen(),
+                                    ),
                                   );
                                 },
                           child: const Text(
@@ -319,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      
+
                       // زر التسجيل
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleLogin,
@@ -357,19 +367,26 @@ class _LoginScreenState extends State<LoginScreen> {
                         future: BiometricService.isBiometricEnabled(),
                         builder: (context, snapshot) {
                           final isEnabled = snapshot.data ?? false;
-                          
+
                           if (!isEnabled) return const SizedBox.shrink();
-                          
+
                           return Column(
                             children: [
                               const SizedBox(height: 20),
-                              
+
                               // خط فاصل
                               Row(
                                 children: [
-                                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                                  Expanded(
+                                    child: Divider(
+                                      color: Colors.grey.shade300,
+                                      thickness: 1,
+                                    ),
+                                  ),
                                   Padding(
-                                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 16,
+                                    ),
                                     child: Text(
                                       'أو',
                                       style: TextStyle(
@@ -380,12 +397,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                       ),
                                     ),
                                   ),
-                                  Expanded(child: Divider(color: Colors.grey.shade300, thickness: 1)),
+                                  Expanded(
+                                    child: Divider(
+                                      color: Colors.grey.shade300,
+                                      thickness: 1,
+                                    ),
+                                  ),
                                 ],
                               ),
-                              
+
                               const SizedBox(height: 20),
-                              
+
                               // زر البايومتركس
                               Container(
                                 decoration: BoxDecoration(
@@ -398,12 +420,17 @@ class _LoginScreenState extends State<LoginScreen> {
                                 child: Material(
                                   color: Colors.transparent,
                                   child: InkWell(
-                                    onTap: _isLoading ? null : _handleBiometricLogin,
+                                    onTap: _isLoading
+                                        ? null
+                                        : _handleBiometricLogin,
                                     borderRadius: BorderRadius.circular(12),
                                     child: const Padding(
-                                      padding: EdgeInsets.symmetric(vertical: 16.0),
+                                      padding: EdgeInsets.symmetric(
+                                        vertical: 16.0,
+                                      ),
                                       child: Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
                                         children: [
                                           Icon(
                                             Icons.fingerprint,
@@ -430,15 +457,17 @@ class _LoginScreenState extends State<LoginScreen> {
                           );
                         },
                       ),
-                      
+
                       // زر إنشاء حساب جديد
                       TextButton(
                         onPressed: _isLoading
                             ? null
                             : () {
                                 Navigator.pushReplacement(
-                                  context, 
-                                  MaterialPageRoute(builder: (_) => const RegisterScreen())
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => const RegisterScreen(),
+                                  ),
                                 );
                               },
                         child: const Text(

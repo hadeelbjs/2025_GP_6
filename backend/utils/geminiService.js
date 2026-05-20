@@ -1,7 +1,6 @@
 // utils/geminiService.js
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// رسالة توجيه لطيفة إذا كان السؤال بعيد جداً عن الأمن الرقمي
 function refusalMessage() {
   return "أنا متخصص في الأمن السيبراني وحماية البيانات والخصوصية. إذا وضّحتي لي قصدك (حسابات؟ جهاز؟ واي فاي؟ روابط؟) أقدر أساعدك بخطوات عملية.";
 }
@@ -83,7 +82,6 @@ async function askGeminiCyberOnly(userText) {
 
     console.log(` Gemini reply: "${reply.substring(0, 120)}..."`);
 
-    //  بدل الرفض القاطع: إذا الرد فعلاً رفض/بعيد، نرجّع توجيه لطيف
     const refusalHints = [
       "خارج نطاق",
       "غير متعلق",

@@ -6,7 +6,6 @@ function startMessageExpiryJob(io) {
     try {
       const now = new Date();
       
-      console.log(`\n⏰ [${now.toISOString()}] Checking for expired messages...`);
       
       const expiredMessages = await Message.find({
         expiresAt: { $lte: now },
@@ -17,7 +16,6 @@ function startMessageExpiryJob(io) {
         return;
       }
       
-      console.log(`   ⏱️  Found ${expiredMessages.length} expired messages`);
       
       for (const msg of expiredMessages) {
         try {
@@ -25,23 +23,20 @@ function startMessageExpiryJob(io) {
           const senderId = msg.senderId.toString();
           const recipientId = msg.recipientId.toString();
           
-          console.log(`   📨 Processing: ${messageId}`);
        
           
           const sentToSender = io.sendToUser(senderId, 'message:expired', {
             messageId: messageId,
             reason: 'duration_ended',
           });
-          console.log(`      ${sentToSender ? '✅' : '❌'} Sent to sender`);
           
           const sentToRecipient = io.sendToUser(recipientId, 'message:expired', {
             messageId: messageId,
             reason: 'duration_ended',
           });
-          console.log(`      ${sentToRecipient ? '✅' : '❌'} Sent to recipient`);
           
         } catch (err) {
-          console.error(`   ❌ Failed to send expired event:`, err.message);
+          console.error(`Failed to send expired event:`, err.message);
         }
       }
       
@@ -50,15 +45,13 @@ function startMessageExpiryJob(io) {
         isExpired: false,
       });
       
-      console.log(`   🗑️  Deleted ${result.deletedCount} messages from MongoDB\n`);
       
     } catch (err) {
-      console.error('❌ Message expiry job error:', err);
+      console.error('Message expiry job error:', err);
       console.error('   Stack:', err.stack);
     }
   });
   
-  console.log('⏱️  Message expiry job started (runs every 30 seconds)');
 }
 
 

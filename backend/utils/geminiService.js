@@ -1,6 +1,5 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// رسالة توجيه إذا كان السؤال بعيد جداً عن الأمن الرقمي
 function refusalMessage() {
   return "أنا متخصص في الأمن السيبراني وحماية البيانات والخصوصية. إذا وضّحتي لي قصدك (حسابات؟ جهاز؟ واي فاي؟ روابط؟) أقدر أساعدك بخطوات عملية.";
 }
@@ -24,7 +23,6 @@ const SYSTEM_INSTRUCTION = `
 - عند الحاجة: قائمة تحقق أو خطوات مرقمة.
 `;
 
-// Timeout helper
 function withTimeout(promise, ms = 20000) {
   return Promise.race([
     promise,
@@ -78,7 +76,6 @@ async function askGeminiCyberOnly(userText) {
       };
     }
 
-    //  بدل الرفض القاطع: إذا الرد فعلاً رفض/بعيد، نرجّع توجيه لطيف
     const refusalHints = [
       "خارج نطاق",
       "غير متعلق",

@@ -12,7 +12,7 @@ class MySessionStore extends SessionStore {
   MySessionStore(this._storage, {String? userId}) : _userId = userId;
 
   // ========================================
-  // ✅ دالة موحّدة لإنشاء مفاتيح التخزين
+  //  دالة موحّدة لإنشاء مفاتيح التخزين
   // ========================================
   String _getStorageKey(String key) {
     if (_userId != null) {
@@ -20,30 +20,30 @@ class MySessionStore extends SessionStore {
     }
     return key;
   }
-  
+
   // ========================================
-  // ✅ دالة لإنشاء session key من address
+  //  دالة لإنشاء session key من address
   // ========================================
   String _getSessionKey(SignalProtocolAddress address) {
     return 'session_${address.getName()}_${address.getDeviceId()}';
   }
 
   // ========================================
-  // ✅ التهيئة - موحّدة ومُصلحة
+  // التهيئة - موحّدة ومُصلحة
   // ========================================
   Future<void> initialize() async {
-    print('🔧 Initializing Session Store for user: $_userId');
-    
+    print('Initializing Session Store for user: $_userId');
+
     _sessionsCache.clear();
-    
+
     final allKeys = await _storage.readAll();
     int loadedCount = 0;
-    
+
     for (var entry in allKeys.entries) {
       if (entry.key.contains('session_')) {
         bool isForCurrentUser = false;
         String? sessionKey;
-        
+
         if (_userId != null) {
           // مثال: user456_session_alice_1
           if (entry.key.startsWith('${_userId}_session_')) {
@@ -58,47 +58,47 @@ class MySessionStore extends SessionStore {
             isForCurrentUser = true;
           }
         }
-        
+
         if (!isForCurrentUser || sessionKey == null) continue;
-        
+
         try {
           final recordBytes = base64Decode(entry.value);
           final record = SessionRecord.fromSerialized(recordBytes);
-          
+
           _sessionsCache[sessionKey] = record;
           loadedCount++;
         } catch (e) {
-          print('❌ Error loading session ${entry.key}: $e');
+          print('Error loading session ${entry.key}: $e');
         }
       }
     }
-    
-    print('✅ Loaded $loadedCount Sessions for user: $_userId');
+
+    print('Loaded $loadedCount Sessions for user: $_userId');
   }
 
   // ========================================
-  // ✅ تحميل Session
+  //  تحميل Session
   // ========================================
   @override
   Future<SessionRecord> loadSession(SignalProtocolAddress address) async {
     final sessionKey = _getSessionKey(address);
-    
-    // ✅ إذا موجود في الـ cache، نرجعه
+
+    //  إذا موجود في الـ cache، نرجعه
     if (_sessionsCache.containsKey(sessionKey)) {
       return _sessionsCache[sessionKey]!;
     }
-    
-    // ✅ إذا مو موجود، نرجع session جديد فاضي
+
+    //  إذا مو موجود، نرجع session جديد فاضي
     return SessionRecord();
   }
 
   // ========================================
-  // ✅ تحميل جميع Sub-Device Sessions
+  //  تحميل جميع Sub-Device Sessions
   // ========================================
   @override
   Future<List<int>> getSubDeviceSessions(String name) async {
     final deviceIds = <int>[];
-    
+
     for (var key in _sessionsCache.keys) {
       if (key.startsWith('session_$name')) {
         final parts = key.split('_');
@@ -110,12 +110,12 @@ class MySessionStore extends SessionStore {
         }
       }
     }
-    
+
     return deviceIds;
   }
 
   // ========================================
-  // ✅ حفظ Session - موحّدة
+  //  حفظ Session - موحّدة
   // ========================================
   @override
   Future<void> storeSession(
@@ -124,18 +124,20 @@ class MySessionStore extends SessionStore {
   ) async {
     final sessionKey = _getSessionKey(address);
     _sessionsCache[sessionKey] = record;
-    
+
     final serialized = record.serialize();
     final base64Value = base64Encode(serialized);
-    
+
     final storageKey = _getStorageKey(sessionKey);
     await _storage.write(key: storageKey, value: base64Value);
-    
-    print('✅ Session saved: ${address.getName()} (device ${address.getDeviceId()}) -> $storageKey');
+
+    print(
+      'Session saved: ${address.getName()} (device ${address.getDeviceId()}) -> $storageKey',
+    );
   }
 
   // ========================================
-  // ✅ التحقق من وجود Session
+  // التحقق من وجود Session
   // ========================================
   @override
   Future<bool> containsSession(SignalProtocolAddress address) async {
@@ -144,54 +146,56 @@ class MySessionStore extends SessionStore {
   }
 
   // ========================================
-  // ✅ حذف Session - موحّدة
+  //  حذف Session - موحّدة
   // ========================================
   @override
   Future<void> deleteSession(SignalProtocolAddress address) async {
     final sessionKey = _getSessionKey(address);
     _sessionsCache.remove(sessionKey);
-    
+
     final storageKey = _getStorageKey(sessionKey);
     await _storage.delete(key: storageKey);
-    
-    print('🗑️ Session deleted: ${address.getName()} (device ${address.getDeviceId()}) from $storageKey');
+
+    print(
+      'Session deleted: ${address.getName()} (device ${address.getDeviceId()}) from $storageKey',
+    );
   }
 
   // ========================================
-  // ✅ حذف جميع Sessions لمستخدم معين
+  //  حذف جميع Sessions لمستخدم معين
   // ========================================
   @override
   Future<void> deleteAllSessions(String name) async {
     final keysToRemove = <String>[];
-    
+
     for (var key in _sessionsCache.keys) {
       if (key.startsWith('session_$name')) {
         keysToRemove.add(key);
       }
     }
-    
+
     for (var key in keysToRemove) {
       _sessionsCache.remove(key);
-      
+
       final storageKey = _getStorageKey(key);
       await _storage.delete(key: storageKey);
     }
-    
-    print('🗑️ Deleted ${keysToRemove.length} sessions for: $name');
+
+    print(' Deleted ${keysToRemove.length} sessions for: $name');
   }
 
   // ========================================
-  // ✅ حذف جميع Sessions - مُصلحة
+  //  حذف جميع Sessions - مُصلحة
   // ========================================
   Future<void> clearAll() async {
     try {
-      print('🗑️ Clearing Session Store for user: $_userId');
-      
+      print(' Clearing Session Store for user: $_userId');
+
       _sessionsCache.clear();
-      
+
       final allKeys = await _storage.readAll();
       int deletedCount = 0;
-      
+
       for (var key in allKeys.keys) {
         if (key.startsWith('session_')) {
           if (_userId != null && key.startsWith('${_userId}_session_')) {
@@ -206,97 +210,99 @@ class MySessionStore extends SessionStore {
           }
         }
       }
-      
-      print('✅ Session Store cleared (deleted $deletedCount sessions)');
+
+      print(' Session Store cleared (deleted $deletedCount sessions)');
     } catch (e) {
-      print('❌ Error clearing Session Store: $e');
+      print('Error clearing Session Store: $e');
       rethrow;
     }
   }
 
   // ========================================
-  // ✅ دوال مساعدة
+  // دوال مساعدة
   // ========================================
-  
+
   int getSessionsCount() {
     return _sessionsCache.length;
   }
-  
+
   String? get currentUserId => _userId;
-  
+
   List<String> getSessionKeys() {
     return _sessionsCache.keys.toList()..sort();
   }
-  
+
   /// الحصول على قائمة بجميع المستخدمين الذين لديهم sessions
   List<String> getSessionUserNames() {
     final names = <String>{};
-    
+
     for (var key in _sessionsCache.keys) {
       final parts = key.split('_');
       if (parts.length >= 3) {
         names.add(parts[1]); // اسم المستخدم
       }
     }
-    
+
     return names.toList()..sort();
   }
-  
+
   Future<void> debugPrintAllKeys() async {
-    print('\n🔍 === DEBUG: All Sessions for User $_userId ===');
-    
+    print('\n === DEBUG: All Sessions for User $_userId ===');
+
     final allKeys = await _storage.readAll();
     int count = 0;
-    
-    print('📦 Cached Sessions (in memory):');
+
+    print(' Cached Sessions (in memory):');
     final sortedKeys = getSessionKeys();
     for (var key in sortedKeys) {
-      print('  ✅ $key');
+      print('  $key');
     }
     print('  Total in cache: ${_sessionsCache.length}');
-    
-    print('\n💾 Stored Sessions (on disk):');
+
+    print('\n Stored Sessions (on disk):');
     for (var key in allKeys.keys) {
       if (key.startsWith('session_')) {
         if (_userId != null && key.startsWith('${_userId}_session_')) {
-          print('  ✅ $key');
+          print('   $key');
           count++;
         } else if (_userId == null) {
           final parts = key.split('_');
           if (parts.length == 3) {
-            print('  ✅ $key');
+            print('   $key');
             count++;
           }
         }
       }
     }
     print('  Total on disk: $count');
-    
+
     if (_sessionsCache.length != count) {
-      print('\n⚠️ WARNING: Cache and disk counts do not match!');
+      print('\n WARNING: Cache and disk counts do not match!');
     }
-    
-    print('\n👥 Users with sessions:');
+
+    print('\n Users with sessions:');
     final users = getSessionUserNames();
     for (var user in users) {
       final devices = await getSubDeviceSessions(user);
-      print('  📱 $user: ${devices.length} device(s)');
+      print('   $user: ${devices.length} device(s)');
     }
-    
+
     print('===============================================\n');
   }
-  
+
   /// التحقق من وجود session صالح مع مستخدم معين
   Future<bool> hasValidSessionWith(String userName) async {
     final devices = await getSubDeviceSessions(userName);
     return devices.isNotEmpty;
   }
-  
+
   /// الحصول على تفاصيل session
-  Future<Map<String, dynamic>?> getSessionInfo(SignalProtocolAddress address) async {
+  Future<Map<String, dynamic>?> getSessionInfo(
+    SignalProtocolAddress address,
+  ) async {
     final record = await loadSession(address);
-    
-    // ✅ التحقق من وجود session صالح
+
+    //  التحقق من وجود session صالح
     bool hasValidSession = false;
     try {
       final sessionState = record.sessionState;
@@ -304,7 +310,7 @@ class MySessionStore extends SessionStore {
     } catch (e) {
       hasValidSession = false;
     }
-    
+
     return {
       'name': address.getName(),
       'deviceId': address.getDeviceId(),

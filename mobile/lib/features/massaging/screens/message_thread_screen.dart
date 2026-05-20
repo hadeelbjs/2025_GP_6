@@ -1,4 +1,3 @@
-
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -16,7 +15,6 @@ import 'verify_identity_screen.dart';
 class MessageThreadScreen extends StatefulWidget {
   final String peerName;
   final String peerUsername;
-  // أضِف peerId/threadId هنا لاحقًا عند ربط الـAPI
 
   const MessageThreadScreen({
     super.key,
@@ -113,7 +111,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       _pendingKind = null;
     });
 
-    // TODO: API إرسال (plaintext/ciphertext + attachment + ttlSeconds)
     Future.delayed(const Duration(milliseconds: 400), () {
       if (!mounted) return;
       setState(() => msg.status = MessageStatus.delivered);
@@ -171,12 +168,12 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         );
         if (picked == null) return;
 
-        final localPath = picked.path; // دائمًا غير null
+        final localPath = picked.path;
         setState(() {
           _pendingKind = MessageKind.image;
           _pendingAttachment = Attachment(
             name: p.basename(localPath),
-            url: localPath, // مسار محلي صالح على Android/iOS
+            url: localPath,
             mime:
                 'image/${p.extension(localPath).replaceFirst('.', '').toLowerCase()}',
           );
@@ -203,14 +200,13 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
         final res = await FilePicker.platform.pickFiles(
           allowMultiple: false,
           type: FileType.any,
-          withData: true, // لو رجّع بدون path نستخدم bytes
+          withData: true,
         );
         if (res == null || res.files.isEmpty) return;
 
         final f = res.files.single;
         String? pickedPath = f.path;
 
-        // إذا ما فيه path لكن فيه bytes — نخزّنها مؤقتاً ونستخدم المسار
         if ((pickedPath == null || pickedPath.isEmpty) && f.bytes != null) {
           pickedPath = await _saveBytesToTemp(f.name, f.bytes!);
         }
@@ -239,7 +235,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
     }
   }
 
-  // يحفظ bytes في ملف مؤقت ويرجع المسار (Android/iOS)
   Future<String> _saveBytesToTemp(String filename, List<int> bytes) async {
     final safeName = filename.isEmpty ? 'file.bin' : filename;
     final tmpPath = '${Directory.systemTemp.path}/$safeName';
@@ -314,7 +309,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       await OpenFilex.open(att.url);
     } else {
       _showMessage('الملف على رابط؛ نزّليه أول ثم افتحيه.', false);
-      // TODO: تنزيل ثم OpenFilex.open(path)
     }
   }
 
@@ -323,7 +317,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
       m.status = MessageStatus.deleted;
       m.text = '';
     });
-    // TODO: أبلغ السيرفر بانتهاء الصلاحية إن لزم
   }
 
   // ——— حذف ———
@@ -410,13 +403,13 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
           leading: IconButton(
             onPressed: () => Navigator.pop(context),
             icon: Image.asset(
-              'assets/icons/back_arrow_white.png', // السهم الأبيض فقط
+              'assets/icons/back_arrow_white.png',
               width: 22,
               height: 22,
             ),
           ),
           title: Text(
-            widget.peerName, // الاسم فقط بدون صورة الحساب
+            widget.peerName,
             style: AppTextStyles.h4.copyWith(color: Colors.white),
           ),
           centerTitle: true,
@@ -558,7 +551,6 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
               ),
             ),
             const SizedBox(width: 6),
-            // اختيار TTL
             IconButton(
               onPressed: _pickTTL,
               icon: const Icon(Icons.timer_outlined),
@@ -616,7 +608,7 @@ class _MessageThreadScreenState extends State<MessageThreadScreen> {
   }
 }
 
-// ——— عارض صورة بسيط (محلي/شبكة) ———
+// ——— عارض صورة بسيط———
 class _ImageViewerScreen extends StatelessWidget {
   final String url;
   final String title;
@@ -642,7 +634,7 @@ class _ImageViewerScreen extends StatelessWidget {
   }
 }
 
-// ——— شيت اختيار TTL ———
+// ———  اختيار TTL ———
 class _TTLPickerSheet extends StatelessWidget {
   final Duration? current;
   const _TTLPickerSheet({required this.current});

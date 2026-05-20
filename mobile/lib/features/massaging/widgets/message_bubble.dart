@@ -7,7 +7,7 @@ import '../../../core/constants/colors.dart';
 class MessageBubble extends StatefulWidget {
   final MessageModel msg;
   final VoidCallback? onTap; // لفتح التحقق
-  final VoidCallback? onLongPress; // شيت الحذف
+  final VoidCallback? onLongPress; //  الحذف
   final VoidCallback? onExpired; // انتهاء المؤقّت
   final void Function(Attachment att)? onOpenImage;
   final void Function(Attachment att)? onOpenFile;
@@ -124,7 +124,6 @@ class _MessageBubbleState extends State<MessageBubble> {
 
   // ——— المحتوى ———
   Widget _buildContent(Color textColor, MessageModel msg) {
-    // قبل التحقق: لا نعرض أي نص/صورة/اسم ملف
     if (msg.status == MessageStatus.encryptedPendingVerify) {
       return _encryptedPlaceholder(msg);
     }
@@ -171,7 +170,7 @@ class _MessageBubbleState extends State<MessageBubble> {
       ),
       child: isImage
           ? AspectRatio(
-              aspectRatio: 4 / 3, // لا نستخدم الأبعاد الحقيقية
+              aspectRatio: 4 / 3,
               child: Container(
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
@@ -229,7 +228,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  // صورة + كابتشن (بعد التحقق)
   Widget _imageBubble(MessageModel msg) {
     final att = msg.attachment!;
     final list = <Widget>[
@@ -287,7 +285,6 @@ class _MessageBubbleState extends State<MessageBubble> {
     );
   }
 
-  // ملف (بعد التحقق)
   Widget _fileBubble(MessageModel msg) {
     final att = msg.attachment!;
     final icon = _fileIcon(att.mime ?? att.name);

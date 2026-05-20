@@ -14,18 +14,16 @@ class MediaService {
 
   final ImagePicker _picker = ImagePicker();
 
-
-  static const int maxImageSizeKB = 500;      
-  static const int imageQuality = 75;         
-  static const int maxImageDimension = 1280;  
-  static const int maxFileSizeMB = 10;        
-
+  static const int maxImageSizeKB = 500;
+  static const int imageQuality = 75;
+  static const int maxImageDimension = 1280;
+  static const int maxFileSizeMB = 10;
 
   Future<MediaResult> captureFromCamera() async {
     try {
       final XFile? image = await _picker.pickImage(
         source: ImageSource.camera,
-        imageQuality: 100, 
+        imageQuality: 100,
       );
 
       if (image == null) {
@@ -34,11 +32,10 @@ class MediaService {
 
       return await processImage(File(image.path));
     } catch (e) {
-      debugPrint('❌ Camera error: $e');
+      debugPrint(' Camera error: $e');
       return MediaResult.error('فشل التقاط الصورة');
     }
   }
-
 
   Future<MediaResult> pickFromGallery() async {
     try {
@@ -53,7 +50,7 @@ class MediaService {
 
       return await processImage(File(image.path));
     } catch (e) {
-      debugPrint('❌ Gallery error: $e');
+      debugPrint(' Gallery error: $e');
       return MediaResult.error('فشل اختيار الصورة');
     }
   }
@@ -75,7 +72,6 @@ class MediaService {
         return MediaResult.error('تعذر قراءة محتوى الملف');
       }
 
-   
       final tempDir = await getTemporaryDirectory();
       final tempPath = path.join(tempDir.path, pickedFile.name);
       final file = await File(tempPath).writeAsBytes(pickedFile.bytes!);
@@ -83,13 +79,11 @@ class MediaService {
       final fileSize = pickedFile.size;
       final fileName = pickedFile.name;
 
-  
       if (fileSize > maxFileSizeMB * 1024 * 1024) {
         return MediaResult.error(
           'الملف كبير جداً (الحد الأقصى ${maxFileSizeMB}MB)',
         );
       }
-
 
       return MediaResult.success(
         file: file,
@@ -98,7 +92,7 @@ class MediaService {
         mediaType: MediaType.file,
       );
     } catch (e) {
-      debugPrint('❌ File picker error: $e');
+      debugPrint(' File picker error: $e');
       return MediaResult.error('فشل اختيار الملف');
     }
   }
@@ -108,7 +102,7 @@ class MediaService {
       final originalSize = await imageFile.length();
 
       if (originalSize < maxImageSizeKB * 1024) {
-        debugPrint('✅ Image already optimized, no compression needed');
+        debugPrint('Image already optimized, no compression needed');
         return MediaResult.success(
           file: imageFile,
           fileName: path.basename(imageFile.path),
@@ -120,8 +114,6 @@ class MediaService {
       final compressedFile = await _compressImage(imageFile);
       final compressedSize = await compressedFile.length();
 
-    
-
       return MediaResult.success(
         file: compressedFile,
         fileName: path.basename(compressedFile.path),
@@ -129,11 +121,10 @@ class MediaService {
         mediaType: MediaType.image,
       );
     } catch (e) {
-      debugPrint('❌ Image processing error: $e');
+      debugPrint(' Image processing error: $e');
       return MediaResult.error('فشل معالجة الصورة');
     }
   }
-
 
   Future<File> _compressImage(File file) async {
     try {
@@ -154,22 +145,22 @@ class MediaService {
       );
 
       if (result == null) {
-        debugPrint('⚠️ Compression returned null, using original');
+        debugPrint(' Compression returned null, using original');
         return file;
       }
 
       final compressedFile = File(result.path);
 
-      if (!await compressedFile.exists() || await compressedFile.length() == 0) {
-        print('⚠️ Invalid compressed file, using original');
+      if (!await compressedFile.exists() ||
+          await compressedFile.length() == 0) {
+        print(' Invalid compressed file, using original');
         return file;
       }
 
-      print('✅ Compression successful');
+      print(' Compression successful');
       return compressedFile;
-
     } catch (e) {
-      print('❌ Compression failed: $e, using original');
+      print(' Compression failed: $e, using original');
       return file;
     }
   }
@@ -178,36 +169,35 @@ class MediaService {
     try {
       final bytes = await file.readAsBytes();
       final base64String = base64Encode(bytes);
-      
-      debugPrint('✅ File converted to Base64 (${(base64String.length / 1024).toStringAsFixed(1)} KB)');
-      
+
+      debugPrint(
+        ' File converted to Base64 (${(base64String.length / 1024).toStringAsFixed(1)} KB)',
+      );
+
       return base64String;
     } catch (e) {
-      debugPrint('❌ Base64 encoding error: $e');
+      debugPrint(' Base64 encoding error: $e');
       rethrow;
     }
   }
-
 
   Future<File> base64ToFile(String base64String, String fileName) async {
     try {
       final bytes = base64Decode(base64String);
       final tempDir = await getTemporaryDirectory();
       final file = File('${tempDir.path}/$fileName');
-      
+
       await file.writeAsBytes(bytes);
-      
-      debugPrint('✅ Base64 converted to file: ${file.path}');
-      
+
+      debugPrint(' Base64 converted to file: ${file.path}');
+
       return file;
     } catch (e) {
-      debugPrint('❌ Base64 decoding error: $e');
+      debugPrint(' Base64 decoding error: $e');
       rethrow;
     }
   }
 }
-
-
 
 enum MediaType { image, file }
 

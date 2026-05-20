@@ -16,7 +16,8 @@ class ContactsListScreen extends StatefulWidget {
   State<ContactsListScreen> createState() => _ContactsListScreenState();
 }
 
-class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBindingObserver {
+class _ContactsListScreenState extends State<ContactsListScreen>
+    with WidgetsBindingObserver {
   final _apiService = ApiService();
   final _messagingService = MessagingService();
   List<Map<String, dynamic>> _contacts = [];
@@ -39,14 +40,15 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
     _searchController.dispose();
     super.dispose();
   }
-  //  مراقبة lifecycle للتطبيق
+
+  //  مراقبة للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-    //  print('🔄 App resumed from ContactsList - reconnecting socket...');
+      //  print('🔄 App resumed from ContactsList - reconnecting socket...');
       _ensureSocketConnection();
     } else if (state == AppLifecycleState.paused) {
-    //  print('⏸️ App paused from ContactsList');
+      //  print('⏸️ App paused from ContactsList');
     }
   }
 
@@ -54,21 +56,21 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
-        print('🔌 Socket not connected - initializing...');
+        print(' Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
           //  طلب الحالة لجميع جهات الاتصال بعد الاتصال
           await _requestAllContactsStatus();
         } else {
-          print('❌ Failed to connect socket after resume');
+          print('Failed to connect socket after resume');
         }
       } else {
-        print('✅ Socket already connected');
+        print('Socket already connected');
         //  حتى لو كان متصل، نطلب الحالة عند العودة للتطبيق
         await _requestAllContactsStatus();
       }
     } catch (e) {
-      print('❌ Error ensuring socket connection: $e');
+      print('Error ensuring socket connection: $e');
     }
   }
 
@@ -76,19 +78,19 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
   Future<void> _requestAllContactsStatus() async {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       if (!_messagingService.isConnected) {
-        print('⚠️ Socket not connected, skipping status requests');
+        print('Socket not connected, skipping status requests');
         return;
       }
 
       // جلب قائمة جهات الاتصال
       final result = await _apiService.getContactsList();
-      
+
       if (result['success'] == true && result['contacts'] != null) {
         final contacts = result['contacts'] as List;
         print('Requesting status for ${contacts.length} contacts...');
-        
+
         // طلب الحالة لكل جهة اتصال
         for (var contact in contacts) {
           final contactId = contact['id']?.toString();
@@ -96,21 +98,18 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
             _messagingService.requestUserStatus(contactId);
           }
         }
-        
-        print('✅ Status requests sent for all contacts');
+
+        print('Status requests sent for all contacts');
       }
     } catch (e) {
-      print('❌ Error requesting contacts status: $e');
+      print('Error requesting contacts status: $e');
     }
   }
 
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
 
-    await Future.wait([
-      _loadContacts(),
-      _loadPendingRequests(),
-    ]);
+    await Future.wait([_loadContacts(), _loadPendingRequests()]);
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -154,7 +153,8 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
           _pendingRequests = List<Map<String, dynamic>>.from(
             result['requests'].map((req) {
               return {
-                'requestId': req['requestId']?.toString() ?? req['id']?.toString() ?? '',
+                'requestId':
+                    req['requestId']?.toString() ?? req['id']?.toString() ?? '',
                 'userId': req['user']?['id']?.toString() ?? '',
                 'fullName': req['user']?['fullName']?.toString() ?? 'مستخدم',
                 'username': req['user']?['username']?.toString() ?? '',
@@ -234,61 +234,61 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
   }
 
   Future<void> _deleteContact(String contactId, String name) async {
-  final confirm = await showDialog<bool>(
-    context: context,
-    builder: (context) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        title: const Text(
-          'حذف صديق',
-          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-        ),
-        content: Text(
-          'هل أنت متأكد من حذف $name من جهات الاتصال؟',
-          style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text(
-              'إلغاء',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-            ),
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          title: const Text(
+            'حذف صديق',
+            style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text(
-              'حذف',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-            ),
+          content: Text(
+            'هل أنت متأكد من حذف $name من جهات الاتصال؟',
+            style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: TextButton.styleFrom(foregroundColor: Colors.red),
+              child: const Text(
+                'حذف',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
 
-  if (confirm != true) return;
+    if (confirm != true) return;
 
-  try {
-    final result = await _apiService.deleteContact(contactId);
+    try {
+      final result = await _apiService.deleteContact(contactId);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (result['success']) {
-      setState(() {
-        _contacts.removeWhere((c) => c['id'] == contactId);
-        _results.removeWhere((c) => c['id'] == contactId);
-      });
-      _showMessage('تم حذف $name من جهات الاتصال', true);
-    } else {
-      _showMessage(result['message'] ?? 'فشل الحذف', false);
+      if (result['success']) {
+        setState(() {
+          _contacts.removeWhere((c) => c['id'] == contactId);
+          _results.removeWhere((c) => c['id'] == contactId);
+        });
+        _showMessage('تم حذف $name من جهات الاتصال', true);
+      } else {
+        _showMessage(result['message'] ?? 'فشل الحذف', false);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      _showMessage('خطأ في الحذف', false);
     }
-  } catch (e) {
-    if (!mounted) return;
-    _showMessage('خطأ في الحذف', false);
   }
-}
 
   String _normalize(String s) {
     var t = s.trim().toLowerCase();
@@ -357,7 +357,10 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
 
               if (_pendingRequests.isNotEmpty)
                 Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                  margin: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   constraints: BoxConstraints(
                     maxHeight: MediaQuery.of(context).size.height * 0.35,
                   ),
@@ -444,7 +447,7 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
                           ],
                         ),
                       ),
-                      
+
                       Flexible(
                         child: ListView.builder(
                           shrinkWrap: true,
@@ -534,61 +537,65 @@ class _ContactsListScreenState extends State<ContactsListScreen> with WidgetsBin
                             ),
                           )
                         : _results.isEmpty
-                            ? Center(
-                                child: SingleChildScrollView(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(24.0),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.contacts_outlined,
-                                          size: 64,
-                                          color: AppColors.textHint.withOpacity(0.3),
-                                        ),
-                                        const SizedBox(height: 16),
-                                        Text(
-                                          _contacts.isEmpty && _query.isEmpty
-                                              ? 'لا توجد جهات اتصال'
-                                              : 'لا توجد نتائج',
-                                          style: AppTextStyles.bodyMedium.copyWith(
-                                            color: AppColors.textHint,
-                                          ),
-                                        ),
-                                        if (_contacts.isEmpty && _query.isEmpty) ...[
-                                          const SizedBox(height: 8),
-                                          Text(
-                                            'ابدأ بإضافة أصدقاء جدد',
-                                            textAlign: TextAlign.center,
-                                            style: AppTextStyles.bodySmall.copyWith(
-                                              color: AppColors.textHint,
-                                            ),
-                                          ),
-                                        ],
-                                      ],
+                        ? Center(
+                            child: SingleChildScrollView(
+                              child: Padding(
+                                padding: const EdgeInsets.all(24.0),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.contacts_outlined,
+                                      size: 64,
+                                      color: AppColors.textHint.withOpacity(
+                                        0.3,
+                                      ),
                                     ),
-                                  ),
-                                ),
-                              )
-                            : RefreshIndicator(
-                                onRefresh: _loadData,
-                                color: AppColors.primary,
-                                child: ListView.builder(
-                                  padding: const EdgeInsets.symmetric(vertical: 20),
-                                  itemCount: _results.length,
-                                  itemBuilder: (context, index) {
-                                    final contact = _results[index];
-                                    final name = contact['name'] ?? '';
-                                    final contactId = contact['id'] ?? '';
-
-                                    return ContactCard(
-                                      name: name,
-                                      onDelete: () => _deleteContact(contactId, name),
-                                    );
-                                  },
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      _contacts.isEmpty && _query.isEmpty
+                                          ? 'لا توجد جهات اتصال'
+                                          : 'لا توجد نتائج',
+                                      style: AppTextStyles.bodyMedium.copyWith(
+                                        color: AppColors.textHint,
+                                      ),
+                                    ),
+                                    if (_contacts.isEmpty &&
+                                        _query.isEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'ابدأ بإضافة أصدقاء جدد',
+                                        textAlign: TextAlign.center,
+                                        style: AppTextStyles.bodySmall.copyWith(
+                                          color: AppColors.textHint,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
                                 ),
                               ),
+                            ),
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _loadData,
+                            color: AppColors.primary,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.symmetric(vertical: 20),
+                              itemCount: _results.length,
+                              itemBuilder: (context, index) {
+                                final contact = _results[index];
+                                final name = contact['name'] ?? '';
+                                final contactId = contact['id'] ?? '';
+
+                                return ContactCard(
+                                  name: name,
+                                  onDelete: () =>
+                                      _deleteContact(contactId, name),
+                                );
+                              },
+                            ),
+                          ),
                   ),
                 ),
               ),

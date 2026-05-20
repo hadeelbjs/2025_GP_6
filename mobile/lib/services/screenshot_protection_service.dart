@@ -31,20 +31,17 @@ class ScreenshotProtectionService {
     }
 
     _isInitialized = true;
-    print(' ScreenshotProtectionService initialized');
   }
 
   /// معالجة الأحداث من iOS
   static Future<dynamic> _handleMethodCall(MethodCall call) async {
     switch (call.method) {
       case 'onScreenshotTaken':
-        print('📸 Screenshot detected from iOS!');
         _onScreenshotTaken?.call();
         break;
 
       case 'onScreenRecordingChanged':
         final isRecording = call.arguments['isRecording'] as bool;
-        print('🎥 Screen recording changed: $isRecording');
         _onScreenRecordingChanged?.call(isRecording);
         break;
     }
@@ -57,15 +54,12 @@ class ScreenshotProtectionService {
     try {
       if (Platform.isAndroid) {
         await ScreenProtector.preventScreenshotOn();
-        print(' Android: FLAG_SECURE enabled');
       } else if (Platform.isIOS) {
         final result = await _channel.invokeMethod('enableProtection');
-        print(' iOS: Screenshot protection enabled: $result');
       }
       _isEnabled = true;
       return true;
     } catch (e) {
-      print('Error enabling screenshot protection: $e');
       return false;
     }
   }
@@ -77,10 +71,8 @@ class ScreenshotProtectionService {
     try {
       if (Platform.isAndroid) {
         await ScreenProtector.preventScreenshotOff();
-        print('Android: Screenshot protection disabled');
       } else if (Platform.isIOS) {
         final result = await _channel.invokeMethod('disableProtection');
-        print('iOS: Screenshot protection disabled: $result');
       }
       _isEnabled = false;
       return true;

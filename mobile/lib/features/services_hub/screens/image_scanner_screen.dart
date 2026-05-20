@@ -61,86 +61,110 @@ class _ImageScannerScreenState extends State<ImageScannerScreen> {
   }
 
   // بناء قائمة العناصر الحساسة من نتيجة API
-List<SensitiveItem> _buildSensitiveItems() {
-  final boxes = _apiService.getBoxes();
-  final items = <SensitiveItem>[];
+  List<SensitiveItem> _buildSensitiveItems() {
+    final boxes = _apiService.getBoxes();
+    final items = <SensitiveItem>[];
 
-  // Scale from API image space → ui.Image space
-  final apiW = _apiService.uploadedWidth.toDouble();
-  final apiH = _apiService.uploadedHeight.toDouble();
-  final imgW = _uiImage!.width.toDouble();
-  final imgH = _uiImage!.height.toDouble();
+    // Scale from API image space → ui.Image space
+    final apiW = _apiService.uploadedWidth.toDouble();
+    final apiH = _apiService.uploadedHeight.toDouble();
+    final imgW = _uiImage!.width.toDouble();
+    final imgH = _uiImage!.height.toDouble();
 
-  final scaleX = (apiW > 0) ? imgW / apiW : 1.0;
-  final scaleY = (apiH > 0) ? imgH / apiH : 1.0;
+    final scaleX = (apiW > 0) ? imgW / apiW : 1.0;
+    final scaleY = (apiH > 0) ? imgH / apiH : 1.0;
 
-  Rect? scaledRect(Map<String, dynamic> data) {
-    final r = extractRect(data);
-    if (r == null) return null;
-    return Rect.fromLTRB(
-      r.left * scaleX,
-      r.top * scaleY,
-      r.right * scaleX,
-      r.bottom * scaleY,
-    );
-  }
-
-  for (final face in boxes['faces'] ?? []) {
-    final rect = scaledRect(face);
-    if (rect != null) {
-      items.add(SensitiveItem(rect: rect, label: 'وجه', color: const Color(0xFF9B8EC4)));
+    Rect? scaledRect(Map<String, dynamic> data) {
+      final r = extractRect(data);
+      if (r == null) return null;
+      return Rect.fromLTRB(
+        r.left * scaleX,
+        r.top * scaleY,
+        r.right * scaleX,
+        r.bottom * scaleY,
+      );
     }
-  }
 
-  const sensitiveDocTypes = [
-    'id_card', 'national_id', 'passport', 'driver_license',
-    'residence_permit', 'iqama', 'birth_certificate',
-    'health_card', 'insurance_card', 'credit_card', 'bank_card', 'car_plate',
-  ];
-  const docLabels = {
-    'id_card': 'بطاقة هوية',
-    'national_id': 'هوية وطنية',
-    'passport': 'جواز سفر',
-    'driver_license': 'رخصة قيادة',
-    'residence_permit': 'إقامة',
-    'iqama': 'إقامة',
-    'birth_certificate': 'شهادة ميلاد',
-    'health_card': 'بطاقة صحية',
-    'insurance_card': 'بطاقة تأمين',
-    'credit_card': 'بطاقة ائتمانية',
-    'credit_cards': 'بطاقة ائتمانية',
-    'bank_card': 'بطاقة بنكية',
-    'car_plate': 'لوحة سيارة',
-  };
-
-  for (final doc in boxes['documents'] ?? []) {
-    final normalized = (doc['class'] ?? '')
-        .toString()
-        .toLowerCase()
-        .replaceAll(' ', '_')
-        .replaceAll(RegExp(r's$'), '');
-    if (!sensitiveDocTypes.contains(normalized)) continue;
-    final rect = scaledRect(doc);
-    if (rect != null) {
-      items.add(SensitiveItem(
-        rect: rect,
-        label: docLabels[normalized] ?? normalized,
-        color: Colors.white,
-      ));
+    for (final face in boxes['faces'] ?? []) {
+      final rect = scaledRect(face);
+      if (rect != null) {
+        items.add(
+          SensitiveItem(
+            rect: rect,
+            label: 'وجه',
+            color: const Color(0xFF9B8EC4),
+          ),
+        );
+      }
     }
-  }
 
-  for (final bc in boxes['barcodes'] ?? []) {
-    final isSensitive = bc['analysis']?['sensitive'] == true;
-    if (!isSensitive) continue;
-    final rect = scaledRect(bc);
-    if (rect != null) {
-      items.add(SensitiveItem(rect: rect, label: 'QR/باركود', color: const Color(0xFF1A73E8)));
+    const sensitiveDocTypes = [
+      'id_card',
+      'national_id',
+      'passport',
+      'driver_license',
+      'residence_permit',
+      'iqama',
+      'birth_certificate',
+      'health_card',
+      'insurance_card',
+      'credit_card',
+      'bank_card',
+      'car_plate',
+    ];
+    const docLabels = {
+      'id_card': 'بطاقة هوية',
+      'national_id': 'هوية وطنية',
+      'passport': 'جواز سفر',
+      'driver_license': 'رخصة قيادة',
+      'residence_permit': 'إقامة',
+      'iqama': 'إقامة',
+      'birth_certificate': 'شهادة ميلاد',
+      'health_card': 'بطاقة صحية',
+      'insurance_card': 'بطاقة تأمين',
+      'credit_card': 'بطاقة ائتمانية',
+      'credit_cards': 'بطاقة ائتمانية',
+      'bank_card': 'بطاقة بنكية',
+      'car_plate': 'لوحة سيارة',
+    };
+
+    for (final doc in boxes['documents'] ?? []) {
+      final normalized = (doc['class'] ?? '')
+          .toString()
+          .toLowerCase()
+          .replaceAll(' ', '_')
+          .replaceAll(RegExp(r's$'), '');
+      if (!sensitiveDocTypes.contains(normalized)) continue;
+      final rect = scaledRect(doc);
+      if (rect != null) {
+        items.add(
+          SensitiveItem(
+            rect: rect,
+            label: docLabels[normalized] ?? normalized,
+            color: Colors.white,
+          ),
+        );
+      }
     }
+
+    for (final bc in boxes['barcodes'] ?? []) {
+      final isSensitive = bc['analysis']?['sensitive'] == true;
+      if (!isSensitive) continue;
+      final rect = scaledRect(bc);
+      if (rect != null) {
+        items.add(
+          SensitiveItem(
+            rect: rect,
+            label: 'QR/باركود',
+            color: const Color(0xFF1A73E8),
+          ),
+        );
+      }
+    }
+
+    return items;
   }
 
-  return items;
-}
   Future<void> _startScan() async {
     setState(() {
       _currentState = _ScanState.scanning;
@@ -258,7 +282,9 @@ List<SensitiveItem> _buildSensitiveItems() {
           ],
 
           Text(
-            _showAnnotatedImage ? "الصورة مع تحديد العناصر الحساسة:" : "الصورة المفحوصة:",
+            _showAnnotatedImage
+                ? "الصورة مع تحديد العناصر الحساسة:"
+                : "الصورة المفحوصة:",
             style: TextStyle(
               fontSize: 16,
               color: AppColors.primary,
@@ -387,17 +413,18 @@ List<SensitiveItem> _buildSensitiveItems() {
               decoration: BoxDecoration(
                 color: Colors.red[50],
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: Colors.red[200]!,
-                  width: 1.5,
-                ),
+                border: Border.all(color: Colors.red[200]!, width: 1.5),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      Icon(Icons.info_outline, color: Colors.red[700], size: 22),
+                      Icon(
+                        Icons.info_outline,
+                        color: Colors.red[700],
+                        size: 22,
+                      ),
                       SizedBox(width: 10),
                       Text(
                         'المعلومات المكتشفة:',
@@ -411,10 +438,14 @@ List<SensitiveItem> _buildSensitiveItems() {
                     ],
                   ),
                   SizedBox(height: 18),
-                  ...detectedItems.map((item) => _buildDetectedItemDynamic(
-                    _getIconData(item['icon']),
-                    item['text'],
-                  )).toList(),
+                  ...detectedItems
+                      .map(
+                        (item) => _buildDetectedItemDynamic(
+                          _getIconData(item['icon']),
+                          item['text'],
+                        ),
+                      )
+                      .toList(),
                 ],
               ),
             ),
@@ -528,22 +559,22 @@ List<SensitiveItem> _buildSensitiveItems() {
     );
   }
 
-IconData _getIconData(String iconName) {
-  Map<String, IconData> icons = {
-    'badge': Icons.badge,
-    'card_membership': Icons.card_membership,
-    'flight': Icons.flight,
-    'email': Icons.email,
-    'phone': Icons.phone,
-    'account_balance': Icons.account_balance,
-    'person': Icons.person,
-    'qr_code': Icons.qr_code,
-    'face': Icons.face,
-    'directions_car': Icons.directions_car, 
-    'info': Icons.info,
-  };
-  return icons[iconName] ?? Icons.info;
-}
+  IconData _getIconData(String iconName) {
+    Map<String, IconData> icons = {
+      'badge': Icons.badge,
+      'card_membership': Icons.card_membership,
+      'flight': Icons.flight,
+      'email': Icons.email,
+      'phone': Icons.phone,
+      'account_balance': Icons.account_balance,
+      'person': Icons.person,
+      'qr_code': Icons.qr_code,
+      'face': Icons.face,
+      'directions_car': Icons.directions_car,
+      'info': Icons.info,
+    };
+    return icons[iconName] ?? Icons.info;
+  }
 
   String _getTitle() {
     switch (_currentState) {
@@ -581,7 +612,7 @@ IconData _getIconData(String iconName) {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const SizedBox(height: 20),
-                
+
                 Container(
                   width: double.infinity,
                   height: 220,
@@ -654,7 +685,11 @@ IconData _getIconData(String iconName) {
                     child: const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.photo_library_rounded, color: Colors.white, size: 24),
+                        Icon(
+                          Icons.photo_library_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
                         SizedBox(width: 12),
                         Text(
                           'من المعرض',
@@ -674,7 +709,9 @@ IconData _getIconData(String iconName) {
 
                 Row(
                   children: [
-                    Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+                    Expanded(
+                      child: Divider(color: Colors.grey[300], thickness: 1),
+                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 15),
                       child: Text(
@@ -686,7 +723,9 @@ IconData _getIconData(String iconName) {
                         ),
                       ),
                     ),
-                    Expanded(child: Divider(color: Colors.grey[300], thickness: 1)),
+                    Expanded(
+                      child: Divider(color: Colors.grey[300], thickness: 1),
+                    ),
                   ],
                 ),
 
@@ -709,7 +748,11 @@ IconData _getIconData(String iconName) {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.camera_alt_rounded, color: AppColors.primary, size: 24),
+                        Icon(
+                          Icons.camera_alt_rounded,
+                          color: AppColors.primary,
+                          size: 24,
+                        ),
                         const SizedBox(width: 12),
                         Text(
                           'التقط صورة جديدة',
@@ -751,13 +794,10 @@ IconData _getIconData(String iconName) {
                   ),
                 ),
                 SizedBox(height: 15),
-                
+
                 Container(
                   width: double.infinity,
-                  constraints: BoxConstraints(
-                    minHeight: 300,
-                    maxHeight: 400,
-                  ),
+                  constraints: BoxConstraints(minHeight: 300, maxHeight: 400),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(20),
                     border: Border.all(
@@ -777,16 +817,13 @@ IconData _getIconData(String iconName) {
                     child: InteractiveViewer(
                       minScale: 0.5,
                       maxScale: 4.0,
-                      child: Image.file(
-                        _selectedImage!,
-                        fit: BoxFit.contain,
-                      ),
+                      child: Image.file(_selectedImage!, fit: BoxFit.contain),
                     ),
                   ),
                 ),
-                
+
                 SizedBox(height: 20),
-                
+
                 Center(
                   child: TextButton.icon(
                     onPressed: _changeImage,
@@ -807,7 +844,7 @@ IconData _getIconData(String iconName) {
             ),
           ),
         ),
-        
+
         Container(
           padding: EdgeInsets.all(30),
           decoration: BoxDecoration(

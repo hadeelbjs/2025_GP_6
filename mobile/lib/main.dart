@@ -31,7 +31,6 @@ import 'package:app_links/app_links.dart';
 import 'features/authentication/screens/reset_password.dart';
 import 'features/laws/screens/laws_screen.dart';
 
-
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
@@ -46,14 +45,16 @@ class MyApp extends StatefulWidget {
   @override
   State<MyApp> createState() => _MyAppState();
 }
+
 String? pendingDeepLinkRoute;
 Map<String, dynamic>? pendingDeepLinkArgs;
+
 class _MyAppState extends State<MyApp> {
   late AppLinks _appLinks;
- @override
-void initState() {
-  super.initState();
-  _appLinks = AppLinks();
+  @override
+  void initState() {
+    super.initState();
+    _appLinks = AppLinks();
 
   // انتظر التطبيق يبني نفسه كامل
   Future.delayed(const Duration(milliseconds: 300), () async {
@@ -132,7 +133,6 @@ class _SplashScreenState extends State<SplashScreen>
   void initState() {
     super.initState();
 
-
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -146,7 +146,6 @@ class _SplashScreenState extends State<SplashScreen>
     _checkAuthStatus();
   }
 
-
   @override
   void dispose() {
     _animationController.dispose();
@@ -156,14 +155,14 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> _checkAuthStatus() async {
     await Future.delayed(const Duration(seconds: 3));
     if (!mounted) return;
-  if (pendingDeepLinkRoute != null) {
-    final route = pendingDeepLinkRoute!;
-    final args = pendingDeepLinkArgs;
-    pendingDeepLinkRoute = null;
-    pendingDeepLinkArgs = null;
-    Navigator.of(context).pushReplacementNamed(route, arguments: args);
-    return;
-  }
+    if (pendingDeepLinkRoute != null) {
+      final route = pendingDeepLinkRoute!;
+      final args = pendingDeepLinkArgs;
+      pendingDeepLinkRoute = null;
+      pendingDeepLinkArgs = null;
+      Navigator.of(context).pushReplacementNamed(route, arguments: args);
+      return;
+    }
 
     try {
 
@@ -222,7 +221,6 @@ class _SplashScreenState extends State<SplashScreen>
   Future<void> clearOldKeys() async {
     final storage = FlutterSecureStorage();
 
-
     // حذف جميع المفاتيح
     final allKeys = await storage.readAll();
 
@@ -236,12 +234,12 @@ class _SplashScreenState extends State<SplashScreen>
         await storage.delete(key: key);
       }
     }
-
   }
 
   /// تهيئة التشفير للمستخدم المسجل دخول
   Future<void> _initializeEncryption() async {
     try {
+      print(' جاري تهيئة التشفير...');
       print(' جاري تهيئة التشفير...');
 
       // 1. جلب userId أولاً
@@ -249,6 +247,7 @@ class _SplashScreenState extends State<SplashScreen>
       final userDataStr = await storage.read(key: 'user_data');
 
       if (userDataStr == null) {
+        print(' لا توجد بيانات مستخدم');
         print(' لا توجد بيانات مستخدم');
         return;
       }

@@ -8,47 +8,50 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'api_services.dart';
 import '../features/dashboard/services/notification_service.dart';
 import '../core/models/app_notifications.dart';
-import 'package:waseed/main.dart'; 
+import 'package:waseed/main.dart';
 
 class AnomalyDetectionService {
-
   static const String _wifiSsidKey = 'last_checked_ssid';
   final ApiService _api = ApiService();
-  
+
   static final List<DateTime> _chatOpenHistory = [];
-  static const int _maxChatsThreshold = 3; 
-  static const Duration _windowDuration = Duration(minutes: 1); 
+  static const int _maxChatsThreshold = 3;
+  static const Duration _windowDuration = Duration(minutes: 1);
 
-Future<void> trackChatOpening() async {
-  final now = DateTime.now();
-  _chatOpenHistory.removeWhere((time) => now.difference(time) > _windowDuration);
-  _chatOpenHistory.add(now);
+  Future<void> trackChatOpening() async {
+    final now = DateTime.now();
+    _chatOpenHistory.removeWhere(
+      (time) => now.difference(time) > _windowDuration,
+    );
+    _chatOpenHistory.add(now);
 
-  if (_chatOpenHistory.length >= _maxChatsThreshold) {
+    if (_chatOpenHistory.length >= _maxChatsThreshold) {
+      NotificationService().addNotification(
+        AppNotification(
+          id: 'unusual_chat_activity_${DateTime.now().millisecondsSinceEpoch}',
+          type: NotificationType.unusualChatActivity,
+          title: 'فتح متكرر وسريع للمحادثات',
+          message: 'تم رصد فتح متكرر للمحادثات في وقت قصير',
+          createdAt: DateTime.now(),
+          isRead: false,
+        ),
+      );
 
-    NotificationService().addNotification(AppNotification(
-      id: 'unusual_chat_activity_${DateTime.now().millisecondsSinceEpoch}',
-      type: NotificationType.unusualChatActivity,
-      title: 'فتح متكرر وسريع للمحادثات',
-      message: 'تم رصد فتح متكرر للمحادثات في وقت قصير',
-      createdAt: DateTime.now(),
-      isRead: false,
-    ));
+      _api
+          .checkAnomalies(
+            customType: 'unusual_chat_activity',
+            locationName: 'سلوك مستخدم غير معتاد',
+          )
+          .ignore();
 
-    _api.checkAnomalies(
-      customType: 'unusual_chat_activity',
-      locationName: 'سلوك مستخدم غير معتاد',
-    ).ignore();
-
-    _chatOpenHistory.clear();
+      _chatOpenHistory.clear();
+    }
   }
-}
-  
+
   // الدالة الرئيسية — تُستدعى من main_dashboard.dart
   Future<void> runChecks() async {
 
     try {
-  
       final locationData = await _getLocationData();
       final ssid = await _getCurrentSSID();
 
@@ -72,15 +75,16 @@ Future<void> trackChatOpening() async {
       return;
     }
 
-
-if (result['success'] == true && result['anomalies'] != null) {
+      if (result['success'] == true && result['anomalies'] != null) {
         final List anomalies = result['anomalies'];
         final prefs = await SharedPreferences.getInstance();
 
         final hasWifiAlert = anomalies.any((a) => a['type'] == 'new_wifi');
         if (!hasWifiAlert) await prefs.remove('last_shown_new_wifi');
 
-        final hasLocationAlert = anomalies.any((a) => a['type'] == 'new_location');
+        final hasLocationAlert = anomalies.any(
+          (a) => a['type'] == 'new_location',
+        );
         if (!hasLocationAlert) await prefs.remove('last_shown_new_location');
 
         for (final a in anomalies) {
@@ -94,22 +98,23 @@ if (result['success'] == true && result['anomalies'] != null) {
             await prefs.setString(key, a['detail']);
           }
 
-     NotificationService().addNotification(AppNotification(
-            id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
-            type: _mapType(a['type']),
-            title: _getTitle(a['type']),
-            message: a['detail'] ?? '',
-            createdAt: DateTime.now(),
-            isRead: false,
-          ));
+          NotificationService().addNotification(
+            AppNotification(
+              id: '${a['type']}_${DateTime.now().millisecondsSinceEpoch}',
+              type: _mapType(a['type']),
+              title: _getTitle(a['type']),
+              message: a['detail'] ?? '',
+              createdAt: DateTime.now(),
+              isRead: false,
+            ),
+          );
         }
       }
     } catch (e) {
       print('Anomaly check failed: $e');
     }
-  } 
+  }
 
- 
   // جلب الموقع
   Future<Map<String, dynamic>?> _getLocationData() async {
     try {
@@ -177,21 +182,31 @@ if (result['success'] == true && result['anomalies'] != null) {
   // Helpers
   NotificationType _mapType(String type) {
     switch (type) {
-      case 'new_location':    return NotificationType.newLocation;
-      case 'new_wifi':        return NotificationType.newWifi;
-      case 'failed_attempts': return NotificationType.failedAttempts;
-      case 'unusual_chat_activity': return NotificationType.unusualChatActivity;
-      default:                return NotificationType.breachAlert;
+      case 'new_location':
+        return NotificationType.newLocation;
+      case 'new_wifi':
+        return NotificationType.newWifi;
+      case 'failed_attempts':
+        return NotificationType.failedAttempts;
+      case 'unusual_chat_activity':
+        return NotificationType.unusualChatActivity;
+      default:
+        return NotificationType.breachAlert;
     }
   }
 
   String _getTitle(String type) {
     switch (type) {
-      case 'new_location':    return 'تسجيل دخول من موقع جديد';
-      case 'new_wifi':        return 'اتصال بشبكة جديدة';
-      case 'failed_attempts': return 'محاولات تسجيل دخول غير ناجحة';
-      case 'unusual_chat_activity': return 'نشاط محادثات مشبوه';
-      default:                return 'نشاط مشبوه';
+      case 'new_location':
+        return 'تسجيل دخول من موقع جديد';
+      case 'new_wifi':
+        return 'اتصال بشبكة جديدة';
+      case 'failed_attempts':
+        return 'محاولات تسجيل دخول غير ناجحة';
+      case 'unusual_chat_activity':
+        return 'نشاط محادثات مشبوه';
+      default:
+        return 'نشاط مشبوه';
     }
   }
 }

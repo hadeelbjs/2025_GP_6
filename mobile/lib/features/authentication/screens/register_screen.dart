@@ -8,10 +8,11 @@ import 'login_screen.dart';
 import '../../dashboard/screens/main_dashboard.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
 import '../widgets/MessageDialog.dart';
-import 'dart:convert'; 
+import 'dart:convert';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../../../services/socket_service.dart';
 import 'package:phone_text_field/phone_text_field.dart';
+
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
 
@@ -31,10 +32,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String _passwordValue = '';
   bool _passwordFocused = false;
 
-
   bool _isLoading = false;
   bool _obscurePassword = true;
-
 
   @override
   void dispose() {
@@ -45,40 +44,40 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _passwordController.dispose();
     super.dispose();
   }
-  // real time check for password 
+
+  // real time check for password
   @override
-void initState() {
-  super.initState();
-  _passwordController.addListener(() {
-    setState(() => _passwordValue = _passwordController.text);
-  });
-}
+  void initState() {
+    super.initState();
+    _passwordController.addListener(() {
+      setState(() => _passwordValue = _passwordController.text);
+    });
+  }
 
   final menaCountries = [
-  {'name': 'السعودية', 'code': 'SA', 'dial_code': '+966', 'flag': '🇸🇦'},
-  {'name': 'مصر', 'code': 'EG', 'dial_code': '+20', 'flag': '🇪🇬'},
-  {'name': 'الإمارات', 'code': 'AE', 'dial_code': '+971', 'flag': '🇦🇪'},
-  {'name': 'الأردن', 'code': 'JO', 'dial_code': '+962', 'flag': '🇯🇴'},
-  {'name': 'الكويت', 'code': 'KW', 'dial_code': '+965', 'flag': '🇰🇼'},
-  {'name': 'البحرين', 'code': 'BH', 'dial_code': '+973', 'flag': '🇧🇭'},
-  {'name': 'قطر', 'code': 'QA', 'dial_code': '+974', 'flag': '🇶🇦'},
-  {'name': 'عُمان', 'code': 'OM', 'dial_code': '+968', 'flag': '🇴🇲'},
-  {'name': 'العراق', 'code': 'IQ', 'dial_code': '+964', 'flag': '🇮🇶'},
-  {'name': 'سوريا', 'code': 'SY', 'dial_code': '+963', 'flag': '🇸🇾'},
-  {'name': 'لبنان', 'code': 'LB', 'dial_code': '+961', 'flag': '🇱🇧'},
-  {'name': 'فلسطين', 'code': 'PS', 'dial_code': '+970', 'flag': '🇵🇸'},
-  {'name': 'تونس', 'code': 'TN', 'dial_code': '+216', 'flag': '🇹🇳'},
-  {'name': 'الجزائر', 'code': 'DZ', 'dial_code': '+213', 'flag': '🇩🇿'},
-  {'name': 'المغرب', 'code': 'MA', 'dial_code': '+212', 'flag': '🇲🇦'},
-  {'name': 'ليبيا', 'code': 'LY', 'dial_code': '+218', 'flag': '🇱🇾'},
-  {'name': 'السودان', 'code': 'SD', 'dial_code': '+249', 'flag': '🇸🇩'},
-  {'name': 'جيبوتي', 'code': 'DJ', 'dial_code': '+253', 'flag': '🇩🇯'},
-  {'name': 'الصومال', 'code': 'SO', 'dial_code': '+252', 'flag': '🇸🇴'},
-  {'name': 'اليمن', 'code': 'YE', 'dial_code': '+967', 'flag': '🇾🇪'},
-  {'name': 'إيران', 'code': 'IR', 'dial_code': '+98', 'flag': '🇮🇷'},
-  {'name': 'تركيا', 'code': 'TR', 'dial_code': '+90', 'flag': '🇹🇷'},
-];
-
+    {'name': 'السعودية', 'code': 'SA', 'dial_code': '+966', 'flag': '🇸🇦'},
+    {'name': 'مصر', 'code': 'EG', 'dial_code': '+20', 'flag': '🇪🇬'},
+    {'name': 'الإمارات', 'code': 'AE', 'dial_code': '+971', 'flag': '🇦🇪'},
+    {'name': 'الأردن', 'code': 'JO', 'dial_code': '+962', 'flag': '🇯🇴'},
+    {'name': 'الكويت', 'code': 'KW', 'dial_code': '+965', 'flag': '🇰🇼'},
+    {'name': 'البحرين', 'code': 'BH', 'dial_code': '+973', 'flag': '🇧🇭'},
+    {'name': 'قطر', 'code': 'QA', 'dial_code': '+974', 'flag': '🇶🇦'},
+    {'name': 'عُمان', 'code': 'OM', 'dial_code': '+968', 'flag': '🇴🇲'},
+    {'name': 'العراق', 'code': 'IQ', 'dial_code': '+964', 'flag': '🇮🇶'},
+    {'name': 'سوريا', 'code': 'SY', 'dial_code': '+963', 'flag': '🇸🇾'},
+    {'name': 'لبنان', 'code': 'LB', 'dial_code': '+961', 'flag': '🇱🇧'},
+    {'name': 'فلسطين', 'code': 'PS', 'dial_code': '+970', 'flag': '🇵🇸'},
+    {'name': 'تونس', 'code': 'TN', 'dial_code': '+216', 'flag': '🇹🇳'},
+    {'name': 'الجزائر', 'code': 'DZ', 'dial_code': '+213', 'flag': '🇩🇿'},
+    {'name': 'المغرب', 'code': 'MA', 'dial_code': '+212', 'flag': '🇲🇦'},
+    {'name': 'ليبيا', 'code': 'LY', 'dial_code': '+218', 'flag': '🇱🇾'},
+    {'name': 'السودان', 'code': 'SD', 'dial_code': '+249', 'flag': '🇸🇩'},
+    {'name': 'جيبوتي', 'code': 'DJ', 'dial_code': '+253', 'flag': '🇩🇯'},
+    {'name': 'الصومال', 'code': 'SO', 'dial_code': '+252', 'flag': '🇸🇴'},
+    {'name': 'اليمن', 'code': 'YE', 'dial_code': '+967', 'flag': '🇾🇪'},
+    {'name': 'إيران', 'code': 'IR', 'dial_code': '+98', 'flag': '🇮🇷'},
+    {'name': 'تركيا', 'code': 'TR', 'dial_code': '+90', 'flag': '🇹🇷'},
+  ];
 
   // معالجة التسجيل
   Future<void> _handleRegister() async {
@@ -100,8 +99,7 @@ void initState() {
     if (!mounted) return;
 
     if (result['success']) {
-
-      // حفظ newRegistrationId
+      //  newRegistrationId
       final String? newRegistrationId = result['newRegistrationId'];
       if (newRegistrationId == null) {
         _showMessage('حدث خطأ: لم يتم استلام معرف التسجيل', isError: true);
@@ -122,8 +120,7 @@ void initState() {
       );
 
       if (emailVerified == true && mounted) {
-       _proceedToPhoneVerification();
-                
+        _proceedToPhoneVerification();
       }
     } else {
       _showMessage(result['message'] ?? 'حدث خطأ', isError: true);
@@ -135,10 +132,7 @@ void initState() {
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return MessageDialog(
-          message: message,
-          isError: isError,
-        );
+        return MessageDialog(message: message, isError: isError);
       },
     );
   }
@@ -154,7 +148,7 @@ void initState() {
       final signalManager = SignalProtocolManager();
       await signalManager.initialize();
       final keysUploaded = await signalManager.generateAndUploadKeys();
-      
+
       if (!keysUploaded) {
         _showMessage('تحذير: فشل إعداد مفاتيح تشفير الرسائل', isError: true);
       }
@@ -184,9 +178,7 @@ void initState() {
             ),
             content: const Text(
               'لإكمال التسجيل، يجب التحقق من رقم جوالك',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-              ),
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
             ),
             actions: [
               ElevatedButton(
@@ -238,8 +230,6 @@ void initState() {
           ),
         ),
       );
-
-      
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -264,7 +254,7 @@ void initState() {
     }
   }
 
-  // تخطي تحقق الجوال - مافيه احد مستدعيه مسكينه يمكن تنحذف
+  // تخطي تحقق الجوال
   Future<void> _skipPhoneVerification() async {
     setState(() => _isLoading = true);
 
@@ -393,7 +383,8 @@ void initState() {
                           }
                           final email = value.trim();
                           final emailRegex = RegExp(
-                              r'^[a-zA-Z0-9._]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$');
+                            r'^[a-zA-Z0-9._]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+                          );
                           if (!emailRegex.hasMatch(email)) {
                             return 'الرجاء إدخال بريد إلكتروني صالح';
                           }
@@ -406,17 +397,16 @@ void initState() {
                         decoration: const InputDecoration(
                           filled: true,
                           fillColor: Colors.white,
-                          
+
                           labelText: 'رقم الهاتف',
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(12)),
-                            
                           ),
                           prefixIcon: Icon(Icons.phone),
                         ),
                         searchFieldInputDecoration: const InputDecoration(
                           filled: true,
-                          
+
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.all(Radius.circular(12)),
                           ),
@@ -426,15 +416,15 @@ void initState() {
                         dialogTitle: 'اختر الدولة',
                         initialCountryCode: 'SA',
                         onChanged: (phoneNumber) {
-                          debugPrint('رقم الهاتف: ${phoneNumber.completeNumber}');
+                          debugPrint(
+                            'رقم الهاتف: ${phoneNumber.completeNumber}',
+                          );
                           _phoneController.text = phoneNumber.completeNumber;
                         },
                         invalidNumberMessage: "الرجاء إدخال رقم هاتف صالح",
                       ),
 
-
-                      
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
                       Focus(
                         onFocusChange: (hasFocus) {
                           if (hasFocus) setState(() => _passwordFocused = true);
@@ -449,23 +439,35 @@ void initState() {
                           enabled: !_isLoading,
                           suffixIcon: IconButton(
                             icon: Icon(
-                              !_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              !_obscurePassword
+                                  ? Icons.visibility_outlined
+                                  : Icons.visibility_off_outlined,
                               color: Colors.grey.shade600,
                             ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                            onPressed: () => setState(
+                              () => _obscurePassword = !_obscurePassword,
+                            ),
                           ),
                           validator: (value) {
-                            if (value == null || value.isEmpty) return 'الرجاء إدخال كلمة المرور';
-                            if (value.length < 8) return 'يجب أن تكون كلمة المرور 8 أحرف على الأقل';
-                            if (!RegExp(r'[0-9]').hasMatch(value)) return 'يجب أن تحتوي على رقم';
-                            if (!RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(value)) return 'يجب أن تحتوي على رمز خاص';
-                            if (!RegExp(r'[a-zA-Z]').hasMatch(value)) return 'يجب أن تحتوي على حرف إنجليزي';
+                            if (value == null || value.isEmpty)
+                              return 'الرجاء إدخال كلمة المرور';
+                            if (value.length < 8)
+                              return 'يجب أن تكون كلمة المرور 8 أحرف على الأقل';
+                            if (!RegExp(r'[0-9]').hasMatch(value))
+                              return 'يجب أن تحتوي على رقم';
+                            if (!RegExp(
+                              r'[!@#$%^&*(),.?":{}|<>]',
+                            ).hasMatch(value))
+                              return 'يجب أن تحتوي على رمز خاص';
+                            if (!RegExp(r'[a-zA-Z]').hasMatch(value))
+                              return 'يجب أن تحتوي على حرف إنجليزي';
                             return null;
                           },
                         ),
                       ),
                       const SizedBox(height: 10),
-                      if (_passwordFocused) _PasswordRequirements(password: _passwordValue),
+                      if (_passwordFocused)
+                        _PasswordRequirements(password: _passwordValue),
                       const SizedBox(height: 24),
                       ElevatedButton(
                         onPressed: _isLoading ? null : _handleRegister,
@@ -504,7 +506,8 @@ void initState() {
                                 Navigator.pushReplacement(
                                   context,
                                   MaterialPageRoute(
-                                      builder: (_) => const LoginScreen()),
+                                    builder: (_) => const LoginScreen(),
+                                  ),
                                 );
                               },
                         child: const Text(
@@ -526,9 +529,9 @@ void initState() {
       ),
     );
   }
-
 }
-  class _PasswordRequirements extends StatelessWidget {
+
+class _PasswordRequirements extends StatelessWidget {
   final String password;
   const _PasswordRequirements({required this.password});
 
@@ -536,9 +539,18 @@ void initState() {
   Widget build(BuildContext context) {
     final checks = [
       {'label': '8 أحرف على الأقل', 'met': password.length >= 8},
-      {'label': 'رقم واحد على الأقل', 'met': RegExp(r'[0-9]').hasMatch(password)},
-      {'label': 'رمز خاص (!@#\$...)', 'met': RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password)},
-      {'label': 'حرف إنجليزي واحد على الأقل', 'met': RegExp(r'[a-zA-Z]').hasMatch(password)},
+      {
+        'label': 'رقم واحد على الأقل',
+        'met': RegExp(r'[0-9]').hasMatch(password),
+      },
+      {
+        'label': 'رمز خاص (!@#\$...)',
+        'met': RegExp(r'[!@#$%^&*(),.?":{}|<>]').hasMatch(password),
+      },
+      {
+        'label': 'حرف إنجليزي واحد على الأقل',
+        'met': RegExp(r'[a-zA-Z]').hasMatch(password),
+      },
     ];
 
     const purple = Color(0xFF2D1B69);
@@ -569,8 +581,8 @@ void initState() {
             final color = isEmpty
                 ? Colors.grey.shade400
                 : met
-                    ? purple
-                    : Colors.red.shade400;
+                ? purple
+                : Colors.red.shade400;
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 3),
               child: Row(

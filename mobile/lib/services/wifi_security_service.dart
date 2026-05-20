@@ -14,19 +14,21 @@ class WifiSecurityService {
 
   static const platform = MethodChannel('com.waseed.app/wifi_security');
   final Connectivity _connectivity = Connectivity();
-  final _networkStatusController = StreamController<WifiSecurityStatus>.broadcast();
+  final _networkStatusController =
+      StreamController<WifiSecurityStatus>.broadcast();
 
-  
   // مفاتيح التخزين
   static const String _permissionsAskedKey = 'wifi_permissions_asked';
   static const String _permissionsGrantedKey = 'wifi_permissions_granted';
-  static const String _userDeclinedPermanentlyKey = 'wifi_user_declined_permanently';
+  static const String _userDeclinedPermanentlyKey =
+      'wifi_user_declined_permanently';
   static const String _lastCheckedSSIDKey = 'last_checked_ssid';
   static const String _lastCheckedBSSIDKey = 'last_checked_bssid';
   static const String _lastWarningSSIDKey = 'last_warning_ssid';
-  
+
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
-  Stream<WifiSecurityStatus> get onNetworkChanged => _networkStatusController.stream;
+  Stream<WifiSecurityStatus> get onNetworkChanged =>
+      _networkStatusController.stream;
 
   bool _isInitialized = false;
   bool _isCheckingNetwork = false;
@@ -42,10 +44,9 @@ class WifiSecurityService {
     try {
       // بدء مراقبة تغييرات الشبكة
       _startNetworkMonitoring();
-      
+
       _isInitialized = true;
       return true;
-      
     } catch (e) {
       return false;
     }
@@ -55,41 +56,42 @@ class WifiSecurityService {
   Future<PermissionState> getPermissionState() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-       //  هل المستخدم رفض نهائياً؟
-    final userDeclinedPermanently = prefs.getBool(_userDeclinedPermanentlyKey) ?? false;
-    if (userDeclinedPermanently) {
-      return PermissionState.userDeclinedPermanently;
-    }
-      
+      //  هل المستخدم رفض نهائياً؟
+      final userDeclinedPermanently =
+          prefs.getBool(_userDeclinedPermanentlyKey) ?? false;
+      if (userDeclinedPermanently) {
+        return PermissionState.userDeclinedPermanently;
+      }
+
       // هل تم السؤال من قبل؟
       final wasAsked = prefs.getBool(_permissionsAskedKey) ?? false;
-      
+
       if (!wasAsked) {
         return PermissionState.neverAsked;
       }
-      
+
       // هل تم منح الصلاحيات؟
       final wasGranted = prefs.getBool(_permissionsGrantedKey) ?? false;
-      
+
       // التحقق من الحالة الفعلية (قد يكون المستخدم غيّرها من الإعدادات)
       final currentlyGranted = await _checkPlatformPermissions();
-      
+
       // تحديث الحالة المحفوظة
       if (currentlyGranted != wasGranted) {
         await prefs.setBool(_permissionsGrantedKey, currentlyGranted);
       }
-      
+
       if (currentlyGranted) {
         return PermissionState.granted;
       } else {
         return PermissionState.denied;
       }
-      
     } catch (e) {
       print('Error getting permission state: $e');
       return PermissionState.neverAsked;
     }
   }
+
   /// تسجيل أن المستخدم رفض نهائياً (ضغط "لاحقاً" أو "إلغاء")
 Future<void> markUserDeclinedPermanently() async {
   try {
@@ -105,22 +107,21 @@ Future<void> markUserDeclinedPermanently() async {
   Future<bool> requestPermissions() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       // تسجيل أننا سألنا
       await prefs.setBool(_permissionsAskedKey, true);
-      
+
       // طلب صلاحية الموقع من Flutter plugin
       await _requestLocationPermission();
-      
+
       // طلب صلاحيات من Native code
       final result = await platform.invokeMethod<bool>('requestPermissions');
       final granted = result ?? false;
-      
+
       // حفظ النتيجة
       await prefs.setBool(_permissionsGrantedKey, granted);
       
       return granted;
-      
     } catch (e) {
       return false;
     }
@@ -198,37 +199,39 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
     try {
       // التحقق من الصلاحيات
       final permissionState = await getPermissionState();
-      
+
       if (permissionState == PermissionState.neverAsked) {
         return WifiCheckResult.needsPermission();
       }
       if (permissionState == PermissionState.userDeclinedPermanently) {
-      return WifiCheckResult.userDeclined();
-    }
-      
+        return WifiCheckResult.userDeclined();
+      }
+
       if (permissionState == PermissionState.denied) {
         return WifiCheckResult.permissionDenied();
       }
-      
+
       // إجراء الفحص
       final status = await _performNetworkCheck();
-      
+
       if (status == null) {
         return WifiCheckResult.notConnected();
       }
-      
+
       // التحقق: هل سبق وفحصنا هذه الشبكة؟
-      final alreadyChecked = await _isNetworkAlreadyChecked(status.ssid, status.bssid);
-      
+      final alreadyChecked = await _isNetworkAlreadyChecked(
+        status.ssid,
+        status.bssid,
+      );
+
       if (alreadyChecked) {
         return WifiCheckResult.alreadyChecked();
       }
-      
+
       // تسجيل أننا فحصنا هذه الشبكة
       await _markNetworkAsChecked(status.ssid, status.bssid, status.isSecure);
-      
+
       return WifiCheckResult.success(status);
-      
     } catch (e) {
       return WifiCheckResult.error(e.toString());
     }
@@ -240,31 +243,34 @@ Future<WifiCheckResult> requestPermissionsAndCheck() async {
       final prefs = await SharedPreferences.getInstance();
       final lastSSID = prefs.getString(_lastCheckedSSIDKey);
       final lastBSSID = prefs.getString(_lastCheckedBSSIDKey);
-      
+
       // مقارنة BSSID (أدق)
       if (lastBSSID != null && lastBSSID == bssid) {
         return true;
       }
-      
+
       // مقارنة SSID كبديل
       if (lastSSID != null && lastSSID == ssid) {
         return true;
       }
-      
+
       return false;
-      
     } catch (e) {
       return false;
     }
   }
 
   /// تسجيل أننا فحصنا هذه الشبكة
-  Future<void> _markNetworkAsChecked(String ssid, String bssid, bool isSecure) async {
+  Future<void> _markNetworkAsChecked(
+    String ssid,
+    String bssid,
+    bool isSecure,
+  ) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_lastCheckedSSIDKey, ssid);
       await prefs.setString(_lastCheckedBSSIDKey, bssid);
-      
+
       // حفظ أننا عرضنا التحذير إذا كانت غير آمنة
       if (!isSecure) {
         await prefs.setString(_lastWarningSSIDKey, ssid);
@@ -376,9 +382,8 @@ final Map<dynamic, dynamic> rawData =
         } else {
           print('Disconnected from WiFi');
         //await resetCheckState();
-        }
-      },
-    );
+      }
+    });
   }
 
   /// التحقق من أن الشبكة تغيرت
@@ -387,44 +392,41 @@ final Map<dynamic, dynamic> rawData =
       final prefs = await SharedPreferences.getInstance();
       final lastSSID = prefs.getString(_lastCheckedSSIDKey);
       final lastBSSID = prefs.getString(_lastCheckedBSSIDKey);
-      
+
       // إذا ما في بيانات محفوظة، يعني شبكة جديدة
       if (lastSSID == null || lastBSSID == null) {
         return true;
       }
-      
+
       // محاولة الحصول على معلومات الشبكة الحالية
       try {
-        final Map<dynamic, dynamic> rawData = 
-            await platform.invokeMethod('getWifiSecurityStatus');
-        
+        final Map<dynamic, dynamic> rawData = await platform.invokeMethod(
+          'getWifiSecurityStatus',
+        );
+
         final currentSSID = rawData['ssid'] as String?;
         final currentBSSID = rawData['bssid'] as String?;
-        
+
         // مقارنة BSSID (أدق من SSID)
         if (currentBSSID != null && currentBSSID != lastBSSID) {
           return true;
         }
-        
+
         // إذا ما قدرنا نحصل BSSID، نقارن SSID
         if (currentSSID != null && currentSSID != lastSSID) {
           return true;
         }
-        
+
         return false;
-        
       } catch (e) {
         // إذا فشل الحصول على البيانات، نعتبرها شبكة جديدة للأمان
         return true;
       }
-      
     } catch (e) {
       print('Error checking network change: $e');
       return true; // للأمان، نعتبرها شبكة جديدة
     }
   }
-
-  
 
   void dispose() {
     _connectivitySubscription?.cancel();
@@ -436,10 +438,10 @@ final Map<dynamic, dynamic> rawData =
 
 // Enums & Data Models
 enum PermissionState {
-  neverAsked,  // لم يُسأل من قبل
-  granted,     // تم منح الصلاحيات
+  neverAsked, // لم يُسأل من قبل
+  granted, // تم منح الصلاحيات
   denied, // تم رفض الصلاحيات
-  userDeclinedPermanently,      
+  userDeclinedPermanently,
 }
 
 class WifiCheckResult {
@@ -447,11 +449,7 @@ class WifiCheckResult {
   final WifiSecurityStatus? status;
   final String? errorMessage;
 
-  WifiCheckResult({
-    required this.type,
-    this.status,
-    this.errorMessage,
-  });
+  WifiCheckResult({required this.type, this.status, this.errorMessage});
 
   factory WifiCheckResult.needsPermission() {
     return WifiCheckResult(type: WifiCheckResultType.needsPermission);
@@ -465,10 +463,7 @@ class WifiCheckResult {
   }
 
   factory WifiCheckResult.success(WifiSecurityStatus status) {
-    return WifiCheckResult(
-      type: WifiCheckResultType.success,
-      status: status,
-    );
+    return WifiCheckResult(type: WifiCheckResultType.success, status: status);
   }
 
   factory WifiCheckResult.notConnected() {
@@ -488,13 +483,13 @@ class WifiCheckResult {
 }
 
 enum WifiCheckResultType {
-  needsPermission,   // يحتاج صلاحيات
+  needsPermission, // يحتاج صلاحيات
   permissionDenied, // الصلاحيات مرفوضة
-  userDeclined, 
-  success,           // نجح الفحص
-  notConnected,      // غير متصل بـ WiFi
-  alreadyChecked,    // تم الفحص مسبقاً في هذه الجلسة
-  error,             // خطأ
+  userDeclined,
+  success, // نجح الفحص
+  notConnected, // غير متصل بـ WiFi
+  alreadyChecked, // تم الفحص مسبقاً في هذه الجلسة
+  error, // خطأ
 }
 
 class WifiSecurityStatus {
@@ -537,11 +532,11 @@ class WifiSecurityStatus {
   }
 
   bool get shouldShowWarning => !isSecure && !hasError && ssid.isNotEmpty;
-  
+
   String get securityDescription {
     if (hasError) return 'خطأ في الفحص';
     if (ssid.isEmpty) return 'غير متصل';
-    
+
     switch (securityType.toUpperCase()) {
       case 'WPA3':
       case 'WPA3-SAE':

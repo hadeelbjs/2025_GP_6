@@ -79,30 +79,29 @@ class _OnboardingScreenState extends State<OnboardingScreen>
       ),
     );
 
-    _logoAlignToTop = AlignmentTween(
-      begin: Alignment.center,
-      end: const Alignment(0, -0.60),
-    ).animate(
-      CurvedAnimation(
-        parent: _c,
-        curve: const Interval(split, 1.00, curve: Curves.easeOutCubic),
-      ),
-    );
+    _logoAlignToTop =
+        AlignmentTween(
+          begin: Alignment.center,
+          end: const Alignment(0, -0.60),
+        ).animate(
+          CurvedAnimation(
+            parent: _c,
+            curve: const Interval(split, 1.00, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _contentFade = CurvedAnimation(
       parent: _c,
       curve: const Interval(0.45, 1.00, curve: Curves.easeIn),
     );
 
-    _contentSlide = Tween<Offset>(
-      begin: const Offset(0, 0.12),
-      end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: _c,
-        curve: const Interval(0.45, 1.00, curve: Curves.easeOutCubic),
-      ),
-    );
+    _contentSlide =
+        Tween<Offset>(begin: const Offset(0, 0.12), end: Offset.zero).animate(
+          CurvedAnimation(
+            parent: _c,
+            curve: const Interval(0.45, 1.00, curve: Curves.easeOutCubic),
+          ),
+        );
 
     _c.forward();
   }
@@ -178,16 +177,18 @@ class _OnboardingScreenState extends State<OnboardingScreen>
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                       _PrimaryButton(
-                        label: 'ابدأ الآن',
-                        onTap: () {
-                          HapticFeedback.lightImpact();
-                          Navigator.pushReplacement(
-                            context,
-                            MaterialPageRoute(builder: (context) => const RegisterScreen()),
-                          );
-                        },
-                      ),
+                        _PrimaryButton(
+                          label: 'ابدأ الآن',
+                          onTap: () {
+                            HapticFeedback.lightImpact();
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const RegisterScreen(),
+                              ),
+                            );
+                          },
+                        ),
                       ],
                     ),
                   ),
@@ -257,10 +258,7 @@ class _BrandTitle extends StatelessWidget {
   Widget build(BuildContext context) {
     return ShaderMask(
       shaderCallback: (bounds) => const LinearGradient(
-        colors: [
-          AppColors.primary,
-          AppColors.primaryAlt,
-        ],
+        colors: [AppColors.primary, AppColors.primaryAlt],
         begin: Alignment.topRight,
         end: Alignment.bottomLeft,
       ).createShader(bounds),
@@ -377,6 +375,7 @@ class _BottomGeometricShape extends StatelessWidget {
     );
   }
 }
+
 class _ElegantWavePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
@@ -388,10 +387,7 @@ class _ElegantWavePainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.bottomLeft,
         end: Alignment.topRight,
-        colors: [
-          Color(0xFF281B67),
-          Color(0xFF3D2E8C),
-        ],
+        colors: [Color(0xFF281B67), Color(0xFF3D2E8C)],
       ).createShader(Rect.fromLTWH(0, 0, w, h));
 
     final path1 = Path()
@@ -408,10 +404,7 @@ class _ElegantWavePainter extends CustomPainter {
       ..shader = const LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
-        colors: [
-          Color(0xFF4A3E92),
-          Color(0xFF6B5DA8),
-        ],
+        colors: [Color(0xFF4A3E92), Color(0xFF6B5DA8)],
       ).createShader(Rect.fromLTWH(0, 0, w, h))
       ..style = PaintingStyle.fill
       ..isAntiAlias = true;

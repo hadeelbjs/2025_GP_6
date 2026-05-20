@@ -258,10 +258,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
             _quickQuestionsPanel(),
             // Input
             _assistantTextOnlyBar(),
-            /*
-            // Quick Questions
-            _quickQuestionsPanel(),
-          */
           ],
         ),
       ),
@@ -287,7 +283,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
         top: false,
         child: Row(
           children: [
-            // صندوق الإدخال (نفس ستايل التشات)
             Expanded(
               child: Container(
                 decoration: BoxDecoration(
@@ -339,7 +334,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
                       ),
                     ),
 
-                    // (اختياري) زر إخفاء الكيبورد مثل التشات
                     if (_controller.text.isNotEmpty)
                       GestureDetector(
                         onTap: () => FocusScope.of(context).unfocus(),
@@ -363,7 +357,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
 
             const SizedBox(width: 8),
 
-            // زر الإرسال (نفس التشات)
             GestureDetector(
               onTap: canSend ? _send : null,
               child: AnimatedContainer(
@@ -427,7 +420,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
   ];
 
   Widget _quickQuestionsPanel() {
-    //  اخفيها إذا المستخدم بدأ يكتب
     if (_controller.text.trim().isNotEmpty) {
       return const SizedBox.shrink();
     }
@@ -503,15 +495,7 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
                 : Colors.grey.shade200,
           ),
         ),
-        /*child: Text(
-          msg.text,
-          style: TextStyle(
-            fontFamily: 'IBMPlexSansArabic',
-            fontSize: 13,
-            height: 1.35,
-            color: Colors.black.withOpacity(0.78),
-          ),
-        ),*/
+
         child: RichText(text: TextSpan(children: _formatMessage(msg.text))),
       ),
     );
@@ -526,14 +510,13 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
     int lastIndex = 0;
 
     for (final match in matches) {
-      // النص العادي قبل الـ bold
       if (match.start > lastIndex) {
         spans.add(
           TextSpan(
             text: text.substring(lastIndex, match.start),
             style: TextStyle(
               fontFamily: 'IBMPlexSansArabic',
-              fontSize: 15, // 🔥 كبرنا الخط
+              fontSize: 15,
               height: 1.6,
               color: Colors.black.withOpacity(0.85),
             ),
@@ -541,7 +524,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
         );
       }
 
-      // النص داخل **
       spans.add(
         TextSpan(
           text: match.group(1),
@@ -558,7 +540,6 @@ class _ChatbotChatScreenState extends State<ChatbotChatScreen> {
       lastIndex = match.end;
     }
 
-    // النص الأخير بعد آخر bold
     if (lastIndex < text.length) {
       spans.add(
         TextSpan(

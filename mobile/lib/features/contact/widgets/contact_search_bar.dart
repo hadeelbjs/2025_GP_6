@@ -4,9 +4,9 @@ import '../../../core/constants/app_text_styles.dart';
 
 class ContactSearchBar extends StatefulWidget {
   final TextEditingController? controller;
-  final ValueChanged<String>? onSearch; //  المكبّر / Enter = بحث
-  final ValueChanged<String>? onChanged; //   تصفية لحظية أثناء الكتابة
-  final VoidCallback? onClear; // X
+  final ValueChanged<String>? onSearch;
+  final ValueChanged<String>? onChanged;
+  final VoidCallback? onClear;
 
   const ContactSearchBar({
     super.key,
@@ -29,7 +29,7 @@ class _ContactSearchBarState extends State<ContactSearchBar> {
     super.initState();
     _ownsController = widget.controller == null;
     _ctl = widget.controller ?? TextEditingController();
-    _ctl.addListener(() => setState(() {})); //  ظهور زر X
+    _ctl.addListener(() => setState(() {}));
   }
 
   @override
@@ -44,7 +44,7 @@ class _ContactSearchBarState extends State<ContactSearchBar> {
 
   void _clear() {
     _ctl.clear();
-    widget.onSearch?.call(''); //  النتائج كاملة
+    widget.onSearch?.call('');
     widget.onClear?.call();
   }
 
@@ -65,7 +65,7 @@ class _ContactSearchBarState extends State<ContactSearchBar> {
       child: TextField(
         controller: _ctl,
         textAlign: TextAlign.right,
-        textInputAction: TextInputAction.search, //  "بحث" بالكيبورد
+        textInputAction: TextInputAction.search,
         onSubmitted: (_) => _triggerSearch(), // Enter = بحث
         onChanged: widget.onChanged, //  تصفية لحظية أثناء الكتابة
         style: AppTextStyles.searchText,

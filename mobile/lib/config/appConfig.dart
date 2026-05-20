@@ -5,11 +5,9 @@ class AppConfig {
   static String? get apiBaseUrl {
     if (isProduction) {
       return dotenv.env['API_BASE_URL'];
-      }
-     
-    else {
-     return 'http://localhost:3000/api';
-     }
+    } else {
+      return 'http://localhost:3000/api';
+    }
   }
 
   static bool get isProduction {
@@ -18,21 +16,21 @@ class AppConfig {
   }
 
   static String? get socketUrl {
-    if(isProduction){
-    return dotenv.env['SOCKET_URL']; 
-    }else{
-    return 'http://localhost:3000';}
+    if (isProduction) {
+      return dotenv.env['SOCKET_URL'];
+    } else {
+      return 'http://localhost:3000';
+    }
   }
 
   static String get hibpApikey {
-
-    return dotenv.env['HIBP_API_KEY'] ?? "00000000"; 
-
+    return dotenv.env['HIBP_API_KEY'] ?? "00000000";
   }
 
   static String get virustotalApiKey {
     return dotenv.env['VIRUS_TOTAL_API_KEY'] ?? 'http://localhost:3000';
   }
+
   static String get imageModelUrl {
     return dotenv.env['IMAGE_MODEL_URL'] ?? 'http://localhost:3000';
   }
@@ -45,7 +43,4 @@ class AppConfig {
   static bool get isLoaded {
     return dotenv.isInitialized;
   }
-
-  
-  
 }

@@ -16,7 +16,6 @@ import '../../../config/appConfig.dart';
 import '../../../services/messaging_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-
 class AccountManagementScreen extends StatefulWidget {
   const AccountManagementScreen({super.key});
 
@@ -25,7 +24,8 @@ class AccountManagementScreen extends StatefulWidget {
       _AccountManagementScreenState();
 }
 
-class _AccountManagementScreenState extends State<AccountManagementScreen> with WidgetsBindingObserver {
+class _AccountManagementScreenState extends State<AccountManagementScreen>
+    with WidgetsBindingObserver {
   final _apiService = ApiService();
   final _messagingService = MessagingService();
   Map<String, dynamic>? _userData;
@@ -40,7 +40,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
       builder: (context) => _SupportSheet(apiService: _apiService),
     );
   }
- 
+
   @override
   void initState() {
     super.initState();
@@ -54,60 +54,59 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
     super.dispose();
   }
 
-  // مراقبة lifecycle للتطبيق
+  // مراقبة للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _ensureSocketConnection();
-    } else if (state == AppLifecycleState.paused) {
-    }
+    } else if (state == AppLifecycleState.paused) {}
   }
 
   //  التأكد من الاتصال بالـ Socket وطلب الحالة لجميع جهات الاتصال
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
-        print('🔌 Socket not connected - initializing...');
+        print('Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
           await _requestAllContactsStatus();
         } else {
-          print('❌ Failed to connect socket after resume');
+          print('Failed to connect socket after resume');
         }
       } else {
         await _requestAllContactsStatus();
       }
     } catch (e) {
-      print('❌ Error ensuring socket connection: $e');
+      print('Error ensuring socket connection: $e');
     }
   }
 
   Future<void> _requestAllContactsStatus() async {
     try {
       await Future.delayed(const Duration(milliseconds: 500));
-      
+
       if (!_messagingService.isConnected) {
-        print('⚠️ Socket not connected, skipping status requests');
+        print('Socket not connected, skipping status requests');
         return;
       }
 
       final result = await _apiService.getContactsList();
-      
+
       if (result['success'] == true && result['contacts'] != null) {
         final contacts = result['contacts'] as List;
         print('Requesting status for ${contacts.length} contacts...');
-        
+
         for (var contact in contacts) {
           final contactId = contact['id']?.toString();
           if (contactId != null) {
             _messagingService.requestUserStatus(contactId);
           }
         }
-        
-        print('✅ Status requests sent for all contacts');
+
+        print('Status requests sent for all contacts');
       }
     } catch (e) {
-      print('❌ Error requesting contacts status: $e');
+      print('Error requesting contacts status: $e');
     }
   }
 
@@ -172,7 +171,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                             _buildSecuritySettings(),
                             _buildEditOptions(),
                             const SizedBox(height: 20),
-                           
+
                             _buildLogoutButton(context),
                             const SizedBox(height: 12),
                             _buildEmergencyModeButton(context),
@@ -189,17 +188,15 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
     );
   }
 
-  
   Widget _buildProfileCard() {
     final fullName = _userData?['fullName'] ?? 'المستخدم';
     final username = _userData?['username'] ?? '';
-    // حرف أول ثابت بدل الإيموجي
+    // حرف أول ثابت
     final String initial = fullName.trim().isNotEmpty
         ? fullName.trim()[0].toUpperCase()
         : '؟';
 
     return Container(
-      // حجم أصغر للكارد
       padding: const EdgeInsets.all(0),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
@@ -207,7 +204,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
           end: Alignment.bottomLeft,
           colors: [Color(0xFF6B5B95), Color(0xFF2D1B69)],
         ),
-        borderRadius: BorderRadius.circular(24), // كان 45
+        borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
             color: const Color(0xFF2D1B69).withOpacity(0.20),
@@ -218,7 +215,6 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
       ),
       child: Stack(
         children: [
-          // زخارف أصغر
           Positioned(
             left: -20,
             top: -20,
@@ -244,14 +240,13 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
             ),
           ),
 
-          // المحتوى – مضغوط
           Padding(
-            padding: const EdgeInsets.all(16), // كان 24
+            padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // أفاتار بحرف ثابت (بدون onTap وبدون زر تعديل)
+                // أفاتار بحرف ثابت
                 Container(
-                  width: 56, // كان 80
+                  width: 56,
                   height: 56,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
@@ -275,7 +270,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                           initial,
                           style: const TextStyle(
                             fontFamily: 'IBMPlexSansArabic',
-                            fontSize: 24, // كان 40
+                            fontSize: 24,
                             fontWeight: FontWeight.w700,
                             color: Colors.white,
                           ),
@@ -285,8 +280,8 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                   ),
                 ),
 
-                const SizedBox(width: 14), // كان 20
-                // معلومات المستخدم (مقاسات أصغر)
+                const SizedBox(width: 14),
+                //  معلومات المستخدم
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,26 +293,25 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontFamily: 'IBMPlexSansArabic',
-                          fontSize: 20, // كان 24
+                          fontSize: 20,
                           fontWeight: FontWeight.w700,
                           color: Colors.white,
                         ),
                       ),
                       if (username.isNotEmpty) ...[
-                        const SizedBox(height: 4), // كان 6
+                        const SizedBox(height: 4),
                         Text(
                           '@$username',
                           textDirection: TextDirection.ltr,
                           style: TextStyle(
                             fontFamily: 'IBMPlexSansArabic',
-                            fontSize: 13, // كان 16
+                            fontSize: 13,
                             color: Colors.white.withOpacity(0.85),
                             letterSpacing: 0.3,
                           ),
                         ),
                       ],
-                      const SizedBox(height: 8), // كان 12
-                      // من عائلة وصيد + اللوجو (تصغير بسيط)
+                      const SizedBox(height: 8),
                       Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -325,7 +319,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                             'من عائلة وصيد',
                             style: TextStyle(
                               fontFamily: 'IBMPlexSansArabic',
-                              fontSize: 12, // كان 13
+                              fontSize: 12,
                               color: Colors.white.withOpacity(0.95),
                               fontWeight: FontWeight.w500,
                             ),
@@ -333,7 +327,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
                           const SizedBox(width: 6),
                           SvgPicture.asset(
                             'assets/images/logo-white.svg',
-                            width: 22, // كان 28
+                            width: 22,
                             height: 22,
                           ),
                         ],
@@ -393,60 +387,60 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
             subtitle: '••••••••',
             onTap: _showChangePasswordDialog,
           ),
-           _buildDivider(),
-         _buildSettingsItem(
-         icon: Icons.support_agent_outlined,
-         title: 'خدمة العملاء',
-        onTap: _contactSupport,
-       ),
- _buildDivider(),
+          _buildDivider(),
+          _buildSettingsItem(
+            icon: Icons.support_agent_outlined,
+            title: 'خدمة العملاء',
+            onTap: _contactSupport,
+          ),
+          _buildDivider(),
 
           _buildSettingsItem(
-          icon: Icons.delete_outline,
-          title: 'حذف الحساب نهائياً',
-          isDelete: true,
-          onTap: _confirmDeleteAccount,
-        ),
-      
+            icon: Icons.delete_outline,
+            title: 'حذف الحساب نهائياً',
+            isDelete: true,
+            onTap: _confirmDeleteAccount,
+          ),
         ],
       ),
     );
   }
+
   Widget _buildSettingsItem({
-  required IconData icon,
-  required String title,
-  bool isDelete = false,
-  required VoidCallback onTap,
-}) {
-  return ListTile(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-    leading: Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: isDelete 
-            ? Colors.red.withOpacity(0.1) 
-            : AppColors.primary.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
+    required IconData icon,
+    required String title,
+    bool isDelete = false,
+    required VoidCallback onTap,
+  }) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+      leading: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: isDelete
+              ? Colors.red.withOpacity(0.1)
+              : AppColors.primary.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Icon(
+          icon,
+          color: isDelete ? Colors.red : AppColors.primary,
+          size: 24,
+        ),
       ),
-      child: Icon(
-        icon, 
-        color: isDelete ? Colors.red : AppColors.primary, 
-        size: 24,
+      title: Text(
+        title,
+        style: TextStyle(
+          fontFamily: 'IBMPlexSansArabic',
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          color: isDelete ? Colors.red : Colors.black87,
+        ),
       ),
-    ),
-    title: Text(
-      title,
-      style: TextStyle(
-        fontFamily: 'IBMPlexSansArabic',
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: isDelete ? Colors.red : Colors.black87,
-      ),
-    ),
-    
-    onTap: onTap,
-  );
-}
+
+      onTap: onTap,
+    );
+  }
 
   Widget _buildEditTile({
     required IconData icon,
@@ -495,7 +489,7 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: const [
-                    Icon(Icons.check_circle, color: Colors.green, size: 12),
+                  Icon(Icons.check_circle, color: Colors.green, size: 12),
                   SizedBox(width: 4),
                   Text(
                     'مؤكد',
@@ -525,7 +519,6 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
     );
   }
 
-  
   // ============= Edit Username =============
   void _showEditUsernameDialog() {
     final controller = TextEditingController(
@@ -1181,248 +1174,247 @@ class _AccountManagementScreenState extends State<AccountManagementScreen> with 
   }
 
   Widget _buildSecuritySettings() {
-  return Container(
-    margin: const EdgeInsets.only(bottom: 20),
-    padding: const EdgeInsets.all(20),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 10,
-          offset: const Offset(0, 2),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'الأمان',
-          style: TextStyle(
-            fontFamily: 'IBMPlexSansArabic',
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: Color(0xFF2D1B69),
+    return Container(
+      margin: const EdgeInsets.only(bottom: 20),
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
-        ),
-        const SizedBox(height: 16),
-        FutureBuilder<bool>(
-          future: BiometricService.isBiometricEnabled(),
-          builder: (context, snapshot) {
-            final isEnabled = snapshot.data ?? false;
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'الأمان',
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF2D1B69),
+            ),
+          ),
+          const SizedBox(height: 16),
+          FutureBuilder<bool>(
+            future: BiometricService.isBiometricEnabled(),
+            builder: (context, snapshot) {
+              final isEnabled = snapshot.data ?? false;
 
-            return ListTile(
-              leading: Icon(
-                Icons.fingerprint,
-                color: isEnabled ? const Color(0xFF2D1B69) : Colors.grey,
-              ),
-              title: const Text(
-                'المصادقة الحيوية',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.w500,
+              return ListTile(
+                leading: Icon(
+                  Icons.fingerprint,
+                  color: isEnabled ? const Color(0xFF2D1B69) : Colors.grey,
                 ),
-              ),
-              subtitle: Text(
-                isEnabled ? 'مفعلة - دخول سريع' : 'غير مفعلة',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  color: isEnabled ? Colors.green : Colors.grey,
+                title: const Text(
+                  'المصادقة الحيوية',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              trailing: Switch(
-                value: isEnabled,
-                onChanged: (value) async {
-                  await _toggleBiometric(value);
-                  // ✅ تحديث الـ widget بالكامل بعد انتهاء العملية
-                  if (mounted) {
-                    setState(() {});
-                  }
-                },
-                activeColor: const Color(0xFF2D1B69),
-              ),
-            );
-          },
-        ),
-      ],
-    ),
-  );
-}
-
-Future<void> _toggleBiometric(bool enable) async {
-  if (enable) {
-    // تفعيل البايومتركس
-    final isSupported = await BiometricService.isDeviceSupported();
-    final canUse = await BiometricService.canCheckBiometrics();
-
-    if (!canUse) {
-      if (mounted) {
-        _showMessage('البصمة غير متاحة على هذا الجهاز', false);
-      }
-      return;
-    }
-
-    if (mounted) setState(() => _isLoading = true);
-    final result = await _apiService.requestBiometricEnable();
-    if (mounted) setState(() => _isLoading = false);
-
-    if (!mounted) return;
-
-    if (!result['success']) {
-      _showMessage(result['message'] ?? 'فشل في الإرسال', false);
-      return;
-    }
-
-    _showMessage('تم إرسال رمز التحقق لبريدك', true);
-    _showBiometricVerificationDialog();
-  } else {
-    // إلغاء البايومتركس
-    final success = await BiometricService.authenticateWithBiometrics(
-      reason: 'تأكيد إلغاء المصادقة الحيوية',
+                subtitle: Text(
+                  isEnabled ? 'مفعلة - دخول سريع' : 'غير مفعلة',
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    color: isEnabled ? Colors.green : Colors.grey,
+                  ),
+                ),
+                trailing: Switch(
+                  value: isEnabled,
+                  onChanged: (value) async {
+                    await _toggleBiometric(value);
+                    if (mounted) {
+                      setState(() {});
+                    }
+                  },
+                  activeColor: const Color(0xFF2D1B69),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
+  }
 
-    if (!success) {
-      if (mounted) {
-        _showMessage('فشل التحقق من الهوية', false);
+  Future<void> _toggleBiometric(bool enable) async {
+    if (enable) {
+      // تفعيل البايومتركس
+      final isSupported = await BiometricService.isDeviceSupported();
+      final canUse = await BiometricService.canCheckBiometrics();
+
+      if (!canUse) {
+        if (mounted) {
+          _showMessage('البصمة غير متاحة على هذا الجهاز', false);
+        }
+        return;
       }
-      return;
-    }
 
-    if (mounted) setState(() => _isLoading = true);
-    final result = await _apiService.disableBiometric();
-    if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = true);
+      final result = await _apiService.requestBiometricEnable();
+      if (mounted) setState(() => _isLoading = false);
 
-    if (!mounted) return;
+      if (!mounted) return;
 
-    if (result['success']) {
-      await BiometricService.disableBiometric();
-      _showMessage('تم إلغاء المصادقة الحيوية بنجاح', true);
+      if (!result['success']) {
+        _showMessage(result['message'] ?? 'فشل في الإرسال', false);
+        return;
+      }
+
+      _showMessage('تم إرسال رمز التحقق لبريدك', true);
+      _showBiometricVerificationDialog();
     } else {
-      _showMessage(result['message'] ?? 'فشل الإلغاء', false);
+      // إلغاء البايومتركس
+      final success = await BiometricService.authenticateWithBiometrics(
+        reason: 'تأكيد إلغاء المصادقة الحيوية',
+      );
+
+      if (!success) {
+        if (mounted) {
+          _showMessage('فشل التحقق من الهوية', false);
+        }
+        return;
+      }
+
+      if (mounted) setState(() => _isLoading = true);
+      final result = await _apiService.disableBiometric();
+      if (mounted) setState(() => _isLoading = false);
+
+      if (!mounted) return;
+
+      if (result['success']) {
+        await BiometricService.disableBiometric();
+        _showMessage('تم إلغاء المصادقة الحيوية بنجاح', true);
+      } else {
+        _showMessage(result['message'] ?? 'فشل الإلغاء', false);
+      }
     }
   }
-}
 
-void _showBiometricVerificationDialog() {
-  final controller = TextEditingController();
+  void _showBiometricVerificationDialog() {
+    final controller = TextEditingController();
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        title: const Text(
-          'تأكيد تفعيل المصادقة الحيوية',
-          style: TextStyle(
-            fontFamily: 'IBMPlexSansArabic',
-            fontWeight: FontWeight.bold,
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'أدخل رمز التحقق المرسل لبريدك الإلكتروني',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-              textAlign: TextAlign.center,
+          title: const Text(
+            'تأكيد تفعيل المصادقة الحيوية',
+            style: TextStyle(
+              fontFamily: 'IBMPlexSansArabic',
+              fontWeight: FontWeight.bold,
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: controller,
-              keyboardType: TextInputType.number,
-              maxLength: 6,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontSize: 24,
-                letterSpacing: 8,
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'أدخل رمز التحقق المرسل لبريدك الإلكتروني',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                textAlign: TextAlign.center,
               ),
-              decoration: InputDecoration(
-                labelText: 'رمز التحقق',
-                labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 16),
+              TextField(
+                controller: controller,
+                keyboardType: TextInputType.number,
+                maxLength: 6,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 24,
+                  letterSpacing: 8,
                 ),
-                counterText: '',
+                decoration: InputDecoration(
+                  labelText: 'رمز التحقق',
+                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  counterText: '',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text(
+                'إلغاء',
+                style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                final code = controller.text.trim();
+                if (code.length != 6) {
+                  if (mounted) {
+                    _showMessage('أدخل الرمز كاملاً (6 أرقام)', false);
+                  }
+                  return;
+                }
+
+                Navigator.pop(context);
+
+                if (mounted) setState(() => _isLoading = true);
+                final result = await _apiService.verifyBiometricEnable(code);
+                if (mounted) setState(() => _isLoading = false);
+
+                if (!mounted) return;
+
+                if (!result['success']) {
+                  _showMessage(result['message'] ?? 'الرمز غير صحيح', false);
+                  return;
+                }
+
+                final userData = await _apiService.getUserData();
+                if (userData == null) {
+                  if (mounted) {
+                    _showMessage('حدث خطأ في جلب بيانات المستخدم', false);
+                  }
+                  return;
+                }
+
+                final biometricSuccess = await BiometricService.enableBiometric(
+                  userData['email'],
+                );
+
+                if (!mounted) return;
+
+                if (biometricSuccess) {
+                  _showMessage('تم تفعيل المصادقة الحيوية بنجاح', true);
+                  setState(() {});
+                } else {
+                  _showMessage('فشل في حفظ البصمة', false);
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2D1B69),
+              ),
+              child: const Text(
+                'تأكيد',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'إلغاء',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final code = controller.text.trim();
-              if (code.length != 6) {
-                if (mounted) {
-                  _showMessage('أدخل الرمز كاملاً (6 أرقام)', false);
-                }
-                return;
-              }
-
-              Navigator.pop(context);
-
-              if (mounted) setState(() => _isLoading = true);
-              final result = await _apiService.verifyBiometricEnable(code);
-              if (mounted) setState(() => _isLoading = false);
-
-              if (!mounted) return;
-
-              if (!result['success']) {
-                _showMessage(result['message'] ?? 'الرمز غير صحيح', false);
-                return;
-              }
-
-              final userData = await _apiService.getUserData();
-              if (userData == null) {
-                if (mounted) {
-                  _showMessage('حدث خطأ في جلب بيانات المستخدم', false);
-                }
-                return;
-              }
-
-              final biometricSuccess = await BiometricService.enableBiometric(
-                userData['email'],
-              );
-
-              if (!mounted) return;
-
-              if (biometricSuccess) {
-                _showMessage('تم تفعيل المصادقة الحيوية بنجاح', true);
-                setState(() {});
-              } else {
-                _showMessage('فشل في حفظ البصمة', false);
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2D1B69),
-            ),
-            child: const Text(
-              'تأكيد',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                color: Colors.white,
-              ),
-            ),
-          ),
-        ],
       ),
-    ),
-  );
-}
-  
+    );
+  }
+
   Widget _buildLogoutButton(BuildContext context) {
     return Container(
       width: double.infinity,
@@ -1523,7 +1515,6 @@ void _showBiometricVerificationDialog() {
   }
 
   Future<void> _handleLogout() async {
-    // علامة إنك للتو سويتي logout
     await BiometricService.setJustLoggedOut(true);
 
     await _apiService.logout();
@@ -1624,17 +1615,26 @@ void _showBiometricVerificationDialog() {
                   SizedBox(height: 10),
                   Text(
                     '• حذف المحادثات والصور والملفات  ',
-                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                    ),
                   ),
                   SizedBox(height: 6),
                   Text(
                     '• إيقاف تفعيل البصمة ',
-                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                    ),
                   ),
                   SizedBox(height: 6),
                   Text(
                     '• تسجيل خروجك من هذا الجهاز',
-                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                    ),
                   ),
                   SizedBox(height: 10),
                   Text(
@@ -1648,7 +1648,10 @@ void _showBiometricVerificationDialog() {
                   SizedBox(height: 8),
                   Text(
                     'هل تريد المتابعة؟',
-                    style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontSize: 14),
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -1693,7 +1696,7 @@ void _showBiometricVerificationDialog() {
   }
 
   Future<void> _handleEmergencyMode() async {
-    // إبلاغ السيرفر (بدون انتظار - timeout 3 ثواني داخلياً)
+    // إبلاغ السيرفر
     _apiService.activateEmergencyModeOnServer().then((_) {});
 
     // مسح جميع البيانات المحلية فوراً
@@ -1720,6 +1723,7 @@ void _showBiometricVerificationDialog() {
       ),
     );
   }
+
   // ============================================
   // حذف الحساب
   // ============================================
@@ -1753,14 +1757,16 @@ void _showBiometricVerificationDialog() {
         return;
       }
 
-      final response = await http.delete(
-        Uri.parse('$baseUrl/user/delete-account'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'password': password}),
-      ).timeout(const Duration(seconds: 15));
+      final response = await http
+          .delete(
+            Uri.parse('$baseUrl/user/delete-account'),
+            headers: {
+              'Authorization': 'Bearer $token',
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({'password': password}),
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (!mounted) return;
 
@@ -1781,10 +1787,9 @@ void _showBiometricVerificationDialog() {
 
         if (!mounted) return;
 
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          '/login',
-          (route) => false,
-        );
+        Navigator.of(
+          context,
+        ).pushNamedAndRemoveUntil('/login', (route) => false);
       } else {
         if (!mounted) return;
         setState(() => _isLoading = false);
@@ -1801,16 +1806,13 @@ void _showBiometricVerificationDialog() {
 }
 
 // ============================================
-// Dialog Widget منفصل
+// Dialog Widget
 // ============================================
 class _DeleteAccountDialog extends StatefulWidget {
   final Function(String) onConfirm;
   final VoidCallback onCancel;
 
-  const _DeleteAccountDialog({
-    required this.onConfirm,
-    required this.onCancel,
-  });
+  const _DeleteAccountDialog({required this.onConfirm, required this.onCancel});
 
   @override
   State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
@@ -1838,8 +1840,6 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
             shrinkWrap: true,
             padding: EdgeInsets.zero,
             children: [
-             
-
               // المحتوى
               Padding(
                 padding: const EdgeInsets.all(24),
@@ -1897,7 +1897,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    
+
                     const Text(
                       'يمكنك إنشاء حساب جديد في أي وقت',
                       style: TextStyle(
@@ -1960,7 +1960,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(
-                           !_obscurePassword
+                            !_obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
                             color: Colors.grey.shade600,
@@ -2022,8 +2022,7 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
                           widget.onConfirm(password);
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor:
-                              const Color(0xFF2D1B69),
+                          backgroundColor: const Color(0xFF2D1B69),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
@@ -2083,13 +2082,15 @@ class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
     );
   }
 }
-  class _SupportSheet extends StatefulWidget {
+
+class _SupportSheet extends StatefulWidget {
   final ApiService apiService;
   const _SupportSheet({required this.apiService});
 
   @override
   State<_SupportSheet> createState() => _SupportSheetState();
 }
+
 class _SupportSheetState extends State<_SupportSheet> {
   final _subjectController = TextEditingController();
   final _messageController = TextEditingController();
@@ -2135,31 +2136,54 @@ class _SupportSheetState extends State<_SupportSheet> {
           textDirection: TextDirection.rtl,
           child: AlertDialog(
             backgroundColor: const Color(0xFF2D1B69),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text('تم إرسال طلبك بنجاح',
+                const Text(
+                  'تم إرسال طلبك بنجاح',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                  ),
+                ),
                 const SizedBox(height: 8),
-                const Text('سنتواصل معك في أقرب وقت',
+                const Text(
+                  'سنتواصل معك في أقرب وقت',
                   textAlign: TextAlign.center,
-                  style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 14, color: Colors.white70)),
+                  style: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    fontSize: 14,
+                    color: Colors.white70,
+                  ),
+                ),
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.white,
                     foregroundColor: const Color(0xFF2D1B69),
-                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 32,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  child: const Text('حسناً',
-                    style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                      fontWeight: FontWeight.bold, fontSize: 16)),
+                  child: const Text(
+                    'حسناً',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -2169,9 +2193,11 @@ class _SupportSheetState extends State<_SupportSheet> {
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(result['message'] ?? 'حدث خطأ، حاولي مرة أخرى',
+          content: Text(
+            result['message'] ?? 'حدث خطأ، حاولي مرة أخرى',
             textAlign: TextAlign.center,
-            style: const TextStyle(fontFamily: 'IBMPlexSansArabic')),
+            style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+          ),
           backgroundColor: Colors.red,
         ),
       );
@@ -2188,7 +2214,9 @@ class _SupportSheetState extends State<_SupportSheet> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
         ),
         padding: EdgeInsets.only(
-          top: 24, left: 20, right: 20,
+          top: 24,
+          left: 20,
+          right: 20,
           bottom: MediaQuery.of(context).viewInsets.bottom + 24,
         ),
         child: SingleChildScrollView(
@@ -2198,7 +2226,8 @@ class _SupportSheetState extends State<_SupportSheet> {
             children: [
               Center(
                 child: Container(
-                  width: 40, height: 4,
+                  width: 40,
+                  height: 4,
                   decoration: BoxDecoration(
                     color: Colors.grey.shade300,
                     borderRadius: BorderRadius.circular(2),
@@ -2206,14 +2235,25 @@ class _SupportSheetState extends State<_SupportSheet> {
                 ),
               ),
               const SizedBox(height: 20),
-              const Text('تواصل مع خدمة العملاء',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF2D1B69))),
+              const Text(
+                'تواصل مع خدمة العملاء',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF2D1B69),
+                ),
+              ),
               const SizedBox(height: 20),
 
-              const Text('نوع الطلب',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 14, fontWeight: FontWeight.w600)),
+              const Text(
+                'نوع الطلب',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 8),
               Row(
                 children: _types.map((type) {
@@ -2225,13 +2265,21 @@ class _SupportSheetState extends State<_SupportSheet> {
                         margin: const EdgeInsets.only(left: 8),
                         padding: const EdgeInsets.symmetric(vertical: 10),
                         decoration: BoxDecoration(
-                          color: selected ? const Color(0xFF2D1B69) : Colors.grey.shade100,
+                          color: selected
+                              ? const Color(0xFF2D1B69)
+                              : Colors.grey.shade100,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(type, textAlign: TextAlign.center,
-                          style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                            fontSize: 13, fontWeight: FontWeight.w600,
-                            color: selected ? Colors.white : Colors.black87)),
+                        child: Text(
+                          type,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: selected ? Colors.white : Colors.black87,
+                          ),
+                        ),
                       ),
                     ),
                   );
@@ -2239,20 +2287,30 @@ class _SupportSheetState extends State<_SupportSheet> {
               ),
               const SizedBox(height: 16),
 
-              const Text('العنوان',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 14, fontWeight: FontWeight.w600)),
+              const Text(
+                'العنوان',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _subjectController,
                 onChanged: (_) => setState(() => _subjectError = false),
                 decoration: InputDecoration(
                   hintText: 'اكتب عنوان طلبك',
-                  hintStyle: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.grey.shade400),
+                  hintStyle: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    color: Colors.grey.shade400,
+                  ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
@@ -2262,7 +2320,9 @@ class _SupportSheetState extends State<_SupportSheet> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                      color: _subjectError ? Colors.red : const Color(0xFF2D1B69),
+                      color: _subjectError
+                          ? Colors.red
+                          : const Color(0xFF2D1B69),
                       width: 2,
                     ),
                   ),
@@ -2271,9 +2331,14 @@ class _SupportSheetState extends State<_SupportSheet> {
               ),
               const SizedBox(height: 16),
 
-              const Text('الرسالة',
-                style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 14, fontWeight: FontWeight.w600)),
+              const Text(
+                'الرسالة',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(height: 8),
               TextField(
                 controller: _messageController,
@@ -2281,11 +2346,16 @@ class _SupportSheetState extends State<_SupportSheet> {
                 onChanged: (_) => setState(() => _messageError = false),
                 decoration: InputDecoration(
                   hintText: 'اكتب تفاصيل طلبك هنا...',
-                  hintStyle: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.grey.shade400),
+                  hintStyle: TextStyle(
+                    fontFamily: 'IBMPlexSansArabic',
+                    color: Colors.grey.shade400,
+                  ),
                   filled: true,
                   fillColor: Colors.grey.shade50,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300)),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: Colors.grey.shade300),
+                  ),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
@@ -2295,7 +2365,9 @@ class _SupportSheetState extends State<_SupportSheet> {
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                     borderSide: BorderSide(
-                      color: _messageError ? Colors.red : const Color(0xFF2D1B69),
+                      color: _messageError
+                          ? Colors.red
+                          : const Color(0xFF2D1B69),
                       width: 2,
                     ),
                   ),
@@ -2312,13 +2384,27 @@ class _SupportSheetState extends State<_SupportSheet> {
                     backgroundColor: const Color(0xFF2D1B69),
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
                   child: _isSending
-                    ? const SizedBox(width: 20, height: 20,
-                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : const Text('إرسال', style: TextStyle(fontFamily: 'IBMPlexSansArabic',
-                        fontSize: 16, fontWeight: FontWeight.bold)),
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'إرسال',
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
@@ -2328,6 +2414,3 @@ class _SupportSheetState extends State<_SupportSheet> {
     );
   }
 }
-
-
-

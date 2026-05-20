@@ -7,8 +7,7 @@ import '../../../services/biometric_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../services/api_services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import '../../../main.dart'; 
-
+import '../../../main.dart';
 
 class SimpleNotificationsPage extends StatelessWidget {
   const SimpleNotificationsPage({super.key});
@@ -33,7 +32,6 @@ class SimpleNotificationsPage extends StatelessWidget {
           elevation: 0,
         ),
         body: StreamBuilder<List<AppNotification>>(
-          
           stream: NotificationService().notificationsStream,
           initialData: NotificationService().notifications,
           builder: (context, snapshot) {
@@ -57,8 +55,6 @@ class SimpleNotificationsPage extends StatelessWidget {
               itemCount: notifications.length,
               itemBuilder: (context, index) {
                 final n = notifications[index];
-
-
 
                 final isAnomaly = {
                   //NotificationType.unknownDevice,
@@ -97,7 +93,11 @@ class SimpleNotificationsPage extends StatelessWidget {
   }
 
   // ─── Card ────────────────────────────────────────────────────
-  Widget _buildNotificationCard(BuildContext context, AppNotification n, bool isAnomaly) {
+  Widget _buildNotificationCard(
+    BuildContext context,
+    AppNotification n,
+    bool isAnomaly,
+  ) {
     final color = _getColor(n.type);
     final icon = _getIcon(n.type);
     final data = _parseMessage(n);
@@ -112,7 +112,9 @@ class SimpleNotificationsPage extends StatelessWidget {
       cardText = n.message;
     }
 
-    final cardColor = isAnomaly ? Colors.white : (n.isRead ? Colors.white : color.withOpacity(0.04));
+    final cardColor = isAnomaly
+        ? Colors.white
+        : (n.isRead ? Colors.white : color.withOpacity(0.04));
     final borderColor = isAnomaly
         ? const Color(0xFF2D1B69).withOpacity(0.25)
         : (n.isRead ? Colors.grey.shade200 : color.withOpacity(0.25));
@@ -170,7 +172,9 @@ class SimpleNotificationsPage extends StatelessWidget {
                               style: TextStyle(
                                 fontFamily: 'IBMPlexSansArabic',
                                 fontSize: 14,
-                                fontWeight: n.isRead ? FontWeight.w500 : FontWeight.w700,
+                                fontWeight: n.isRead
+                                    ? FontWeight.w500
+                                    : FontWeight.w700,
                                 color: const Color(0xFF1A1A2E),
                               ),
                             ),
@@ -181,7 +185,9 @@ class SimpleNotificationsPage extends StatelessWidget {
                               width: 8,
                               height: 8,
                               decoration: BoxDecoration(
-                                color: isAnomaly ? const Color(0xFF2D1B69) : color,
+                                color: isAnomaly
+                                    ? const Color(0xFF2D1B69)
+                                    : color,
                                 shape: BoxShape.circle,
                               ),
                             ),
@@ -213,34 +219,42 @@ class SimpleNotificationsPage extends StatelessWidget {
             ),
 
             // ── تم الإبلاغ — يظهر بعد "لم أقم بذلك" ──
-          if (n.actionTaken != null) ...[
-          const SizedBox(height: 10),
-          Divider(
-            color: const Color(0xFF2D1B69).withOpacity(0.1),
-            thickness: 1,
-            height: 1,
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Icon(
-                n.actionTaken == true ? Icons.verified : Icons.check_circle_outline,
-                color: n.actionTaken == true ? Colors.green : const Color(0xFF2D1B69),
-                size: 16,
+            if (n.actionTaken != null) ...[
+              const SizedBox(height: 10),
+              Divider(
+                color: const Color(0xFF2D1B69).withOpacity(0.1),
+                thickness: 1,
+                height: 1,
               ),
-              const SizedBox(width: 8),
-              Text(
-               n.actionTaken == true ? 'تم توثيق النشاط كآمن' : 'تم تأكيد البلاغ وتأمين الحساب',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 12,
-                  color: n.actionTaken == true ? Colors.green : const Color(0xFF2D1B69),
-                  fontWeight: FontWeight.w500,
-                ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    n.actionTaken == true
+                        ? Icons.verified
+                        : Icons.check_circle_outline,
+                    color: n.actionTaken == true
+                        ? Colors.green
+                        : const Color(0xFF2D1B69),
+                    size: 16,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    n.actionTaken == true
+                        ? 'تم توثيق النشاط كآمن'
+                        : 'تم تأكيد البلاغ وتأمين الحساب',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 12,
+                      color: n.actionTaken == true
+                          ? Colors.green
+                          : const Color(0xFF2D1B69),
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
             ],
-          ),
-        ],
           ],
         ),
       ),
@@ -252,7 +266,7 @@ class SimpleNotificationsPage extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 4),
       child: Row(
         children: [
-          // لم أقم بذلك — بنفسجي
+          // لم أقم بذلك
           Expanded(
             child: GestureDetector(
               onTap: () => _handleAction(context, n, false),
@@ -286,7 +300,7 @@ class SimpleNotificationsPage extends StatelessWidget {
 
           const SizedBox(width: 8),
 
-          // أنا من فعل ذلك — أبيض
+          // أنا من فعل ذلك
           Expanded(
             child: GestureDetector(
               onTap: () => _handleAction(context, n, true),
@@ -301,7 +315,11 @@ class SimpleNotificationsPage extends StatelessWidget {
                 child: const Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.verified_user_outlined, color: Color(0xFF2D1B69), size: 18),
+                    Icon(
+                      Icons.verified_user_outlined,
+                      color: Color(0xFF2D1B69),
+                      size: 18,
+                    ),
                     SizedBox(width: 6),
                     Text(
                       'أنا من فعل ذلك',
@@ -323,62 +341,69 @@ class SimpleNotificationsPage extends StatelessWidget {
   }
 
   // ─── Handle Action ───────────────────────────────────────────
- Future<void> _handleAction(BuildContext context, AppNotification n, bool wasMe) async {
-  
-  final canUse = await BiometricService.canCheckBiometrics();
-  final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+  Future<void> _handleAction(
+    BuildContext context,
+    AppNotification n,
+    bool wasMe,
+  ) async {
+    final canUse = await BiometricService.canCheckBiometrics();
+    final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
 
-  if (!canUse || !hasEnrolled) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('يجب تفعيل البصمة أولاً لتأكيد الإجراءات الأمنية',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
-          backgroundColor: Colors.orange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (!canUse || !hasEnrolled) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'يجب تفعيل البصمة أولاً لتأكيد الإجراءات الأمنية',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+            ),
+            backgroundColor: Colors.orange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
     }
-    return;
-  }
 
-  final verified = await BiometricService.authenticateWithBiometrics(
-    reason: wasMe 
-        ? 'يرجى التحقق لتأكيد قيامك بهذا النشاط' 
-        : 'تحقق من هويتك لتأكيد البلاغ وتأمين حسابك',
-    biometricOnly: true,
-  );
+    final verified = await BiometricService.authenticateWithBiometrics(
+      reason: wasMe
+          ? 'يرجى التحقق لتأكيد قيامك بهذا النشاط'
+          : 'تحقق من هويتك لتأكيد البلاغ وتأمين حسابك',
+      biometricOnly: true,
+    );
 
-  if (!verified) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('فشل التحقق — لم يتم اتخاذ أي إجراء',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
-          backgroundColor: Colors.red,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (!verified) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'فشل التحقق — لم يتم اتخاذ أي إجراء',
+              style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+            ),
+            backgroundColor: Colors.red,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
     }
-    return;
-  }
 
-  if (wasMe) {
-    NotificationService().updateAnomalyAction(n.id, true);
-    
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('تم تأكيد النشاط بنجاح'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    if (wasMe) {
+      NotificationService().updateAnomalyAction(n.id, true);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('تم تأكيد النشاط بنجاح'),
+            backgroundColor: Colors.green,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } else {
+      _showForcePasswordChangeDialog(context, n.id);
     }
-  } else {
-    _showForcePasswordChangeDialog(context, n.id);
   }
-}
 
   // ─── Detail Dialog ───────────────────────────────────────────
   void _showDetailDialog(BuildContext context, AppNotification n) {
@@ -395,14 +420,15 @@ class SimpleNotificationsPage extends StatelessWidget {
         textDirection: TextDirection.rtl,
         child: Dialog(
           backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 24),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-
                 // العنوان
                 Row(
                   textDirection: TextDirection.rtl,
@@ -439,7 +465,10 @@ class SimpleNotificationsPage extends StatelessWidget {
                 if (n.type == NotificationType.breachAlert && hasPassword) ...[
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.red.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(10),
@@ -448,7 +477,11 @@ class SimpleNotificationsPage extends StatelessWidget {
                     child: Row(
                       textDirection: TextDirection.rtl,
                       children: const [
-                        Icon(Icons.warning_amber_rounded, color: Colors.white, size: 18),
+                        Icon(
+                          Icons.warning_amber_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
                         SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -486,7 +519,11 @@ class SimpleNotificationsPage extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Icon(Icons.calendar_today, size: 13, color: Colors.white.withOpacity(0.6)),
+                        Icon(
+                          Icons.calendar_today,
+                          size: 13,
+                          color: Colors.white.withOpacity(0.6),
+                        ),
                       ],
                     ),
                   ),
@@ -518,7 +555,10 @@ class SimpleNotificationsPage extends StatelessWidget {
                       runSpacing: 8,
                       children: dataClasses.map((item) {
                         return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(20),
@@ -543,7 +583,9 @@ class SimpleNotificationsPage extends StatelessWidget {
                 const SizedBox(height: 16),
 
                 // زر تغيير كلمة المرور
-                if (n.type == NotificationType.breachAlert && hasPassword && domain.isNotEmpty) ...[
+                if (n.type == NotificationType.breachAlert &&
+                    hasPassword &&
+                    domain.isNotEmpty) ...[
                   ElevatedButton.icon(
                     iconAlignment: IconAlignment.end,
                     icon: const Icon(Icons.open_in_new, size: 18),
@@ -558,7 +600,10 @@ class SimpleNotificationsPage extends StatelessWidget {
                     onPressed: () async {
                       final url = Uri.parse('https://$domain');
                       if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                        await launchUrl(
+                          url,
+                          mode: LaunchMode.externalApplication,
+                        );
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -566,7 +611,9 @@ class SimpleNotificationsPage extends StatelessWidget {
                       foregroundColor: const Color(0xFF2D1B69),
                       padding: const EdgeInsets.symmetric(vertical: 14),
                       minimumSize: const Size(double.infinity, 50),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 6),
@@ -590,7 +637,9 @@ class SimpleNotificationsPage extends StatelessWidget {
                     backgroundColor: Colors.white.withOpacity(0.1),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     minimumSize: const Size(double.infinity, 48),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
                   child: const Text(
                     'حسناً، فهمت',
@@ -620,10 +669,16 @@ class SimpleNotificationsPage extends StatelessWidget {
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           title: Row(
             children: [
-              Icon(alertData['icon'] as IconData, color: Colors.white, size: 22),
+              Icon(
+                alertData['icon'] as IconData,
+                color: Colors.white,
+                size: 22,
+              ),
               const SizedBox(width: 8),
               Text(
                 alertData['title'] as String,
@@ -662,298 +717,354 @@ class SimpleNotificationsPage extends StatelessWidget {
       ),
     );
   }
- void _showForcePasswordChangeDialog(BuildContext context, String notificationId) {
 
- 
-  final currentPasswordController = TextEditingController();
-  final newPasswordController = TextEditingController();
-  final confirmPasswordController = TextEditingController();
-  final apiService = ApiService();
+  void _showForcePasswordChangeDialog(
+    BuildContext context,
+    String notificationId,
+  ) {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+    final apiService = ApiService();
 
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (dialogContext) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: const [
-            Icon(Icons.lock_reset, color: Color(0xFF2D1B69)),
-            SizedBox(width: 8),
-            Text(
-              'يجب تغيير كلمة المرور',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-              ),
-            ),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF2D1B69).withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFF2D1B69).withOpacity(0.25)),
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Row(
+            children: const [
+              Icon(Icons.lock_reset, color: Color(0xFF2D1B69)),
+              SizedBox(width: 8),
+              Text(
+                'يجب تغيير كلمة المرور',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Icon(Icons.warning_amber_rounded, color: Color(0xFF2D1B69), size: 22),
-                    SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        'تم رصد نشاط مشبوه على حسابك.\nلحماية حسابك يجب تغيير كلمة المرور الآن.',
-                        style: TextStyle(
-                          fontFamily: 'IBMPlexSansArabic',
-                          fontSize: 13,
-                          color: Color(0xFF2D1B69),
-                          height: 1.6,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: currentPasswordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'كلمة المرور الحالية',
-                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.lock),
-                ),
-                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: newPasswordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'كلمة المرور الجديدة',
-                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.lock_outline),
-                ),
-                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: confirmPasswordController,
-                obscureText: true,
-                decoration: InputDecoration(
-                  labelText: 'تأكيد كلمة المرور',
-                  labelStyle: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  prefixIcon: const Icon(Icons.lock_outline),
-                ),
-                style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
               ),
             ],
           ),
-        ),
-        actions: [
-          ElevatedButton(
-          onPressed: () async {
-            if (newPasswordController.text != confirmPasswordController.text) {
-              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                const SnackBar(
-                  content: Text('كلمة المرور غير متطابقة',
-                      style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
-                  backgroundColor: Colors.red,
-                  behavior: SnackBarBehavior.floating,
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF2D1B69).withOpacity(0.07),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: const Color(0xFF2D1B69).withOpacity(0.25),
+                    ),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: const [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFF2D1B69),
+                        size: 22,
+                      ),
+                      SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'تم رصد نشاط مشبوه على حسابك.\nلحماية حسابك يجب تغيير كلمة المرور الآن.',
+                          style: TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                            fontSize: 13,
+                            color: Color(0xFF2D1B69),
+                            height: 1.6,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-              return;
-            }
-            if (newPasswordController.text.length < 8) {
-              ScaffoldMessenger.of(dialogContext).showSnackBar(
-                const SnackBar(
-                  content: Text('كلمة المرور يجب أن تكون 8 أحرف على الأقل',
-                      style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
-                  backgroundColor: Colors.red,
-                  behavior: SnackBarBehavior.floating,
+                const SizedBox(height: 16),
+                TextField(
+                  controller: currentPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور الحالية',
+                    labelStyle: const TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.lock),
+                  ),
+                  style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
                 ),
-              );
-              return;
-            }
-
-        final password = newPasswordController.text;
-        if (!RegExp(r'[A-Z]').hasMatch(password) ||
-            !RegExp(r'[a-z]').hasMatch(password) ||
-            !RegExp(r'[0-9]').hasMatch(password) ||
-            !RegExp(r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]').hasMatch(password)) {
-          ScaffoldMessenger.of(dialogContext).showSnackBar(
-            const SnackBar(
-              content: Text('يجب أن تحتوي على حرف كبير وصغير ورقم ورمز خاص',
-                  style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
+                const SizedBox(height: 12),
+                TextField(
+                  controller: newPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'كلمة المرور الجديدة',
+                    labelStyle: const TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: confirmPasswordController,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: 'تأكيد كلمة المرور',
+                    labelStyle: const TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.lock_outline),
+                  ),
+                  style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                ),
+              ],
             ),
-          );
-          return;
-        }
-
-            final result = await apiService.changePassword(
-              currentPasswordController.text,
-              newPasswordController.text,
-              invalidateSession: true, 
-            );
-
-
-            if (result['success'] == true) {
-              NotificationService().updateAnomalyAction(notificationId, false);
-              const storage = FlutterSecureStorage();
-              await storage.delete(key: 'access_token');
-
-              if (!dialogContext.mounted) return;
-              Navigator.pop(dialogContext);
-
-              Future.microtask(() => _showSessionResetDialog());
-            } else {
-               if (navigatorKey.currentContext != null) {
-                ScaffoldMessenger.of(navigatorKey.currentContext!).showSnackBar(
-                    SnackBar(
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                if (newPasswordController.text !=
+                    confirmPasswordController.text) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
                       content: Text(
-                        result['message'] ?? 'حدث خطأ',
-                        style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                        'كلمة المرور غير متطابقة',
+                        style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
                       ),
                       backgroundColor: Colors.red,
                       behavior: SnackBarBehavior.floating,
                     ),
                   );
-              }
-            }
-          },
-                    
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2D1B69),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text(
-              'تغيير الآن',
-              style: TextStyle(fontFamily: 'IBMPlexSansArabic', color: Colors.white),
-            ),
-          ),
-        ],
-      ),
-    ),
-  );
-}
+                  return;
+                }
+                if (newPasswordController.text.length < 8) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'كلمة المرور يجب أن تكون 8 أحرف على الأقل',
+                        style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                      ),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
 
-void _showSessionResetDialog() {
-  showDialog(
-    context: navigatorKey.currentContext!,
-    barrierDismissible: false,
-    builder: (ctx) => Directionality(
-      textDirection: TextDirection.rtl,
-      child: AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Row(
-          children: [
-            Icon(Icons.refresh, color: Color(0xFF2D1B69)),
-            SizedBox(width: 8),
-            Text(
-              'إعادة تعيين الجلسة',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                final password = newPasswordController.text;
+                if (!RegExp(r'[A-Z]').hasMatch(password) ||
+                    !RegExp(r'[a-z]').hasMatch(password) ||
+                    !RegExp(r'[0-9]').hasMatch(password) ||
+                    !RegExp(
+                      r'[!@#$%^&*()_+\-=\[\]{};:"\\|,.<>\/?]',
+                    ).hasMatch(password)) {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'يجب أن تحتوي على حرف كبير وصغير ورقم ورمز خاص',
+                        style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+                      ),
+                      backgroundColor: Colors.red,
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                  return;
+                }
+
+                final result = await apiService.changePassword(
+                  currentPasswordController.text,
+                  newPasswordController.text,
+                  invalidateSession: true,
+                );
+
+                if (result['success'] == true) {
+                  NotificationService().updateAnomalyAction(
+                    notificationId,
+                    false,
+                  );
+                  const storage = FlutterSecureStorage();
+                  await storage.delete(key: 'access_token');
+
+                  if (!dialogContext.mounted) return;
+                  Navigator.pop(dialogContext);
+
+                  Future.microtask(() => _showSessionResetDialog());
+                } else {
+                  if (navigatorKey.currentContext != null) {
+                    ScaffoldMessenger.of(
+                      navigatorKey.currentContext!,
+                    ).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          result['message'] ?? 'حدث خطأ',
+                          style: const TextStyle(
+                            fontFamily: 'IBMPlexSansArabic',
+                          ),
+                        ),
+                        backgroundColor: Colors.red,
+                        behavior: SnackBarBehavior.floating,
+                      ),
+                    );
+                  }
+                }
+              },
+
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2D1B69),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'تغيير الآن',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  color: Colors.white,
+                ),
               ),
             ),
           ],
         ),
-        content: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: const Color(0xFF2D1B69).withOpacity(0.07),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: const Color(0xFF2D1B69).withOpacity(0.25)),
+      ),
+    );
+  }
+
+  void _showSessionResetDialog() {
+    showDialog(
+      context: navigatorKey.currentContext!,
+      barrierDismissible: false,
+      builder: (ctx) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
           ),
-          child: const Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          title: const Row(
             children: [
-              Icon(Icons.info_outline, color: Color(0xFF2D1B69), size: 22),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'تم تغيير كلمة المرور بنجاح.\n\nسيتم تسجيل خروجك الآن لإعادة تعيين الجلسة وضمان أمان حسابك.',
-                  style: TextStyle(
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 13,
-                    color: Color(0xFF2D1B69),
-                    height: 1.7,
-                  ),
+              Icon(Icons.refresh, color: Color(0xFF2D1B69)),
+              SizedBox(width: 8),
+              Text(
+                'إعادة تعيين الجلسة',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
                 ),
               ),
             ],
           ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              await _performLogout();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2D1B69),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            child: const Text(
-              'حسناً',
-              style: TextStyle(
-                fontFamily: 'IBMPlexSansArabic',
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+          content: Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2D1B69).withOpacity(0.07),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: const Color(0xFF2D1B69).withOpacity(0.25),
               ),
             ),
+            child: const Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, color: Color(0xFF2D1B69), size: 22),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'تم تغيير كلمة المرور بنجاح.\n\nسيتم تسجيل خروجك الآن لإعادة تعيين الجلسة وضمان أمان حسابك.',
+                    style: TextStyle(
+                      fontFamily: 'IBMPlexSansArabic',
+                      fontSize: 13,
+                      color: Color(0xFF2D1B69),
+                      height: 1.7,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await _performLogout();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2D1B69),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              child: const Text(
+                'حسناً',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
-}
-Future<void> _performLogout() async {
-  await ApiService().logout();
-  await BiometricService.setJustLoggedOut(true);
-  navigatorKey.currentState?.pushNamedAndRemoveUntil('/login', (route) => false);
-}
+    );
+  }
+
+  Future<void> _performLogout() async {
+    await ApiService().logout();
+    await BiometricService.setJustLoggedOut(true);
+    navigatorKey.currentState?.pushNamedAndRemoveUntil(
+      '/login',
+      (route) => false,
+    );
+  }
 
   // ─── Alert Data ──────────────────────────────────────────────
   Map<String, dynamic> _getAlertData(NotificationType type) {
     switch (type) {
-  
       case NotificationType.newLocation:
         return {
           'icon': Icons.location_on,
           'title': 'دخول من موقع مجهول!',
-          'content': '• تأكد أنك لم تسافر مؤخراً\n• غيّر كلمة المرور فوراً\n• راجع نشاط حسابك',
+          'content':
+              '• تأكد أنك لم تسافر مؤخراً\n• غيّر كلمة المرور فوراً\n• راجع نشاط حسابك',
         };
       case NotificationType.newWifi:
         return {
           'icon': Icons.wifi_off,
           'title': 'شبكة واي فاي مجهولة!',
-          'content': '• تجنب استخدام شبكات عامة\n• غيّر كلمة المرور كإجراء احترازي\n• تأكد من أمان الشبكة الحالية',
+          'content':
+              '• تجنب استخدام شبكات عامة\n• غيّر كلمة المرور كإجراء احترازي\n• تأكد من أمان الشبكة الحالية',
         };
       case NotificationType.failedAttempts:
         return {
           'icon': Icons.lock_outline,
           'title': 'محاولات دخول مشبوهة!',
-          'content': '• غيّر كلمة المرور فوراً\n• لا تشارك بياناتك مع أحد\n• تواصل مع الدعم إذا استمر الأمر',
+          'content':
+              '• غيّر كلمة المرور فوراً\n• لا تشارك بياناتك مع أحد\n• تواصل مع الدعم إذا استمر الأمر',
         };
-        case NotificationType.unusualChatActivity:
-      return {
-        'icon': Icons.security_update_warning,
-        'title': 'تنبيه أمان المحادثات',
-        'content': 'تم رصد نشاط غير معتاد في استخدام المحادثات المشفرة.\n• تم تفعيل هذا الإجراء الاحترازي لضمان أمان رسائلك وخصوصيتك.\n• يرجى تحديث كلمة المرور الآن لإعادة تأمين حسابك بالكامل.',      };
+      case NotificationType.unusualChatActivity:
+        return {
+          'icon': Icons.security_update_warning,
+          'title': 'تنبيه أمان المحادثات',
+          'content':
+              'تم رصد نشاط غير معتاد في استخدام المحادثات المشفرة.\n• تم تفعيل هذا الإجراء الاحترازي لضمان أمان رسائلك وخصوصيتك.\n• يرجى تحديث كلمة المرور الآن لإعادة تأمين حسابك بالكامل.',
+        };
       default:
         return {
           'icon': Icons.warning_amber,
@@ -966,35 +1077,51 @@ Future<void> _performLogout() async {
   // ─── Helpers ─────────────────────────────────────────────────
   IconData _getIcon(NotificationType type) {
     switch (type) {
-      case NotificationType.wifiWarning:    return Icons.wifi_off;
-      case NotificationType.breachAlert:    return Icons.security;
-      case NotificationType.friendRequest:  return Icons.person_add;
-      case NotificationType.unknownDevice:  return Icons.devices;
-      case NotificationType.newLocation:    return Icons.location_on;
-      case NotificationType.newWifi:        return Icons.wifi;
-      case NotificationType.failedAttempts: return Icons.lock_outline;
-      case NotificationType.unusualChatActivity: return Icons.history_toggle_off_rounded;
+      case NotificationType.wifiWarning:
+        return Icons.wifi_off;
+      case NotificationType.breachAlert:
+        return Icons.security;
+      case NotificationType.friendRequest:
+        return Icons.person_add;
+      case NotificationType.unknownDevice:
+        return Icons.devices;
+      case NotificationType.newLocation:
+        return Icons.location_on;
+      case NotificationType.newWifi:
+        return Icons.wifi;
+      case NotificationType.failedAttempts:
+        return Icons.lock_outline;
+      case NotificationType.unusualChatActivity:
+        return Icons.history_toggle_off_rounded;
     }
   }
 
   Color _getColor(NotificationType type) {
     switch (type) {
-      case NotificationType.wifiWarning:    return Colors.orange;
-      case NotificationType.breachAlert:    return Colors.red;
-      case NotificationType.friendRequest:  return Colors.blue;
-      case NotificationType.unknownDevice:  return Colors.red;
-      case NotificationType.newLocation:    return Colors.red;
-      case NotificationType.newWifi:        return Colors.orange;
-      case NotificationType.failedAttempts: return Colors.red;
-      case NotificationType.unusualChatActivity: return Colors.red;
+      case NotificationType.wifiWarning:
+        return Colors.orange;
+      case NotificationType.breachAlert:
+        return Colors.red;
+      case NotificationType.friendRequest:
+        return Colors.blue;
+      case NotificationType.unknownDevice:
+        return Colors.red;
+      case NotificationType.newLocation:
+        return Colors.red;
+      case NotificationType.newWifi:
+        return Colors.orange;
+      case NotificationType.failedAttempts:
+        return Colors.red;
+      case NotificationType.unusualChatActivity:
+        return Colors.red;
     }
   }
 
   String _formatTime(DateTime time) {
     final diff = DateTime.now().difference(time);
-    if (diff.inMinutes < 1)  return 'الآن';
+    if (diff.inMinutes < 1) return 'الآن';
     if (diff.inMinutes < 60) return 'منذ ${diff.inMinutes} دقيقة';
-    if (diff.inHours < 24)   return 'منذ ${diff.inHours} ساعة';
+    if (diff.inHours < 24) return 'منذ ${diff.inHours} ساعة';
     return 'منذ ${diff.inDays} يوم';
   }
 }

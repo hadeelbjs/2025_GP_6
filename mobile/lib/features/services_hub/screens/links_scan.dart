@@ -8,7 +8,7 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 
 class LinksScreen extends StatefulWidget {
   const LinksScreen({Key? key}) : super(key: key);
-  
+
   @override
   State<LinksScreen> createState() => _LinksScreenState();
 }
@@ -49,24 +49,32 @@ class _LinksScreenState extends State<LinksScreen> {
             Text('خطأ', style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
           ],
         ),
-        content: Text(message, style: TextStyle(fontFamily: 'IBMPlexSansArabic')),
+        content: Text(
+          message,
+          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('حسناً', style: TextStyle(fontFamily: 'IBMPlexSansArabic', color: AppColors.primary)),
+            child: Text(
+              'حسناً',
+              style: TextStyle(
+                fontFamily: 'IBMPlexSansArabic',
+                color: AppColors.primary,
+              ),
+            ),
           ),
         ],
       ),
     );
   }
+
   void _showScanningDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (context) => Dialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         backgroundColor: AppColors.primary,
         child: Padding(
           padding: const EdgeInsets.all(30),
@@ -96,12 +104,12 @@ class _LinksScreenState extends State<LinksScreen> {
 
   // منطق الفحص
   Future<void> _handleScan() async {
-    // إخفاء الكيبورد أولاً
+    // إخفاء الكيبورد
     _linkFocusNode.unfocus();
     FocusScope.of(context).unfocus();
-    
+
     String code = _linkController.text.trim();
-    
+
     // التحقق من وجود صورة أو رابط مكتوب
     if (code.isEmpty && _selectedFile == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -113,7 +121,7 @@ class _LinksScreenState extends State<LinksScreen> {
       return;
     }
 
-       _showScanningDialog();
+    _showScanningDialog();
 
     // إذا كان هناك صورة واختيرت
     if (_selectedFile != null) {
@@ -129,20 +137,20 @@ class _LinksScreenState extends State<LinksScreen> {
           _scannedResult = code;
           _urlScanResult = null;
         });
-        
+
         try {
           final scanResult = await _apiService.scanURL(code);
           setState(() {
             _urlScanResult = scanResult;
             _isScanning = false;
           });
-           Navigator.pop(context);
+          Navigator.pop(context);
           _showResultDialog(code, isUrl: true);
         } catch (e) {
           setState(() {
             _isScanning = false;
           });
-          Navigator.pop(context); 
+          Navigator.pop(context);
           _showErrorDialog('فشل فحص الرابط: ${e.toString()}');
         }
       } else {
@@ -153,7 +161,7 @@ class _LinksScreenState extends State<LinksScreen> {
       Navigator.pop(context);
       _showErrorDialog('لم يتم العثور على رابط صالح');
     }
-    
+
     // مسح النص والصورة بعد الفحص
     setState(() {
       _linkController.clear();
@@ -166,7 +174,7 @@ class _LinksScreenState extends State<LinksScreen> {
     // إخفاء الكيبورد قبل فتح modal
     _linkFocusNode.unfocus();
     FocusScope.of(context).unfocus();
-    
+
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -188,10 +196,14 @@ class _LinksScreenState extends State<LinksScreen> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                
+
                 // خيار الكاميرا
                 ListTile(
-                  leading: const Icon(Icons.camera_alt, color: AppColors.primary, size: 30),
+                  leading: const Icon(
+                    Icons.camera_alt,
+                    color: AppColors.primary,
+                    size: 30,
+                  ),
                   title: const Text(
                     'الكاميرا',
                     style: TextStyle(
@@ -212,12 +224,16 @@ class _LinksScreenState extends State<LinksScreen> {
                     }
                   },
                 ),
-                
+
                 const Divider(),
-                
+
                 // خيار المعرض
                 ListTile(
-                  leading: const Icon(Icons.photo_library, color: AppColors.primary, size: 30),
+                  leading: const Icon(
+                    Icons.photo_library,
+                    color: AppColors.primary,
+                    size: 30,
+                  ),
                   title: const Text(
                     'الألبوم',
                     style: TextStyle(
@@ -238,9 +254,9 @@ class _LinksScreenState extends State<LinksScreen> {
                     }
                   },
                 ),
-                
+
                 const SizedBox(height: 10),
-                
+
                 // زر الإلغاء
                 TextButton(
                   onPressed: () => Navigator.pop(context),
@@ -267,7 +283,9 @@ class _LinksScreenState extends State<LinksScreen> {
       builder: (context) => Directionality(
         textDirection: TextDirection.rtl,
         child: Dialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           backgroundColor: Colors.transparent,
           child: Container(
             constraints: BoxConstraints(
@@ -277,10 +295,7 @@ class _LinksScreenState extends State<LinksScreen> {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                colors: [
-                  Color(0xFF3D2B5F),
-                  Color(0xFF2D1B4E),
-                ],
+                colors: [Color(0xFF3D2B5F), Color(0xFF2D1B4E)],
               ),
               borderRadius: BorderRadius.circular(20),
             ),
@@ -311,12 +326,12 @@ class _LinksScreenState extends State<LinksScreen> {
                   child: Center(
                     child: isUrl && _urlScanResult != null
                         ? Icon(
-                            _urlScanResult!.isSafe 
-                                ? Icons.verified 
+                            _urlScanResult!.isSafe
+                                ? Icons.verified
                                 : Icons.warning,
                             size: 60,
-                            color: _urlScanResult!.isSafe 
-                                ? Color(0xFF4CAF50) 
+                            color: _urlScanResult!.isSafe
+                                ? Color(0xFF4CAF50)
                                 : Color(0xFFE53935),
                           )
                         : Icon(
@@ -336,8 +351,8 @@ class _LinksScreenState extends State<LinksScreen> {
                         if (isUrl && _urlScanResult != null)
                           Text(
                             _urlScanResult!.isSafe
-                           ? 'لم يتم اكتشاف أي خطر في هذا الرابط حتى الآن، لكن يُنصح بالحذر وعدم مشاركة معلومات شخصية.'
-: 'تحذير: هذا الرابط غير آمن. يُرجى تجنب فتحه أو استخدامه.',
+                                ? 'لم يتم اكتشاف أي خطر في هذا الرابط حتى الآن، لكن يُنصح بالحذر وعدم مشاركة معلومات شخصية.'
+                                : 'تحذير: هذا الرابط غير آمن. يُرجى تجنب فتحه أو استخدامه.',
                             textAlign: TextAlign.center,
                             style: TextStyle(
                               fontFamily: 'IBMPlexSansArabic',
@@ -357,7 +372,7 @@ class _LinksScreenState extends State<LinksScreen> {
                               height: 1.8,
                             ),
                           ),
-                        
+
                         // URL Display
                         if (isUrl) ...[
                           SizedBox(height: 20),
@@ -385,7 +400,7 @@ class _LinksScreenState extends State<LinksScreen> {
                     ),
                   ),
                 ),
-                
+
                 SizedBox(height: 30),
 
                 // Buttons
@@ -398,10 +413,15 @@ class _LinksScreenState extends State<LinksScreen> {
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white.withOpacity(0.2),
                         foregroundColor: Colors.white,
-                        padding: EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 22,
+                          vertical: 12,
+                        ),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(25),
-                          side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.3),
+                          ),
                         ),
                       ),
                       child: Text(
@@ -413,7 +433,7 @@ class _LinksScreenState extends State<LinksScreen> {
                         ),
                       ),
                     ),
-                    
+
                     // Open Link Button (only for safe URLs)
                     if (isUrl && _urlScanResult?.isSafe == true) ...[
                       SizedBox(width: 8),
@@ -434,7 +454,10 @@ class _LinksScreenState extends State<LinksScreen> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Color(0xFF4CAF50),
                           foregroundColor: Colors.white,
-                          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          padding: EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 12,
+                          ),
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(25),
                           ),
@@ -453,20 +476,18 @@ class _LinksScreenState extends State<LinksScreen> {
 
   bool _isValidUrl(String text) {
     text = text.trim();
-    
+
     if (text.contains('://')) {
       final uri = Uri.tryParse(text);
-      return uri != null && 
-             uri.hasScheme && 
-             (uri.scheme == 'http' || uri.scheme == 'https');
+      return uri != null &&
+          uri.hasScheme &&
+          (uri.scheme == 'http' || uri.scheme == 'https');
     }
-    
+
     final uri = Uri.tryParse('http://$text');
     if (uri == null) return false;
-    
-    return uri.hasAuthority && 
-           uri.host.isNotEmpty && 
-           uri.host.contains('.');
+
+    return uri.hasAuthority && uri.host.isNotEmpty && uri.host.contains('.');
   }
 
   Future<void> _openUrl(String url) async {
@@ -474,7 +495,7 @@ class _LinksScreenState extends State<LinksScreen> {
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         url = 'https://$url';
       }
-      
+
       final uri = Uri.parse(url);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
@@ -506,7 +527,7 @@ class _LinksScreenState extends State<LinksScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 30),
-                
+
                 // العنوان الأول
                 const Text(
                   "ادخل/الصق الرابط هنا:",
@@ -518,9 +539,9 @@ class _LinksScreenState extends State<LinksScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // حقل إدخال الرابط
                 Container(
                   decoration: BoxDecoration(
@@ -555,9 +576,9 @@ class _LinksScreenState extends State<LinksScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 30),
-                
+
                 // النص الثاني
                 const Text(
                   "أو ادخل صورة تحتوي على الرابط مكتوباً بها:",
@@ -569,9 +590,9 @@ class _LinksScreenState extends State<LinksScreen> {
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                
+
                 const SizedBox(height: 15),
-                
+
                 // عرض الصورة المختارة
                 if (_selectedFile != null)
                   Container(
@@ -611,7 +632,7 @@ class _LinksScreenState extends State<LinksScreen> {
                       ],
                     ),
                   ),
-                
+
                 // زر اختيار الصورة
                 SizedBox(
                   child: ElevatedButton(
@@ -642,7 +663,7 @@ class _LinksScreenState extends State<LinksScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 40),
 
                 // زر الإرسال
@@ -669,7 +690,7 @@ class _LinksScreenState extends State<LinksScreen> {
                     ),
                   ),
                 ),
-                
+
                 const SizedBox(height: 30),
               ],
             ),
@@ -678,7 +699,7 @@ class _LinksScreenState extends State<LinksScreen> {
       ),
     );
   }
-  
+
   Future<void> extractLinkFromImage(File? file) async {
     if (file == null) return;
 
@@ -686,11 +707,15 @@ class _LinksScreenState extends State<LinksScreen> {
       setState(() {
         _isScanning = true;
       });
-      
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
+
+      final textRecognizer = TextRecognizer(
+        script: TextRecognitionScript.latin,
+      );
       final inputImage = InputImage.fromFile(file);
 
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
+      final RecognizedText recognizedText = await textRecognizer.processImage(
+        inputImage,
+      );
       final String fullText = recognizedText.text;
 
       // Regex لاستخراج الروابط من النص

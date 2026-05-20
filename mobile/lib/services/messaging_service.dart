@@ -71,7 +71,8 @@ class MessagingService {
   Stream<UploadProgress> get onUploadProgress => _uploadProgressCtrl.stream;
 
   bool get isConnected => _socket.isConnected;
-  Stream<Map<String, dynamic>> get onUserStatusChange => _socket.onUserStatusChange;
+  Stream<Map<String, dynamic>> get onUserStatusChange =>
+      _socket.onUserStatusChange;
 
   // ---------------------------------------------------------------------------
   // Initialisation
@@ -165,22 +166,48 @@ class MessagingService {
       String? attachmentName;
 
       if (imageFile != null) {
-        _emitProgress(UploadProgress(stage: UploadStage.compressing, progress: 0.1, message: 'جاري ضغط الصورة...'));
+        _emitProgress(
+          UploadProgress(
+            stage: UploadStage.compressing,
+            progress: 0.1,
+            message: 'جاري ضغط الصورة...',
+          ),
+        );
         final result = await _media.processImage(imageFile);
         if (!result.success || result.file == null) {
           throw Exception(result.errorMessage ?? 'فشل معالجة الصورة');
         }
-        _emitProgress(UploadProgress(stage: UploadStage.encoding, progress: 0.4, message: 'جاري تحويل الصورة...'));
+        _emitProgress(
+          UploadProgress(
+            stage: UploadStage.encoding,
+            progress: 0.4,
+            message: 'جاري تحويل الصورة...',
+          ),
+        );
         attachmentData = await _media.fileToBase64(result.file!);
         attachmentType = 'image';
         attachmentName = result.fileName;
       } else if (attachmentFile != null) {
-        _emitProgress(UploadProgress(stage: UploadStage.validating, progress: 0.2, message: 'جاري التحقق من الملف...'));
+        _emitProgress(
+          UploadProgress(
+            stage: UploadStage.validating,
+            progress: 0.2,
+            message: 'جاري التحقق من الملف...',
+          ),
+        );
         final fileSize = await attachmentFile.length();
         if (fileSize > MediaService.maxFileSizeMB * 1024 * 1024) {
-          throw Exception('الملف كبير جداً (الحد الأقصى ${MediaService.maxFileSizeMB}MB)');
+          throw Exception(
+            'الملف كبير جداً (الحد الأقصى ${MediaService.maxFileSizeMB}MB)',
+          );
         }
-        _emitProgress(UploadProgress(stage: UploadStage.encoding, progress: 0.5, message: 'جاري تحويل الملف...'));
+        _emitProgress(
+          UploadProgress(
+            stage: UploadStage.encoding,
+            progress: 0.5,
+            message: 'جاري تحويل الملف...',
+          ),
+        );
         attachmentData = await _media.fileToBase64(attachmentFile);
         attachmentType = 'file';
         attachmentName = fileName ?? attachmentFile.path.split('/').last;
@@ -188,25 +215,38 @@ class MessagingService {
 
       // ── Session checks ───────────────────────────────────────────────────
       final peerCheck = await _api.getPeerKeysVersion(recipientId);
-      final peerKeysExist = peerCheck['success'] == true && peerCheck['exists'] == true;
+      final peerKeysExist =
+          peerCheck['success'] == true && peerCheck['exists'] == true;
 
       if (peerCheck['success'] == true && !peerKeysExist) {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('rekey_required_$recipientId', true);
-        return {'success': false, 'code': 'REKEY_REQUIRED', 'message': 'الطرف الآخر لم يرفع مفاتيح التشفير الجديدة بعد'};
+        return {
+          'success': false,
+          'code': 'REKEY_REQUIRED',
+          'message': 'الطرف الآخر لم يرفع مفاتيح التشفير الجديدة بعد',
+        };
       }
 
       final prefs = await SharedPreferences.getInstance();
       if (prefs.getBool('rekey_required_$recipientId') ?? false) {
         if (!await createNewSession(recipientId)) {
-          return {'success': false, 'code': 'REKEY_REQUIRED', 'message': 'تعذر إنشاء جلسة تشفير جديدة حالياً'};
+          return {
+            'success': false,
+            'code': 'REKEY_REQUIRED',
+            'message': 'تعذر إنشاء جلسة تشفير جديدة حالياً',
+          };
         }
         await prefs.remove('rekey_required_$recipientId');
       }
 
       if (!await _signal.sessionExists(recipientId)) {
         if (!await createNewSession(recipientId)) {
-          return {'success': false, 'code': 'REKEY_REQUIRED', 'message': 'تعذر إنشاء جلسة تشفير جديدة مع الطرف الآخر'};
+          return {
+            'success': false,
+            'code': 'REKEY_REQUIRED',
+            'message': 'تعذر إنشاء جلسة تشفير جديدة مع الطرف الآخر',
+          };
         }
       }
 
@@ -252,17 +292,23 @@ class MessagingService {
         'contactId': recipientId,
         'contactName': recipientName,
         'lastMessage': attachmentType == 'image'
-            ? '📷 صورة'
+            ? ' صورة'
             : attachmentType == 'file'
-                ? '📎 $attachmentName'
-                : messageText,
+            ? ' $attachmentName'
+            : messageText,
         'lastMessageTime': timestamp,
         'unreadCount': 0,
         'updatedAt': timestamp,
       });
 
       // ── Send over socket ─────────────────────────────────────────────────
-      _emitProgress(UploadProgress(stage: UploadStage.sending, progress: 0.9, message: 'جاري الإرسال...'));
+      _emitProgress(
+        UploadProgress(
+          stage: UploadStage.sending,
+          progress: 0.9,
+          message: 'جاري الإرسال...',
+        ),
+      );
 
       _socket.sendMessageWithAttachment(
         messageId: messageId,
@@ -275,14 +321,28 @@ class MessagingService {
         attachmentEncryptionType: attachmentEncType,
         visibilityDuration: duration,
         expiresAt: expiresAt.toUtc().toIso8601String(),
-        createdAt: DateTime.fromMillisecondsSinceEpoch(timestamp).toUtc().toIso8601String(),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          timestamp,
+        ).toUtc().toIso8601String(),
       );
 
-      _emitProgress(UploadProgress(stage: UploadStage.complete, progress: 1.0, message: 'تم الإرسال بنجاح'));
+      _emitProgress(
+        UploadProgress(
+          stage: UploadStage.complete,
+          progress: 1.0,
+          message: 'تم الإرسال بنجاح',
+        ),
+      );
 
       return {'success': true, 'messageId': messageId};
     } catch (e) {
-      _emitProgress(UploadProgress(stage: UploadStage.error, progress: 0.0, message: 'فشل الإرسال: $e'));
+      _emitProgress(
+        UploadProgress(
+          stage: UploadStage.error,
+          progress: 0.0,
+          message: 'فشل الإرسال: $e',
+        ),
+      );
       return {'success': false, 'message': 'فشل إرسال الرسالة: $e'};
     }
   }
@@ -367,6 +427,7 @@ class MessagingService {
       });
     } catch (e) {
       debugPrint('_handleIncomingMessage: $e');
+      debugPrint(' _handleIncomingMessage: $e');
     }
   }
 
@@ -402,7 +463,8 @@ class MessagingService {
       final visibilityDuration = data['visibilityDuration'] as int?;
 
       final updateData = <String, dynamic>{'status': newStatus};
-      if (visibilityDuration != null) updateData['visibilityDuration'] = visibilityDuration;
+      if (visibilityDuration != null)
+        updateData['visibilityDuration'] = visibilityDuration;
 
       await _db.updateMessage(messageId, updateData);
       _emit(_statusCtrl, {'messageId': messageId, 'status': newStatus});
@@ -423,7 +485,9 @@ class MessagingService {
         String? createdAtStr;
 
         if (msg['createdAt'] != null) {
-          final createdAt = DateTime.fromMillisecondsSinceEpoch(msg['createdAt'] as int);
+          final createdAt = DateTime.fromMillisecondsSinceEpoch(
+            msg['createdAt'] as int,
+          );
           createdAtStr = createdAt.toUtc().toIso8601String();
 
           // احسب expiresAt من الآن دائماً عشان ما تكون منتهية
@@ -463,11 +527,17 @@ class MessagingService {
   // Decryption
   // ---------------------------------------------------------------------------
 
-  Future<Map<String, dynamic>> decryptAllConversationMessages(String conversationId) async {
+  Future<Map<String, dynamic>> decryptAllConversationMessages(
+    String conversationId,
+  ) async {
     try {
       final encrypted = await _db.getEncryptedMessages(conversationId);
       if (encrypted.isEmpty) {
-        return {'success': true, 'message': 'لا توجد رسائل تحتاج فك تشفير', 'count': 0};
+        return {
+          'success': true,
+          'message': 'لا توجد رسائل تحتاج فك تشفير',
+          'count': 0,
+        };
       }
 
       int successCount = 0;
@@ -480,7 +550,11 @@ class MessagingService {
           final senderId = message['senderId'] as String;
           final encryptionType = message['encryptionType'] as int;
 
-          final decrypted = await _signal.decryptMessage(senderId, encryptionType, message['ciphertext'] as String);
+          final decrypted = await _signal.decryptMessage(
+            senderId,
+            encryptionType,
+            message['ciphertext'] as String,
+          );
 
           if (decrypted == null) {
             _decryptionFailureCount++;
@@ -490,17 +564,27 @@ class MessagingService {
             if (_decryptionFailureCount >= 1) {
               await _signal.deleteSession(senderId);
               await deleteConversation(conversationId);
-              return {'success': false, 'error': 'SessionReset', 'message': 'Session reset due to decryption errors'};
+              return {
+                'success': false,
+                'error': 'SessionReset',
+                'message': 'Session reset due to decryption errors',
+              };
             }
             continue;
           }
 
           // Decrypt attachment if present
           String? decryptedAttachment = message['attachmentData'] as String?;
-          if (decryptedAttachment != null && message['attachmentType'] != null) {
+          if (decryptedAttachment != null &&
+              message['attachmentType'] != null) {
             try {
-              decryptedAttachment = await _signal.decryptMessage(senderId, encryptionType, decryptedAttachment)
-                  ?? decryptedAttachment;
+              decryptedAttachment =
+                  await _signal.decryptMessage(
+                    senderId,
+                    encryptionType,
+                    decryptedAttachment,
+                  ) ??
+                  decryptedAttachment;
             } catch (_) {
               // Keep the stored value; decryption will be reattempted next session.
             }
@@ -527,16 +611,38 @@ class MessagingService {
       }
 
       if (successCount == encrypted.length) {
-        return {'success': true, 'message': 'تم فك تشفير $successCount رسائل', 'count': successCount};
+        return {
+          'success': true,
+          'message': 'تم فك تشفير $successCount رسائل',
+          'count': successCount,
+        };
       }
 
       if (successCount == 0) {
-        return {'success': false, 'message': 'فشل فك تشفير جميع الرسائل', 'count': 0, 'error': lastErrorType, 'errorMessage': lastError};
+        return {
+          'success': false,
+          'message': 'فشل فك تشفير جميع الرسائل',
+          'count': 0,
+          'error': lastErrorType,
+          'errorMessage': lastError,
+        };
       }
 
-      return {'success': true, 'message': 'تم فك تشفير $successCount من ${encrypted.length} رسائل', 'count': successCount, 'error': lastErrorType, 'errorMessage': lastError};
+      return {
+        'success': true,
+        'message': 'تم فك تشفير $successCount من ${encrypted.length} رسائل',
+        'count': successCount,
+        'error': lastErrorType,
+        'errorMessage': lastError,
+      };
     } catch (e) {
-      return {'success': false, 'message': 'فشل فك تشفير الرسائل', 'count': 0, 'error': _classifyDecryptionError(e.toString()), 'errorMessage': e.toString()};
+      return {
+        'success': false,
+        'message': 'فشل فك تشفير الرسائل',
+        'count': 0,
+        'error': _classifyDecryptionError(e.toString()),
+        'errorMessage': e.toString(),
+      };
     }
   }
 
@@ -546,7 +652,8 @@ class MessagingService {
       final authenticated = await BiometricService.authenticateWithBiometrics(
         reason: 'تحقق من هويتك لقراءة الرسالة',
       );
-      if (!authenticated) return {'success': false, 'message': 'فشل التحقق بالبايومتركس'};
+      if (!authenticated)
+        return {'success': false, 'message': 'فشل التحقق بالبايومتركس'};
 
       final message = await _db.getMessage(messageId);
       if (message == null) throw Exception('Message not found');
@@ -579,13 +686,16 @@ class MessagingService {
   }
 
   String _classifyDecryptionError(String msg) {
-    if (msg.contains('InvalidKeyException'))      return 'InvalidKeyException';
-    if (msg.contains('InvalidMessageException'))  return 'InvalidMessageException';
+    if (msg.contains('InvalidKeyException')) return 'InvalidKeyException';
+    if (msg.contains('InvalidMessageException'))
+      return 'InvalidMessageException';
     if (msg.contains('InvalidSessionException') ||
         msg.contains('NoSessionException') ||
         msg.contains('session') ||
-        msg.contains('Session'))                  return 'InvalidSessionException';
-    if (msg.contains('UntrustedIdentityException')) return 'UntrustedIdentityException';
+        msg.contains('Session'))
+      return 'InvalidSessionException';
+    if (msg.contains('UntrustedIdentityException'))
+      return 'UntrustedIdentityException';
     return 'UnknownError';
   }
 
@@ -597,8 +707,10 @@ class MessagingService {
     _messageTimers[messageId]?.cancel();
     _messageTimers.remove(messageId);
 
-    final delay = DateTime.fromMillisecondsSinceEpoch(expiresAtMillis, isUtc: true)
-        .difference(DateTime.now().toUtc());
+    final delay = DateTime.fromMillisecondsSinceEpoch(
+      expiresAtMillis,
+      isUtc: true,
+    ).difference(DateTime.now().toUtc());
 
     if (delay.isNegative || delay.inMilliseconds <= 0) {
       _deleteSingleExpiredMessage(messageId);
@@ -651,7 +763,10 @@ class MessagingService {
   /// Fallback sweep every 5 s to catch any messages whose timers were missed.
   void _startGlobalExpiryTimer() {
     _expiryTimer?.cancel();
-    _expiryTimer = Timer.periodic(const Duration(seconds: 5), (_) => deleteExpiredMessages());
+    _expiryTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => deleteExpiredMessages(),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -664,7 +779,8 @@ class MessagingService {
   }) async {
     try {
       final message = await _db.getMessage(messageId);
-      if (message == null) return {'success': false, 'message': 'الرسالة غير موجودة'};
+      if (message == null)
+        return {'success': false, 'message': 'الرسالة غير موجودة'};
 
       final isMine = (message['isMine'] as int?) == 1;
       final otherUserId = isMine
@@ -753,7 +869,8 @@ class MessagingService {
   // Duration / visibility
   // ---------------------------------------------------------------------------
 
-  Future<int?> getUserDuration(String conversationId) => _db.getUserDuration(conversationId);
+  Future<int?> getUserDuration(String conversationId) =>
+      _db.getUserDuration(conversationId);
 
   Future<void> setUserDuration(String conversationId, int duration) =>
       _db.setUserDuration(conversationId, duration);
@@ -812,19 +929,27 @@ class MessagingService {
     return _cachedUserId!;
   }
 
-  Future<void> _cacheUserId() async => _cachedUserId = await _getCurrentUserId();
+  Future<void> _cacheUserId() async =>
+      _cachedUserId = await _getCurrentUserId();
 
   void _startCacheCleanupTimer() {
     _cleanupTimer?.cancel();
     _cleanupTimer = Timer.periodic(const Duration(minutes: 5), (_) {
       if (_processedMessageIds.length > 100) {
-        final keep = _processedMessageIds.skip(_processedMessageIds.length - 50).toList();
-        _processedMessageIds..clear()..addAll(keep);
+        final keep = _processedMessageIds
+            .skip(_processedMessageIds.length - 50)
+            .toList();
+        _processedMessageIds
+          ..clear()
+          ..addAll(keep);
       }
     });
   }
 
-  void _emit(StreamController<Map<String, dynamic>> ctrl, Map<String, dynamic> data) {
+  void _emit(
+    StreamController<Map<String, dynamic>> ctrl,
+    Map<String, dynamic> data,
+  ) {
     if (!ctrl.isClosed) ctrl.add(data);
   }
 
@@ -858,7 +983,17 @@ class MessagingService {
 // Upload progress model
 // ---------------------------------------------------------------------------
 
-enum UploadStage { idle, validating, compressing, encoding, encrypting, saving, sending, complete, error }
+enum UploadStage {
+  idle,
+  validating,
+  compressing,
+  encoding,
+  encrypting,
+  saving,
+  sending,
+  complete,
+  error,
+}
 
 class UploadProgress {
   final UploadStage stage;

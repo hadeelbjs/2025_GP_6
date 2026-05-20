@@ -5,9 +5,8 @@ const Contact = require('../models/Contact');
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 
-// ============================================
-// 1. البحث عن مستخدم
-// ============================================
+// البحث عن مستخدم
+
 router.post('/search',
   auth,
   [
@@ -115,9 +114,7 @@ router.post('/search',
   }
 );
 
-// ============================================
-// 2. إرسال طلب صداقة
-// ============================================
+// إرسال طلب صداقة
 router.post('/send-request',
   auth,
   [
@@ -217,9 +214,7 @@ router.post('/send-request',
   }
 );
 
-// ============================================
-// 3. عرض طلبات الصداقة الواردة (pending)
-// ============================================
+// عرض طلبات الصداقة الواردة (pending)
 router.get('/pending-requests', auth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -232,10 +227,10 @@ router.get('/pending-requests', auth, async (req, res) => {
     .populate('requester', 'fullName username')
     .sort({ createdAt: -1 });
 
-    // ✅ فلترة الطلبات - استبعاد الطلبات من مستخدمين محذوفين
+    //  فلترة الطلبات - استبعاد الطلبات من مستخدمين محذوفين
     const validRequests = pendingRequests.filter(req => req.requester !== null);
 
-    // ✅ حذف الطلبات من مستخدمين محذوفين
+    //  حذف الطلبات من مستخدمين محذوفين
     const invalidRequests = pendingRequests.filter(req => req.requester === null);
     if (invalidRequests.length > 0) {
       const invalidIds = invalidRequests.map(req => req._id);
@@ -270,9 +265,7 @@ router.get('/pending-requests', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// 4. قبول طلب صداقة
-// ============================================
+// قبول طلب صداقة
 router.post('/accept-request/:requestId',
   auth,
   [
@@ -325,9 +318,7 @@ router.post('/accept-request/:requestId',
   }
 );
 
-// ============================================
-// 5. رفض طلب صداقة
-// ============================================
+// رفض طلب صداقة
 router.post('/reject-request/:requestId',
   auth,
   [
@@ -378,9 +369,7 @@ router.post('/reject-request/:requestId',
   }
 );
 
-// ============================================
-// 6. عرض قائمة الأصدقاء (accepted فقط)
-// ============================================
+//  عرض قائمة الأصدقاء (accepted فقط)
 router.get('/list', auth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -427,9 +416,7 @@ router.get('/list', auth, async (req, res) => {
   }
 });
 
-// ============================================
-// 7. حذف صديق
-// ============================================
+// حذف صديق
 router.delete('/:contactId',
   auth,
   [
@@ -486,9 +473,7 @@ router.delete('/:contactId',
   }
 );
 
-// ============================================
-// 8. جلب سياسة لقطات الشاشة
-// ============================================
+// جلب سياسة لقطات الشاشة
 router.get('/:peerUserId/screenshots', auth, async (req, res) => {
   try {
     const currentUserId = req.user.id;
@@ -549,52 +534,9 @@ router.get('/:peerUserId/screenshots', auth, async (req, res) => {
     });
   }
 });
-/*router.get('/:peerUserId/screenshots', auth, async (req, res) => {
-  try {
-    const currentUserId = req.user.id;
-    const { peerUserId } = req.params;
 
-    console.log('📥 GET /screenshots request');
-    console.log('   Current User:', currentUserId);
-    console.log('   Peer User:', peerUserId);
 
-    const contact = await Contact.findOne({
-      $or: [
-        { requester: currentUserId, recipient: peerUserId },
-        { requester: peerUserId, recipient: currentUserId }
-      ],
-      status: 'accepted'
-    });
-
-    if (!contact) {
-      console.log('❌ Contact not found');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'العلاقة غير موجودة',
-        allowScreenshots: false
-      });
-    }
-
-    console.log('✅ Contact found, allowScreenshots:', contact.allowScreenshots);
-
-    res.json({
-      success: true,
-      allowScreenshots: contact.allowScreenshots || false
-    });
-
-  } catch (err) {
-    console.error('❌ Get screenshot policy error:', err);
-    res.status(500).json({ 
-      success: false, 
-      message: 'خطأ في جلب السياسة',
-      allowScreenshots: false
-    });
-  }
-});*/
-
-// ============================================
-// 9. تحديث سياسة لقطات الشاشة
-// ============================================
+// تحديث سياسة لقطات الشاشة
 router.put('/:peerUserId/screenshots', auth, async (req, res) => {
   try {
     const { allowScreenshots } = req.body;
@@ -674,132 +616,5 @@ router.put('/:peerUserId/screenshots', auth, async (req, res) => {
     });
   }
 });
-/*router.put('/:peerUserId/screenshots', auth, async (req, res) => {
-  try {
-    const { allowScreenshots } = req.body;
-    const currentUserId = req.user.id;
-    const { peerUserId } = req.params;
-
-    console.log(' PUT /screenshots request');
-    console.log('   Current User:', currentUserId);
-    console.log('   Peer User:', peerUserId);
-    console.log('   Allow:', allowScreenshots);
-
-    // ✅ التحقق من صحة البيانات
-    if (typeof allowScreenshots !== 'boolean') {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'قيمة allowScreenshots يجب أن تكون true أو false' 
-      });
-    }
-
-    // ✅ البحث عن العلاقة
-    const contact = await Contact.findOne({
-      $or: [
-        { requester: currentUserId, recipient: peerUserId },
-        { requester: peerUserId, recipient: currentUserId }
-      ],
-      status: 'accepted'
-    });
-
-    if (!contact) {
-      console.log('❌ Contact not found');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'العلاقة غير موجودة' 
-      });
-    }
-
-    // ✅ تحديث السياسة
-    contact.allowScreenshots = allowScreenshots;
-    await contact.save();
-
-    console.log('✅ Policy updated in database');
-
-    // ✅ إرسال إشعار Socket عبر req.app
-    try {
-      const io = req.app.get('io');
-      if (io && io.sendToUser) {
-        const sent = io.sendToUser(peerUserId, 'privacy:screenshots:changed', {
-          peerUserId: currentUserId,
-          allowScreenshots
-        });
-        console.log(sent ? '✅ Socket notification sent' : '⚠️ User offline');
-      } else {
-        console.warn('⚠️ Socket.IO not available');
-      }
-    } catch (socketErr) {
-      console.error('❌ Socket notification failed:', socketErr);
-      // لا نفشل الـ request - السياسة محفوظة في قاعدة البيانات
-    }
-
-    res.json({
-      success: true,
-      message: allowScreenshots
-        ? 'تم السماح بلقطات الشاشة'
-        : 'تم منع لقطات الشاشة',
-      allowScreenshots
-    });
-
-  } catch (err) {
-    console.error('❌ Privacy update error:', err);
-    res.status(500).json({ 
-      success: false, 
-      message: 'خطأ في تحديث السياسة' 
-    });
-  }
-});*/
-/*router.put('/:peerUserId/screenshots', auth, async (req, res) => {
-  try {
-    const { allowScreenshots } = req.body;
-    const currentUserId = req.user.id;
-    const { peerUserId } = req.params;
-
-    console.log(' PUT /screenshots request');
-    console.log('   Current User:', currentUserId);
-    console.log('   Peer User:', peerUserId);
-    console.log('   Allow:', allowScreenshots);
-
-    const contact = await Contact.findOne({
-      $or: [
-        { requester: currentUserId, recipient: peerUserId },
-        { requester: peerUserId, recipient: currentUserId }
-      ],
-      status: 'accepted'
-    });
-
-    if (!contact) {
-      console.log('❌ Contact not found');
-      return res.status(404).json({ 
-        success: false, 
-        message: 'العلاقة غير موجودة' 
-      });
-    }
-
-    contact.allowScreenshots = allowScreenshots;
-    await contact.save();
-
-    console.log('✅ Updated successfully');
-
-    // إرسال عبر Socket
-    req.io?.sendToUser?.(peerUserId, 'privacy:screenshots:changed', {
-      peerUserId: currentUserId,
-      allowScreenshots
-    });
-
-    res.json({
-      success: true,
-      message: allowScreenshots
-        ? 'تم السماح بلقطات الشاشة'
-        : 'تم منع لقطات الشاشة'
-    });
-  } catch (err) {
-    console.error('❌ Privacy update error:', err);
-    res.status(500).json({ 
-      success: false, 
-      message: 'خطأ في تحديث السياسة' 
-    });
-  }
-});*/
 
 module.exports = router;

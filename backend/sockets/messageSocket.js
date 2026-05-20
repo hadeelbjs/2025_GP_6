@@ -44,7 +44,7 @@ async function broadcastStatusToContacts(userId, isOnline, io) {
 
 module.exports = (io) => {
 
-  // ✅ التحقق من التوكن
+  // التحقق من التوكن
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth.token;
@@ -131,7 +131,7 @@ module.exports = (io) => {
       broadcastStatusToContacts(userId.toString(), true, io);
     }, 500);
 
-    // ✅ إرسال رسالة مع مرفقات
+    //  إرسال رسالة مع مرفقات
     socket.on('message:send', async (data) => {
       try {
         const { 
@@ -222,82 +222,13 @@ if (finalExpiresAt && visibilityDuration) {
     });
     
 
-    /* 
-    (socket.on('message:delivered', async (data) => {
-      try {
-        const { messageId, senderId, encryptedType, encryptedBody, attachmentData, attachmentType, attachmentName, createdAt } = data;
-        const receiverId = userId;
-
-        console.log(`📨 Message delivered confirmation: ${messageId}`);
-
-        await Message.findOneAndUpdate(
-          { messageId },
-          {
-            messageId,
-            senderId,
-            recipientId: receiverId,
-            encryptedType,
-            encryptedBody,
-            attachmentData,
-            attachmentType,
-            attachmentName,
-            status: 'delivered',
-            deliveredAt: new Date(),
-            createdAt: createdAt ? new Date(createdAt) : new Date(),
-          },
-          { upsert: true, new: true }
-        );
-
-        io.sendToUser(senderId, 'message:status_update', {
-          messageId,
-          status: 'delivered',
-          timestamp: Date.now(),
-        });
-
-        console.log(`✅ Message ${messageId} marked as delivered`);
-
-      } catch (err) {
-        console.error('❌ Delivered confirmation error:', err);
-      }
-    });
-
-    // ✅ تحديث الحالة
-    socket.on('message:status', async (data) => {
-      */
      socket.on('message:delete_local', (data) => {
 
       try {
-       /*
-        const { messageId, status, recipientId } = data;
-
-        await Message.findOneAndUpdate(
-          { messageId },
-          { status, [`${status}At`]: new Date() }
-        );
-
-        io.sendToUser(recipientId, 'message:status_update', {
-          messageId,
-          status,
-          timestamp: Date.now(),
-        });
-
-      } catch (err) {
-        console.error('❌ Status update error:', err);
-      }
-    });
-
-    // ✅ حذف رسالة
-    socket.on('message:delete', async (data) => {
-      try {
-        const { messageId, deleteFor } = data;
-            const { messageId, deleteFor, recipientId } = data;
-        */
+    
         const { messageId, deleteFor, recipientId } = data;
         const senderId = userId;
 
-     //   console.log(`🗑️ Delete request: ${messageId} (deleteFor: ${deleteFor})`);
-
-      //  const message = await Message.findOne({ messageId });
           console.log(`🗑️ Local delete: ${messageId} (deleteFor: ${deleteFor})`);
 
         
@@ -306,60 +237,10 @@ if (finalExpiresAt && visibilityDuration) {
       socket.emit('error', { message: 'معرف المستقبل مفقود' });
       return;
     }
-    /*
-
-        if (deleteFor === 'everyone') {
-          if (message.senderId.toString() !== senderId) {
-            socket.emit('error', { message: 'فقط المرسل يمكنه الحذف للجميع' });
-            return;
-          }
-
-          message.deletedForEveryone = true;
-          message.deletedForEveryoneAt = new Date();
-          message.status = 'deleted';
-          await message.save();
-
-          const recipientId = message.recipientId.toString();
-          
-          const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
-          */
-             // ✅ إرسال الإشعار للطرف الآخر مباشرة
+   
+             //  إرسال الإشعار للطرف الآخر مباشرة
     const sent = io.sendToUser(recipientId, 'message:deleted', {
       messageId,
-           /* deletedFor: 'everyone',
-        });
-          
-          console.log(`${sentToRecipient ? '✅' : '⚠️'} Sent delete to recipient ${recipientId}`);
-
-          socket.emit('message:deleted', {
-            messageId,
-            deletedFor: 'everyone',
-          });
-          
-          console.log(`✅ Delete confirmed to sender ${senderId}`);
-
-        } else if (deleteFor === 'recipient') {
-          if (message.senderId.toString() !== senderId) {
-            socket.emit('error', { message: 'ليس لديك صلاحية' });
-            return;
-          }
-
-          const recipientId = message.recipientId.toString();
-          
-          if (!message.deletedFor.includes(recipientId)) {
-            message.deletedFor.push(message.recipientId);
-            message.deletedForRecipient = true;
-            await message.save();
-          }
-
-          const sentToRecipient = io.sendToUser(recipientId, 'message:deleted', {
-            messageId,
-            deletedFor: 'recipient',
-          });
-
-          console.log(`${sentToRecipient ? '✅' : '⚠️'} Delete sent to recipient ${recipientId}`);
-          */
-
           deletedFor: deleteFor,
           });
 
@@ -375,7 +256,7 @@ if (finalExpiresAt && visibilityDuration) {
       }
     });
 
-    // ✅ حالة الكتابة
+    //  حالة الكتابة
     socket.on('typing', (data) => {
       const { recipientId, isTyping } = data;
       io.sendToUser(recipientId, 'typing', {
@@ -394,7 +275,7 @@ if (finalExpiresAt && visibilityDuration) {
       });
     });
 
-    // ✅ حذف رسائل المحادثة بعد فشل التحقق 3 مرات
+    //  حذف رسائل المحادثة بعد فشل التحقق 3 مرات
     socket.on('conversation:failed_verification', async (data) => {
       try {
         const { otherUserId } = data;
@@ -526,7 +407,7 @@ if (finalExpiresAt && visibilityDuration) {
     });
   });
 
-  // ✅ دالة إرسال محسّنة
+  //  دالة إرسال محسّنة
   io.sendToUser = (userId, event, data) => {
     const socketId = userSockets.get(userId.toString());
     

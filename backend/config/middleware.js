@@ -4,10 +4,8 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
-// ============================================
+// 
 // Rate Limiters 
-// ============================================
-
 // General API Rate Limiter
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -25,7 +23,7 @@ const apiLimiter = rateLimit({
 // Authentication Endpoints (Login, Register, 2FA)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Increased from 5 to 10 for better UX
+  max: 10, 
   skipSuccessfulRequests: true,
   handler: (req, res) => {
     res.status(429).json({
@@ -71,9 +69,7 @@ const uploadLimiter = rateLimit({
   },
 });
 
-// ============================================
 // Configure Middleware Function
-// ============================================
 const configureMiddleware = (app) => {
   // Security Headers
   app.use(helmet({
@@ -100,9 +96,7 @@ const configureMiddleware = (app) => {
   // Static Files
   app.use('/uploads', express.static('uploads'));
 
-  // ============================================
-  // Apply Rate Limiters 
-  // ============================================
+ 
   
   // General API rate limiter (applies to all /api/* routes)
   app.use('/api/', apiLimiter);

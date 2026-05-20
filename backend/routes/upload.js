@@ -9,9 +9,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const auth = require('../middleware/auth');
 
-// ============================================
 // إنشاء المجلدات إذا ما كانت موجودة
-// ============================================
 const uploadDir = path.join(__dirname, '../uploads');
 const imagesDir = path.join(uploadDir, 'images');
 const filesDir = path.join(uploadDir, 'files');
@@ -53,7 +51,7 @@ storage: imageStorage,
  limits: {
  fileSize: 10 * 1024 * 1024,
  },
- fileFilter: imageFilter // استخدام الفلتر المعدل
+ fileFilter: imageFilter
 });
 
 // إعدادات Multer للملفات
@@ -114,7 +112,7 @@ router.post('/image', auth, uploadImage.single('image'), async (req, res) => {
   } catch (error) {
     console.error('❌ Image upload error:', error);
     
-    // ✅ حذف الملف إذا حصل خطأ
+    //  حذف الملف إذا حصل خطأ
     if (req.file && req.file.path) {
       fs.unlink(req.file.path, (err) => {
         if (err) console.error('Failed to delete file:', err);

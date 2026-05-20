@@ -138,7 +138,7 @@ app.use('/api/chatbot', chatbotRoutes);
 app.use('/api/content-scanning-stats',require('./routes/contentScanning') )
 app.use('/api/securitytips', require('./routes/securitytips'));
 app.use('/api/support', require('./routes/support'));
-
+app.use('/api/anomaly', anomalyRoutes);
 
 app.get('/', (req, res) => {
   res.json({ 

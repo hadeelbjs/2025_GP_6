@@ -20,7 +20,7 @@ function distanceKm(lat1, lng1, lat2, lng2) {
 router.post('/check', authMiddleware, async (req, res) => {
     try {
         const userId = req.userId;
-        const { latitude, longitude, locationName, ssid } = req.body;
+        const { lat, lng, locationName, ssid } = req.body;
         const anomalies = [];
 
         const user = await User.findById(userId).select(

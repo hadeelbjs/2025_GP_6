@@ -15,14 +15,15 @@ Waseed is a comprehensive, user-friendly cybersecurity platform specifically des
 - **Node.js** with Express framework for RESTful API services
 - **Python** service for AI component
 - **MongoDB** for data persistence (user information and security events)
-- **AWS** cloud infrastructure for AI model hosting
+- **Modal** for AI model hosting
 
 ### Integrations
 - **Have I Been Pwned API** for breach monitoring
 - **VirusTotal API** for link and file scanning
 - **Resend** for email verification
 - **Twilio** for SMS-based phone number verification
-- **Firebase** for real-time push notifications and threat alerts
+- **Google Gemini API** for AI-powered chatbot functionality
+
 
 ## Installation & Setup
 

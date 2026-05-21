@@ -7,11 +7,12 @@ import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/crypto/signal_protocol_manager.dart';
-import '../../../services/biometric_service.dart';
+import '../../../services/biometric_service.dart'; 
 import 'chat_screen.dart';
 import '../../../services/local_db/database_helper.dart';
 import '../../../services/socket_service.dart';
 import '../../../services/anomaly_detection_service.dart';
+
 
 class ChatListScreen extends StatefulWidget {
   const ChatListScreen({super.key});
@@ -20,22 +21,22 @@ class ChatListScreen extends StatefulWidget {
   State<ChatListScreen> createState() => _ChatListScreenState();
 }
 
-class _ChatListScreenState extends State<ChatListScreen>
-    with WidgetsBindingObserver {
+class _ChatListScreenState extends State<ChatListScreen> with WidgetsBindingObserver {
   final _apiService = ApiService();
   final _messagingService = MessagingService();
   final _signalProtocolManager = SignalProtocolManager();
   final _anomalyService = AnomalyDetectionService();
-
+  
   List<Map<String, dynamic>> _chats = [];
   List<Map<String, dynamic>> _conversations = [];
   bool _isLoading = false;
-
+  
   StreamSubscription? _newMessageSubscription;
   StreamSubscription? _connectionSubscription;
   String? _currentOpenChatId;
 
   final Map<String, int> _verificationAttempts = {};
+
 
   @override
   void initState() {
@@ -44,29 +45,31 @@ class _ChatListScreenState extends State<ChatListScreen>
     _initializeScreen();
   }
 
-  //  مراقبة للتطبيق
+    //  مراقبة lifecycle للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      print('ChatListScreen: App resumed - ensuring socket connection...');
+      print('🔄 ChatListScreen: App resumed - ensuring socket connection...');
       _ensureSocketConnection();
     }
   }
 
+
+  
   // التأكد من الاتصال بالـ Socket عند العودة للتطبيق
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
-        print('ChatListScreen: Socket not connected - initializing...');
+        print('🔌ChatListScreen: Socket not connected - initializing...');
         final success = await _messagingService.initialize();
         if (success) {
-          print('Socket connected after resume');
+          print('✅ Socket connected after resume');
         } else {
-          print('Failed to connect socket after resume');
+          print('❌ Failed to connect socket after resume');
         }
       }
     } catch (e) {
-      print('Error ensuring socket connection: $e');
+      print('❌  Error ensuring socket connection: $e');
     }
   }
 
@@ -83,27 +86,27 @@ class _ChatListScreenState extends State<ChatListScreen>
     await _loadChats();
     await _loadConversations();
     _listenToNewMessages();
-    _setupConnectionListener();
+    _setupConnectionListener(); 
   }
 
   void _listenToNewMessages() {
     _newMessageSubscription = _messagingService.onNewMessage.listen((data) {
-      print('New message notification');
+      print('📨 New message notification');
       _loadConversations();
-
+      
       final senderId = data['senderId'];
-
+      
       if (_currentOpenChatId == senderId) {
-        print('User inside chat - no notification');
+        print('⚠️ User inside chat - no notification');
         return;
       }
-
+      
       if (mounted) {
         final senderName = _chats.firstWhere(
           (c) => c['id'] == senderId,
           orElse: () => {'name': 'مستخدم'},
         )['name'];
-
+        
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Row(
@@ -114,7 +117,11 @@ class _ChatListScreenState extends State<ChatListScreen>
                     color: Colors.white.withOpacity(0.2),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.chat_bubble, color: Colors.white, size: 20),
+                  child: Icon(
+                    Icons.chat_bubble,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
                 SizedBox(width: 12),
                 Expanded(
@@ -175,9 +182,8 @@ class _ChatListScreenState extends State<ChatListScreen>
   // فقط لإعادة الاتصال عند العودة للتطبيق
   void _setupConnectionListener() {
     final socketService = SocketService();
-    _connectionSubscription = socketService.onConnectionChange.listen(
-      (isConnected) {},
-    );
+    _connectionSubscription = socketService.onConnectionChange.listen((isConnected) {
+    });
   }
 
   Future<void> _loadChats() async {
@@ -188,7 +194,7 @@ class _ChatListScreenState extends State<ChatListScreen>
 
       if (!mounted) return;
 
-      if (result['code'] == 'SESSION_EXPIRED' ||
+      if (result['code'] == 'SESSION_EXPIRED' || 
           result['code'] == 'TOKEN_EXPIRED' ||
           result['code'] == 'NO_TOKEN') {
         _handleSessionExpired();
@@ -222,18 +228,19 @@ class _ChatListScreenState extends State<ChatListScreen>
   Future<void> _loadConversations() async {
     try {
       final conversations = await _messagingService.getAllConversations();
-
+      
       if (mounted) {
         setState(() {
           _conversations = conversations;
         });
       }
-
+      
       print('Loaded ${conversations.length} conversations');
-
+      
       for (var conv in conversations) {
         print('${conv['contactName']}: unread = ${conv['unreadCount']}');
       }
+      
     } catch (e) {
       print('❌ Error loading conversations: $e');
     }
@@ -244,9 +251,10 @@ class _ChatListScreenState extends State<ChatListScreen>
 
     Future.delayed(const Duration(seconds: 1), () {
       if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/login', (route) => false);
+        Navigator.of(context).pushNamedAndRemoveUntil(
+          '/login',
+          (route) => false,
+        );
       }
     });
   }
@@ -277,7 +285,9 @@ class _ChatListScreenState extends State<ChatListScreen>
         ),
         backgroundColor: isSuccess ? Colors.green : Colors.red,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
         margin: const EdgeInsets.all(16),
       ),
     );
@@ -337,16 +347,16 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Widget _buildChatList() {
-    final Map<String, Map<String, dynamic>> mergedMap = {};
+    final Map<String, Map<String, dynamic>> mergedMap = {}; 
     for (var conv in _conversations) {
       final contactId = conv['contactId'];
       final contact = _chats.firstWhere(
         (c) => c['id'] == contactId,
         orElse: () => {},
       );
-
+      
       if (contact.isNotEmpty) {
-        mergedMap[contactId] = {
+        mergedMap[contactId] = { 
           ...contact,
           'lastMessage': conv['lastMessage'],
           'lastMessageTime': conv['lastMessageTime'],
@@ -354,10 +364,10 @@ class _ChatListScreenState extends State<ChatListScreen>
         };
       }
     }
-
+    
     for (var contact in _chats) {
       final contactId = contact['id'];
-      if (!mergedMap.containsKey(contactId)) {
+      if (!mergedMap.containsKey(contactId)) { 
         mergedMap[contactId] = {
           ...contact,
           'lastMessage': null,
@@ -368,7 +378,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     }
 
     final mergedList = mergedMap.values.toList();
-
+    
     mergedList.sort((a, b) {
       final timeA = a['lastMessageTime'] ?? 0;
       final timeB = b['lastMessageTime'] ?? 0;
@@ -442,7 +452,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final avatarColor = chat['avatarColor'] as Color;
     final userId = chat['id'] as String;
     final initial = name.isNotEmpty ? name[0] : '';
-
+    
     final lastMessage = chat['lastMessage'];
     final unreadCount = chat['unreadCount'] ?? 0;
     final timestamp = chat['lastMessageTime'];
@@ -489,8 +499,8 @@ class _ChatListScreenState extends State<ChatListScreen>
                         child: Text(
                           name,
                           style: AppTextStyles.bodyLarge.copyWith(
-                            fontWeight: unreadCount > 0
-                                ? FontWeight.bold
+                            fontWeight: unreadCount > 0 
+                                ? FontWeight.bold 
                                 : FontWeight.w600,
                             color: AppColors.textPrimary,
                           ),
@@ -518,18 +528,19 @@ class _ChatListScreenState extends State<ChatListScreen>
                             color: AppColors.textHint,
                           ),
                         ),
-
-                      Expanded(
-                        child: Text(
-                          '@${chat['username']}',
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: AppColors.textHint,
-                            fontWeight: FontWeight.normal,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                      
+                     Expanded(
+                      child: Text(
+                      
+                        '@${chat['username']}', 
+                        style: AppTextStyles.bodySmall.copyWith(
+                          color: AppColors.textHint,
+                          fontWeight: FontWeight.normal,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
+                    ),
                     ],
                   ),
                 ],
@@ -570,7 +581,7 @@ class _ChatListScreenState extends State<ChatListScreen>
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
     final now = DateTime.now();
     final difference = now.difference(date);
-
+    
     if (difference.inDays == 0) {
       return '${date.hour}:${date.minute.toString().padLeft(2, '0')}';
     } else if (difference.inDays == 1) {
@@ -583,170 +594,177 @@ class _ChatListScreenState extends State<ChatListScreen>
   }
 
   Future<void> _openChat(Map<String, dynamic> chat) async {
-    final userId = chat['id'] as String;
-    final name = chat['name'] as String;
-
-    try {
-      final canUseBiometric = await BiometricService.canCheckBiometrics();
-
-      if (!canUseBiometric) {
-        _showMessage('هذا الجهاز لا يدعم البصمة', false);
-        return;
-      }
-
-      final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
-
-      if (!hasEnrolled) {
-        if (!mounted) return;
-        _showBiometricNotEnrolledDialog();
-        return;
-      }
-
-      final verified = await BiometricService.authenticateWithBiometrics(
-        reason: 'تحقق من هويتك لفتح المحادثة',
-        biometricOnly: true,
-      );
-
-      if (!verified) {
-        _verificationAttempts[userId] =
-            (_verificationAttempts[userId] ?? 0) + 1;
-
-        final attempts = _verificationAttempts[userId]!;
-        print('🔴 Failed attempt $attempts/3 for user $userId');
-
-        if (attempts >= 3) {
-          await _handleFailedVerification(userId, name);
-          _verificationAttempts[userId] = 0; // إعادة تعيين
-          return;
-        }
-
-        // عرض عدد المحاولات المتبقية
-        final remaining = 3 - attempts;
-        _showMessage('فشل التحقق. المحاولات المتبقية: $remaining', false);
-        return;
-      }
-      await _anomalyService.trackChatOpening();
-
-      _verificationAttempts[userId] = 0;
-
-      _currentOpenChatId = userId;
-
-      await _signalProtocolManager.initialize(userId: userId);
-      await _signalProtocolManager.checkKeysStatus();
-
-      final hasSession = await _signalProtocolManager.hasSession(userId);
-
-      if (!hasSession) {
-        _showMessage('جاري إعداد التشفير...', true);
-
-        final success = await _signalProtocolManager.createSession(userId);
-
-        if (!success) {
-          _showMessage('فشل إعداد التشفير', false);
-          _currentOpenChatId = null;
-          return;
-        }
-      }
-
-      if (!mounted) return;
-
-      await Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ChatScreen(
-            userId: userId,
-            name: name,
-            username: chat['username'],
-          ),
-        ),
-      );
-
-      _currentOpenChatId = null;
-      await _loadConversations();
-    } catch (e) {
-      print('Error opening chat: $e');
-      _currentOpenChatId = null;
-      _showMessage('حدث خطأ', false);
+  final userId = chat['id'] as String;
+  final name = chat['name'] as String;
+  
+  try {
+    final canUseBiometric = await BiometricService.canCheckBiometrics();
+    
+    if (!canUseBiometric) {
+      _showMessage('هذا الجهاز لا يدعم البصمة', false);
+      return;
     }
-  }
 
-  Future<void> _handleFailedVerification(
-    String otherUserId,
-    String name,
-  ) async {
-    try {
-      print('Handling failed verification for $otherUserId');
-
-      // حذف جميع رسائل المحادثة محلياً
-      final conversationId = _generateConversationId(otherUserId);
-      await DatabaseHelper.instance.deleteConversation(conversationId);
-
-      //  إرسال إشعار للسيرفر (بدون socket مباشرة)
-      SocketService().emitEvent('conversation:failed_verification', {
-        'otherUserId': otherUserId,
-      });
-
-      // عرض رسالة للمستخدم
+    final hasEnrolled = await BiometricService.hasEnrolledBiometrics();
+    
+    if (!hasEnrolled) {
       if (!mounted) return;
+      _showBiometricNotEnrolledDialog();
+      return;
+    }
 
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: AlertDialog(
-            icon: Icon(
-              Icons.warning_amber_rounded,
-              color: Colors.red,
-              size: 48,
+    final verified = await BiometricService.authenticateWithBiometrics(
+      reason: 'تحقق من هويتك لفتح المحادثة',
+      biometricOnly: true, 
+    );
+    
+    if (!verified) {
+      
+      _verificationAttempts[userId] = (_verificationAttempts[userId] ?? 0) + 1;
+      
+      final attempts = _verificationAttempts[userId]!;
+      print('🔴 Failed attempt $attempts/3 for user $userId');
+      
+      if (attempts >= 3) {
+        await _handleFailedVerification(userId, name);
+        _verificationAttempts[userId] = 0; // إعادة تعيين
+        return;
+      }
+      
+      // عرض عدد المحاولات المتبقية
+      final remaining = 3 - attempts;
+      _showMessage('فشل التحقق. المحاولات المتبقية: $remaining', false);
+      return;
+    }
+    await _anomalyService.trackChatOpening();
+
+    _verificationAttempts[userId] = 0;
+    
+    _currentOpenChatId = userId;
+    
+    await _signalProtocolManager.initialize(userId: userId);
+    await _signalProtocolManager.checkKeysStatus();
+    
+    final hasSession = await _signalProtocolManager.hasSession(userId);
+    
+    if (!hasSession) {
+      _showMessage('جاري إعداد التشفير...', true);
+      
+      final success = await _signalProtocolManager.createSession(userId);
+      
+      if (!success) {
+        _showMessage('فشل إعداد التشفير', false);
+        _currentOpenChatId = null;
+        return;
+      }
+    }
+    
+    if (!mounted) return;
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatScreen(
+          userId: userId,
+          name: name,
+          username: chat['username'],
+        ),
+      ),
+    );
+    
+    _currentOpenChatId = null;
+    await _loadConversations();
+    
+  } catch (e) {
+    print('Error opening chat: $e');
+    _currentOpenChatId = null;
+    _showMessage('حدث خطأ', false);
+  }
+}
+
+
+Future<void> _handleFailedVerification(String otherUserId, String name) async {
+  try {
+    print('🗑️ Handling failed verification for $otherUserId');
+    
+    // ✅ 1. حذف جميع رسائل المحادثة محلياً
+    final conversationId = _generateConversationId(otherUserId);
+    await DatabaseHelper.instance.deleteConversation(conversationId);
+    
+    // ✅ 2. إرسال إشعار للسيرفر (بدون socket مباشرة)
+    SocketService().emitEvent('conversation:failed_verification', {
+      'otherUserId': otherUserId,
+    });
+    
+    
+    // ✅ 3. عرض رسالة للمستخدم
+    if (!mounted) return;
+    
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          icon: Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.red,
+            size: 48,
+          ),
+          title: Text(
+            'تم حذف المحادثة',
+            style: AppTextStyles.h3.copyWith(
+              fontWeight: FontWeight.bold,
             ),
-            title: Text(
-              'تم حذف المحادثة',
-              style: AppTextStyles.h3.copyWith(fontWeight: FontWeight.bold),
-            ),
-            content: Text(
-              'تم حذف محادثتك مع $name لتجاوز عدد محاولات التحقق المسموحة (3/3).\n\n'
-              'لحماية خصوصيتك، تم حذف جميع الرسائل من جهازك.',
-              style: AppTextStyles.bodyMedium,
-            ),
-            actions: [
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context);
-                  _loadConversations(); // تحديث القائمة
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: Text(
-                  'حسناً',
-                  style: TextStyle(
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+          ),
+          content: Text(
+            'تم حذف محادثتك مع $name لتجاوز عدد محاولات التحقق المسموحة (3/3).\n\n'
+            'لحماية خصوصيتك، تم حذف جميع الرسائل من جهازك.',
+            style: AppTextStyles.bodyMedium,
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                _loadConversations(); // تحديث القائمة
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-            ],
-          ),
+              child: Text(
+                'حسناً',
+                style: TextStyle(
+                  fontFamily: 'IBMPlexSansArabic',
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
         ),
-      );
-    } catch (e) {
-      print('Error handling failed verification: $e');
-      _showMessage('حدث خطأ أثناء الحذف', false);
-    }
+      ),
+    );
+    
+  } catch (e) {
+    print('Error handling failed verification: $e');
+    _showMessage('حدث خطأ أثناء الحذف', false);
   }
+}
 
-  String _generateConversationId(String otherUserId) {
-    return _messagingService.getConversationId(otherUserId);
-  }
+String _generateConversationId(String otherUserId) {
+  return _messagingService.getConversationId(otherUserId);
+}
 
-  // Dialog للتنبيه عند عدم وجود بصمة مسجلة
+
+
+
+
+  // ✅ Dialog للتنبيه عند عدم وجود بصمة مسجلة
   void _showBiometricNotEnrolledDialog() {
     showDialog(
       context: context,
@@ -760,8 +778,8 @@ class _ChatListScreenState extends State<ChatListScreen>
           title: Row(
             children: [
               Icon(
-                Icons.fingerprint_outlined,
-                color: AppColors.primary,
+                Icons.fingerprint_outlined, 
+                color: AppColors.primary, 
                 size: 28,
               ),
               SizedBox(width: 12),
@@ -782,7 +800,10 @@ class _ChatListScreenState extends State<ChatListScreen>
               onPressed: () {
                 Navigator.pop(context);
               },
-              child: Text('إلغاء', style: TextStyle(color: Colors.grey)),
+              child: Text(
+                'إلغاء', 
+                style: TextStyle(color: Colors.grey),
+              ),
             ),
             ElevatedButton.icon(
               onPressed: () {
@@ -805,4 +826,6 @@ class _ChatListScreenState extends State<ChatListScreen>
       ),
     );
   }
+
+  
 }

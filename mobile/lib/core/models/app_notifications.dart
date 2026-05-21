@@ -19,6 +19,7 @@ class AppNotification {
   final bool isRead;
   final bool? actionTaken; // null = لم يتصرف | true = أنا | false = لم أفعل
 
+
   AppNotification({
     required this.id,
     required this.type,

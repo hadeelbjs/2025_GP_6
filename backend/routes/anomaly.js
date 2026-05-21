@@ -23,12 +23,6 @@ router.post('/check', authMiddleware, async (req, res) => {
         const { latitude, longitude, locationName, ssid } = req.body;
         const anomalies = [];
 
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log('Anomaly Check: طلب جديد');
-        console.log(`   → userId: ${userId}`);
-        console.log(`   → SSID: ${ssid}`);
-        console.log(`   → Location: ${latitude}, ${longitude} — ${locationName}`);
-
         const user = await User.findById(userId).select(
             'registrationLocation registrationWifi pendingFailedAttemptsAlert'
         );

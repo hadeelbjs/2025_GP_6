@@ -1,25 +1,34 @@
-//lib/features/dashboard/screens/main_dashboard.dart
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '/shared/widgets/header_widget.dart';
 import '/shared/widgets/bottom_nav_bar.dart';
 import '../../../core/constants/colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../services/api_services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../../../services/biometric_service.dart';
-import '../../../services/socket_service.dart';
 import '../../../services/messaging_service.dart';
 import '../../../services/wifi_security_service.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'notifications.dart';
-import '../services/notification_service.dart';
-import '../../../core/models/app_notifications.dart';
 import '../../../services/anomaly_detection_service.dart';
-import 'dart:convert';
+import '../../../core/models/app_notifications.dart';
 import '../../services_hub/services/api_contentScanning.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../services/notification_service.dart';
+import 'notifications.dart';
+
+class DashboardData {
+  final String todayTip;
+  final Map<String, dynamic>? passwordExp;
+  final Map<String, dynamic>? contentScanningStats;
+
+  const DashboardData({
+    required this.todayTip,
+    this.passwordExp,
+    this.contentScanningStats,
+  });
+}
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({Key? key}) : super(key: key);
@@ -28,112 +37,23 @@ class MainDashboard extends StatefulWidget {
   State<MainDashboard> createState() => _MainDashboardState();
 }
 
-class _MainDashboardState extends State<MainDashboard>
-    with WidgetsBindingObserver {
+class _MainDashboardState extends State<MainDashboard> with WidgetsBindingObserver {
   final _apiService = ApiService();
   final _apiContentScanning = ApiContentService();
-    final _wifiService = WifiSecurityService();
+  final _wifiService = WifiSecurityService();
   final _messagingService = MessagingService();
+  
   StreamSubscription<WifiSecurityStatus>? _wifiSubscription;
-
-  int _notificationCount = 0;
-  bool _hasCheckedWifiThisSession = false;
-  bool _userCanceledPermissionDenialAlert = false;
+  DashboardData? _dashboardData;
   String? _lastLoginTime;
-  String _todayTip = 'جاري تحميل نصيحة اليوم...';
-  bool _isLoadingTodayTip = false;
+  bool _isLoading = true;
+  bool _hasCheckedWifiThisSession = false;
 
   @override
   void initState() {
     super.initState();
-    _loadTodayTip();
     WidgetsBinding.instance.addObserver(this);
-    // للواي فاي تاخير بسيط
-    _loadNotificationCount();
-    _loadLastLoginTime();
-    _apiService.getPasswordExpDate();
-
-    
-   Future.delayed(const Duration(milliseconds: 500), () {
-      if (mounted && !_hasCheckedWifiThisSession) {
-        _checkWifiOnDashboardOpen();
-      }
-    });
-
-    Future.delayed(const Duration(milliseconds: 800), () {
-      if (mounted) {
-        _checkEmailBreach();
-      }
-    });
-
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) AnomalyDetectionService().runChecks();
-    });
-
-    // التأكد من الاتصال بالـ Socket عند فتح Dashboard
-    _ensureSocketConnection();
-    _wifiSubscription = _wifiService.onNetworkChanged.listen((status) {
-      if (mounted) {
-        if (status.shouldShowWarning) {
-          _showSecurityAlert(status);
-        } else {
-          _showSecureNetworkAlert(status);
-        }
-      }
-    });
-  }
-
-  Future<void> _loadTodayTip() async {
-    if (!mounted) return;
-
-    setState(() {
-      _isLoadingTodayTip = true;
-    });
-
-    try {
-      final result = await _apiService.getTodaySecurityTip();
-
-      if (!mounted) return;
-
-      if (result['success'] == true &&
-          result['tip'] != null &&
-          result['tip']['tip_ar'] != null) {
-        setState(() {
-          _todayTip = result['tip']['tip_ar'].toString();
-        });
-      } else {
-        setState(() {
-          _todayTip = 'لا توجد نصيحة متاحة حالياً.';
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _todayTip = 'تعذر تحميل نصيحة اليوم.';
-      });
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoadingTodayTip = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _checkEmailBreach() async {
-    try {
-      await NotificationService().checkEmailBreachAndNotify();
-
-      if (!mounted) return;
-
-      if (NotificationService().notifications.any(
-        (n) => n.type == NotificationType.breachAlert,
-      )) {
-        _showBreachAlert();
-      }
-    } catch (e) {
-      print('خطأ في فحص HIBP: $e');
-    }
+    _initializeDashboard();
   }
 
   @override
@@ -143,7 +63,6 @@ class _MainDashboardState extends State<MainDashboard>
     super.dispose();
   }
 
-  //  مراقبة lifecycle للتطبيق
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
@@ -151,95 +70,101 @@ class _MainDashboardState extends State<MainDashboard>
     }
   }
 
+  // --- Data Initialization & Orchestration ---
+  Future<void> _initializeDashboard() async {
+    if (!mounted) return;
+
+    setState(() => _isLoading = true);
+
+    final results = await Future.wait([
+      _apiService.getTodaySecurityTip().catchError((_) => {'success': false}),
+      _apiService.getPasswordExpDate().catchError((_) => {'success': false}),
+      _apiContentScanning.getAllStats().catchError((_) => <String, dynamic>{}),
+      _loadNotificationCount().catchError((_) => null),
+      _loadLastLoginTime().catchError((_) => null),
+    ]);
+
+    final tipRes = results[0] as Map<String, dynamic>;
+    final passRes = results[1] as Map<String, dynamic>;
+    final statsRes = results[2] as Map<String, dynamic>;
+
+    String tipText = 'لا توجد نصيحة متاحة حالياً.';
+    if (tipRes['success'] == true && tipRes['tip'] != null && tipRes['tip']['tip_ar'] != null) {
+      tipText = tipRes['tip']['tip_ar'].toString();
+    }
+
+    _dashboardData = DashboardData(
+      todayTip: tipText,
+      passwordExp: passRes['success'] != false ? passRes : null,
+      contentScanningStats: statsRes.isNotEmpty ? statsRes : null,
+    );
+
+    setState(() => _isLoading = false);
+    _runBackgroundSecurityChecks();
+  }
+
+  void _runBackgroundSecurityChecks() {
+    _ensureSocketConnection();
+    
+    Future.delayed(const Duration(milliseconds: 500), () {
+      if (mounted && !_hasCheckedWifiThisSession) _checkWifiOnDashboardOpen();
+    });
+
+    Future.delayed(const Duration(milliseconds: 800), () {
+      if (mounted) _checkEmailBreach();
+    });
+
+    Future.delayed(const Duration(seconds: 1), () {
+      if (mounted) AnomalyDetectionService().runChecks();
+    });
+
+    _wifiSubscription = _wifiService.onNetworkChanged.listen((status) {
+      if (!mounted) return;
+      status.shouldShowWarning ? _showSecurityAlert(status) : _showSecureNetworkAlert(status);
+    });
+  }
+
+  // --- Core Services Bindings ---
   Future<void> _ensureSocketConnection() async {
     try {
       if (!_messagingService.isConnected) {
         final success = await _messagingService.initialize();
-        if (success) {
-          // طلب الحالة لجميع جهات الاتصال بعد الاتصال
-          await _requestAllContactsStatus();
-        }
+        if (success) await _requestAllContactsStatus();
       } else {
-        // حتى لو كان متصل، نطلب الحالة عند العودة للتطبيق
         await _requestAllContactsStatus();
       }
     } catch (e) {
-      print(e);
+      debugPrint('Socket connection binding failed: $e');
     }
   }
 
-  // طلب الحالة لجميع جهات الاتصال
   Future<void> _requestAllContactsStatus() async {
     try {
-      // انتظر قليلاً للتأكد من اكتمال الاتصال
       await Future.delayed(const Duration(milliseconds: 500));
+      if (!_messagingService.isConnected) return;
 
-      if (!_messagingService.isConnected) {
-        return;
-      }
-
-      // جلب قائمة جهات الاتصال
       final result = await _apiService.getContactsList();
-
       if (result['success'] == true && result['contacts'] != null) {
-        final contacts = result['contacts'] as List;
-
-        // طلب الحالة لكل جهة اتصال
-        for (var contact in contacts) {
-          final contactId = contact['id']?.toString();
-          if (contactId != null) {
-            _messagingService.requestUserStatus(contactId);
-          }
+        for (var contact in (result['contacts'] as List)) {
+          final id = contact['id']?.toString();
+          if (id != null) _messagingService.requestUserStatus(id);
         }
       }
     } catch (e) {
-      print('❌ Error requesting contacts status: $e');
+      debugPrint('Error requesting contacts status: $e');
     }
-  }
-
-  Future<void> _initializeSocket() async {
-    try {
-      await SocketService().connect();
-      if (kDebugMode) {
-        print('Socket connected from Dashboard!');
-      }
-    } catch (e) {
-      if (kDebugMode) {
-        print('Socket connection failed in Dashboard: $e');
-      }
-    }
-  }
-
-  void _showMessage(String message, bool isSuccess) {
-    if (!mounted) return;
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          message,
-          style: const TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          textAlign: TextAlign.center,
-        ),
-        backgroundColor: isSuccess ? Colors.green : Colors.red,
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
-      ),
-    );
   }
 
   Future<void> _loadNotificationCount() async {
     try {
       final result = await _apiService.getPendingRequests();
-
       if (!mounted) return;
 
-      if (result['code'] == 'SESSION_EXPIRED' ||
-          result['code'] == 'TOKEN_EXPIRED' ||
-          result['code'] == 'NO_TOKEN') {
+      if (['SESSION_EXPIRED', 'TOKEN_EXPIRED', 'NO_TOKEN'].contains(result['code'])) {
         _handleSessionExpired();
         return;
       }
-      if (result['success'] && result['requests'] != null) {
+      if (result['success'] == true && result['requests'] != null) {
         for (var req in result['requests']) {
           NotificationService().addNotification(
             AppNotification(
@@ -252,149 +177,93 @@ class _MainDashboardState extends State<MainDashboard>
           );
         }
       }
-
-      if (result['success'] && mounted) {
-        setState(() {
-          _notificationCount = result['count'] ?? 0;
-        });
-      }
-    } catch (e) {
-      // Silent fail
-    }
+    } catch (_) {}
   }
 
   Future<void> _loadLastLoginTime() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final loginTimeStr = prefs.getString('last_login_time');
-
-      DateTime loginTime;
-      if (loginTimeStr != null) {
-        loginTime = DateTime.parse(loginTimeStr);
-      } else {
-        // إذا لم يكن هناك وقت محفوظ، نستخدم الوقت الحالي
-        loginTime = DateTime.now();
-      }
-
+      final loginTime = loginTimeStr != null ? DateTime.parse(loginTimeStr) : DateTime.now();
       final now = DateTime.now();
 
-      // التحقق إذا كان تسجيل الدخول اليوم
-      if (loginTime.year == now.year &&
-          loginTime.month == now.month &&
-          loginTime.day == now.day) {
-        // تنسيق الوقت
-        final hour = loginTime.hour;
-        final minute = loginTime.minute.toString().padLeft(2, '0');
-        final period = hour < 12 ? 'ص' : 'م';
-        final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-
-        setState(() {
-          _lastLoginTime =
-              'تم تسجيل دخول ناجح من جهازك اليوم الساعة $displayHour:$minute $period';
-        });
-      } else {
-        // إذا لم يكن اليوم، نعرض التاريخ
-        final day = loginTime.day;
-        final month = loginTime.month;
-        final hour = loginTime.hour;
-        final minute = loginTime.minute.toString().padLeft(2, '0');
-        final period = hour < 12 ? 'ص' : 'م';
-        final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
-
-        setState(() {
-          _lastLoginTime =
-              'تم تسجيل دخول ناجح من جهازك في $day/$month الساعة $displayHour:$minute $period';
-        });
-      }
-    } catch (e) {
-      final now = DateTime.now();
-      final hour = now.hour;
-      final minute = now.minute.toString().padLeft(2, '0');
+      final hour = loginTime.hour;
+      final minute = loginTime.minute.toString().padLeft(2, '0');
       final period = hour < 12 ? 'ص' : 'م';
       final displayHour = hour > 12 ? hour - 12 : (hour == 0 ? 12 : hour);
 
       setState(() {
-        _lastLoginTime =
-            'تم تسجيل دخول ناجح من جهازك اليوم الساعة $displayHour:$minute $period';
+        if (loginTime.year == now.year && loginTime.month == now.month && loginTime.day == now.day) {
+          _lastLoginTime = 'تم تسجيل دخول ناجح من جهازك اليوم الساعة $displayHour:$minute $period';
+        } else {
+          _lastLoginTime = 'تم تسجيل دخول ناجح من جهازك في ${loginTime.day}/${loginTime.month} الساعة $displayHour:$minute $period';
+        }
       });
+    } catch (_) {}
+  }
+
+  Future<void> _checkEmailBreach() async {
+    try {
+      await NotificationService().checkEmailBreachAndNotify();
+      if (mounted && NotificationService().notifications.any((n) => n.type == NotificationType.breachAlert)) {
+        _showBreachAlert();
+      }
+    } catch (e) {
+      debugPrint('Email breach background check failure: $e');
     }
   }
 
   void _handleSessionExpired() {
     if (!mounted) return;
-
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text(
-          'انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى',
-          style: TextStyle(fontFamily: 'IBMPlexSansArabic'),
-          textAlign: TextAlign.center,
-        ),
+        content: Text('انتهت صلاحية الجلسة، الرجاء تسجيل الدخول مرة أخرى', style: TextStyle(fontFamily: 'IBMPlexSansArabic')), 
         backgroundColor: Colors.red,
       ),
     );
-
-    Future.delayed(const Duration(seconds: 1), () {
-      if (mounted) {
-        Navigator.of(
-          context,
-        ).pushNamedAndRemoveUntil('/login', (route) => false);
-      }
-    });
+    Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
   }
 
-  /// فحص الشبكة عند فتح Dashboard - مرة واحدة فقط
   Future<void> _checkWifiOnDashboardOpen() async {
-    if (_hasCheckedWifiThisSession) {
-      return;
-    }
-
+    if (_hasCheckedWifiThisSession) return;
     _hasCheckedWifiThisSession = true;
 
     try {
       final result = await _wifiService.checkNetworkOnAppLaunch();
-
       if (!mounted) return;
 
       switch (result.type) {
         case WifiCheckResultType.needsPermission:
-          // أول مرة - نطلب الصلاحيات
           _showPermissionRequestDialog();
           break;
-
         case WifiCheckResultType.permissionDenied:
-          // الصلاحيات مرفوضة - نعرض dialog لفتح الإعدادات
           _showPermissionDeniedDialog();
           break;
-        case WifiCheckResultType.userDeclined:
-          break;
-
         case WifiCheckResultType.success:
-          // نجح الفحص - نعرض التحذير إذا لزم الأمر
-          if (result.status != null && result.status!.shouldShowWarning) {
-            _showSecurityAlert(result.status!);
-          } else {
-            _showSecureNetworkAlert(result.status!);
+          if (result.status != null) {
+            result.status!.shouldShowWarning ? _showSecurityAlert(result.status!) : _showSecureNetworkAlert(result.status!);
           }
           break;
-
-        case WifiCheckResultType.notConnected:
-          break;
-
-        case WifiCheckResultType.alreadyChecked:
-          break;
-
-        case WifiCheckResultType.error:
+        default:
           break;
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('WiFi check error: $e');
-      }
+      debugPrint('WiFi network inspection error: $e');
     }
   }
 
-  // Dialog لطلب الصلاحيات لأول مرة
+  void _showMessage(String message, bool isSuccess) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: const TextStyle(fontFamily: 'IBMPlexSansArabic'), textAlign: TextAlign.center),
+        backgroundColor: isSuccess ? Colors.green : Colors.red,
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  // --- UI Presentation Dialogs ---
   void _showPermissionRequestDialog() {
     showDialog(
       context: context,
@@ -403,70 +272,21 @@ class _MainDashboardState extends State<MainDashboard>
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: const [
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
               Icon(Icons.shield_outlined, color: Colors.white, size: 32),
               SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'فحص أمان الشبكات',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              Expanded(child: Text('فحص أمان الشبكات', style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', fontSize: 20, fontWeight: FontWeight.bold))),
             ],
           ),
-          content: const Text(
-            'للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.\n\nهذا الفحص يتم مرة واحدة فقط عند الاتصال بشبكة جديدة.',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
-          ),
+          content: const Text('للحفاظ على أمانك، نود فحص أمان شبكات WiFi التي تتصل بها.\n\nنحتاج صلاحية الموقع للوصول إلى معلومات الشبكة.', style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', fontSize: 14, height: 1.6)),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                _wifiService.markUserDeclinedPermanently();
-              },
-              child: const Text(
-                'ليس الآن',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontFamily: 'IBMPlexSansArabic',
-                ),
-              ),
-            ),
+            TextButton(onPressed: () { Navigator.pop(context); _wifiService.markUserDeclinedPermanently(); }, child: const Text('ليس الآن', style: TextStyle(color: Colors.white70, fontFamily: 'IBMPlexSansArabic'))),
             ElevatedButton(
               onPressed: () => _handlePermissionGranted(),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF2D1B69),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'منح الصلاحية',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF2D1B69), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              child: const Text('منح الصلاحية', style: TextStyle(fontFamily: 'IBMPlexSansArabic', fontWeight: FontWeight.bold)),
             ),
           ],
         ),
@@ -475,33 +295,20 @@ class _MainDashboardState extends State<MainDashboard>
   }
 
   Future<void> _handlePermissionGranted() async {
-    // إغلاق dialog الصلاحيات
     Navigator.pop(context);
-
-    // عرض Loading
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => Directionality(
+      builder: (context) => const Directionality(
         textDirection: TextDirection.rtl,
         child: AlertDialog(
-          backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
+          backgroundColor: Color(0xFF2D1B69),
           content: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const [
+            children: [
               CircularProgressIndicator(color: Colors.white),
               SizedBox(height: 20),
-              Text(
-                'جاري فحص الشبكة...',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontSize: 16,
-                ),
-              ),
+              Text('جاري فحص الشبكة...', style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', fontSize: 16)),
             ],
           ),
         ),
@@ -509,44 +316,18 @@ class _MainDashboardState extends State<MainDashboard>
     );
 
     final result = await _wifiService.requestPermissionsAndCheck();
-
-    // إغلاق Loading
-    if (mounted && Navigator.canPop(context)) {
-      Navigator.pop(context);
-    }
-
+    if (mounted && Navigator.canPop(context)) Navigator.pop(context);
     if (!mounted) return;
 
-    // عرض النتيجة
-    switch (result.type) {
-      case WifiCheckResultType.success:
-        if (result.status != null) {
-          if (result.status!.shouldShowWarning) {
-            _showSecurityAlert(result.status!);
-          } else {
-            _showSecureNetworkAlert(result.status!);
-          }
-        }
-        break;
-
-      case WifiCheckResultType.permissionDenied:
-        _showPermissionDeniedDialog();
-        break;
-
-      case WifiCheckResultType.notConnected:
-        _showMessage('غير متصل بشبكة WiFi', false);
-        break;
-
-      case WifiCheckResultType.error:
-        _showMessage('حدث خطأ أثناء الفحص', false);
-        break;
-
-      default:
-        break;
+    if (result.type == WifiCheckResultType.success && result.status != null) {
+      result.status!.shouldShowWarning ? _showSecurityAlert(result.status!) : _showSecureNetworkAlert(result.status!);
+    } else if (result.type == WifiCheckResultType.permissionDenied) {
+      _showPermissionDeniedDialog();
+    } else if (result.type == WifiCheckResultType.notConnected) {
+      _showMessage('غير متصل بشبكة WiFi', false);
     }
   }
 
-  /// Dialog عند رفض الصلاحيات
   void _showPermissionDeniedDialog() {
     showDialog(
       context: context,
@@ -555,75 +336,18 @@ class _MainDashboardState extends State<MainDashboard>
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
             children: [
-              const Icon(Icons.location_on, color: Colors.white, size: 32),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'تفعيل الموقع مطلوب',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
+              Icon(Icons.location_on, color: Colors.white, size: 32),
+              SizedBox(width: 10),
+              Expanded(child: Text('تفعيل الموقع مطلوب', style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', fontSize: 20, fontWeight: FontWeight.bold))),
             ],
           ),
-          content: const Text(
-            'لاستخدام ميزة فحص أمان الشبكات، يجب تفعيل الموقع.\n\nالذهاب إلى الإعدادات وتفعيل صلاحية الموقع للتطبيق.',
-            style: TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
-          ),
+          content: const Text('لاستخدام ميزة فحص أمان الشبكات، يجب تفعيل الموقع من إعدادات النظام.', style: TextStyle(color: Colors.white, fontFamily: 'IBMPlexSansArabic', fontSize: 14, height: 1.6)),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                // تسجيل أن المستخدم اختار "إلغاء" - لا نزعجه مرة أخرى
-                _wifiService.markUserDeclinedPermanently();
-              },
-              child: const Text(
-                'إلغاء',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontFamily: 'IBMPlexSansArabic',
-                ),
-              ),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                Navigator.pop(context);
-                await openAppSettings();
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: const Color(0xFF2D1B69),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'فتح الإعدادات',
-                style: TextStyle(
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
+            TextButton(onPressed: () { Navigator.pop(context); _wifiService.markUserDeclinedPermanently(); }, child: const Text('إلغاء', style: TextStyle(color: Colors.white70, fontFamily: 'IBMPlexSansArabic'))),
+            ElevatedButton(onPressed: () async { Navigator.pop(context); await openAppSettings(); }, child: const Text('فتح الإعدادات')),
           ],
         ),
       ),
@@ -631,15 +355,7 @@ class _MainDashboardState extends State<MainDashboard>
   }
 
   void _showSecurityAlert(WifiSecurityStatus status) {
-    NotificationService().addNotification(
-      AppNotification(
-        id: DateTime.now().toString(),
-        type: NotificationType.wifiWarning,
-        title: 'تحذير: شبكة غير آمنة',
-        message: 'أنت متصل بشبكة ${status.ssid}',
-        createdAt: DateTime.now(),
-      ),
-    );
+    NotificationService().addNotification(AppNotification(id: DateTime.now().toString(), type: NotificationType.wifiWarning, title: 'تحذير: شبكة غير آمنة', message: 'أنت متصل بشبكة ${status.ssid}', createdAt: DateTime.now()));
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -647,77 +363,31 @@ class _MainDashboardState extends State<MainDashboard>
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Icon(
-                Icons.warning_amber_rounded,
-                color: Colors.red.shade400,
-                size: 32,
-              ),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'تحذير أمني',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: SingleChildScrollView(
-            child: Text(
-              'شبكة "${status.ssid}" غير آمنة!\n\nنوع الحماية: ${status.securityType}\n\nالتوصيات:\n• استخدم VPN للحماية\n• تجنب إدخال معلومات حساسة\n• لا تدخل كلمات السر أو بيانات بنكية\n• اتصل بشبكة آمنة إن أمكن',
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'IBMPlexSansArabic',
-                fontSize: 14,
-                height: 1.6,
-              ),
-              textAlign: TextAlign.right,
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.1),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'حسناً، فهمت',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
+          title: Row(children: [Icon(Icons.warning_amber_rounded, color: Colors.red.shade400, size: 32), const SizedBox(width: 10), const Text('تحذير أمني', style: TextStyle(color: Colors.white))]),
+          content: Text('شبكة "${status.ssid}" غير آمنة!\n\nنوع الحماية: ${status.securityType}\n\nتجنب إدخال أي معلومات حساسة.', style: const TextStyle(color: Colors.white, height: 1.6)),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('فهمت'))],
+        ),
+      ),
+    );
+  }
+
+  void _showSecureNetworkAlert(WifiSecurityStatus status) {
+    showDialog(
+      context: context,
+      builder: (context) => Directionality(
+        textDirection: TextDirection.rtl,
+        child: AlertDialog(
+          backgroundColor: const Color(0xFF2D1B69),
+          title: Row(children: [Icon(Icons.verified_user, color: Colors.green.shade400, size: 32), const SizedBox(width: 10), const Text('شبكة آمنة', style: TextStyle(color: Colors.white))]),
+          content: Text('أنت متصل بشبكة "${status.ssid}" والمحمية بشكل آمن.', style: const TextStyle(color: Colors.white)),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('حسناً'))],
         ),
       ),
     );
   }
 
   void _showBreachAlert() {
-    final breachNotifications = NotificationService().notifications
-        .where((n) => n.type == NotificationType.breachAlert)
-        .toList();
-
-    final count = breachNotifications.length;
-
+    final count = NotificationService().notifications.where((n) => n.type == NotificationType.breachAlert).length;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -725,104 +395,81 @@ class _MainDashboardState extends State<MainDashboard>
         textDirection: TextDirection.rtl,
         child: AlertDialog(
           backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.security, color: Colors.red.shade400, size: 32),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'تنبيه أمني',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            'تم رصد بريدك الإلكتروني في $count تسريب جديد للبيانات.\n\nاضغط على الإشعار لمعرفة التفاصيل.',
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
-          ),
+          title: Row(children: [Icon(Icons.security, color: Colors.red.shade400, size: 32), const SizedBox(width: 10), const Text('تنبيه أمني', style: TextStyle(color: Colors.white))]),
+          content: Text('تم رصد بريدك الإلكتروني في $count تسريب جديد للبيانات.', style: const TextStyle(color: Colors.white)),
           actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => SimpleNotificationsPage(),
-                  ),
-                );
-              },
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.1),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'عرض الإشعارات',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text(
-                'لاحقاً',
-                style: TextStyle(
-                  color: Colors.white70,
-                  fontFamily: 'IBMPlexSansArabic',
-                ),
-              ),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('لاحقاً')),
+            ElevatedButton(onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (context) => SimpleNotificationsPage())); }, child: const Text('عرض الإشعارات')),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildBellButton() {
-    final w = MediaQuery.of(context).size.width;
+  // --- Build Framework ---
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
 
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        bottomNavigationBar: const BottomNavBar(currentIndex: 0),
+        backgroundColor: AppColors.background,
+        body: SafeArea(
+          child: Stack(
+            children: [
+              const HeaderWidget(title: '', showBackground: true, alignTitleRight: false),
+              Padding(
+                padding: EdgeInsets.only(top: size.height * 0.12, left: size.width * 0.06, right: size.width * 0.06),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(alignment: Alignment.topLeft, child: NotificationBellButton(onTap: () {
+                      Navigator.push(context, MaterialPageRoute(builder: (context) => SimpleNotificationsPage()));
+                    })),
+                    const SizedBox(height: 6),
+                    Expanded(
+                      child: _isLoading 
+                        ? const Center(child: CircularProgressIndicator()) 
+                        : DashboardContentView(
+                            data: _dashboardData!, 
+                            lastLoginTime: _lastLoginTime,
+                            onRefreshBreaches: () => setState(() {}),
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// =========================================================================
+// Componentized Sub-Widgets Section (Clean, Const, Isolated)
+// =========================================================================
+
+class NotificationBellButton extends StatelessWidget {
+  final VoidCallback onTap;
+  const NotificationBellButton({Key? key, required this.onTap}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final w = MediaQuery.of(context).size.width;
     return StreamBuilder<List<AppNotification>>(
       stream: NotificationService().notificationsStream,
       initialData: NotificationService().notifications,
       builder: (context, snapshot) {
-        final notifications = snapshot.data ?? [];
-        final unreadCount = notifications.where((n) => !n.isRead).length;
-
+        final unreadCount = (snapshot.data ?? []).where((n) => !n.isRead).length;
         return Material(
           color: Colors.transparent,
           child: InkWell(
             borderRadius: BorderRadius.circular(w * 0.03),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => SimpleNotificationsPage(),
-                ),
-              );
-            },
+            onTap: onTap,
             child: Container(
               padding: EdgeInsets.all(w * 0.022),
               decoration: BoxDecoration(
@@ -833,35 +480,17 @@ class _MainDashboardState extends State<MainDashboard>
               child: Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  Icon(
-                    Icons.notifications,
-                    color: AppColors.textPrimary,
-                    size: w * 0.066,
-                  ),
-
+                  Icon(Icons.notifications, color: AppColors.textPrimary, size: w * 0.066),
                   if (unreadCount > 0)
                     Positioned(
                       right: -4,
                       top: -4,
                       child: Container(
                         padding: const EdgeInsets.all(5),
-                        decoration: const BoxDecoration(
-                          color: Colors.red,
-                          shape: BoxShape.circle,
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 18,
-                          minHeight: 18,
-                        ),
+                        decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                        constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
                         child: Center(
-                          child: Text(
-                            unreadCount > 99 ? '99+' : '$unreadCount',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                          child: Text(unreadCount > 99 ? '99+' : '$unreadCount', style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
                         ),
                       ),
                     ),
@@ -873,854 +502,115 @@ class _MainDashboardState extends State<MainDashboard>
       },
     );
   }
+}
 
-  void _showSecureNetworkAlert(WifiSecurityStatus status) {
-    showDialog(
-      context: context,
-      barrierDismissible: true,
-      builder: (context) => Directionality(
-        textDirection: TextDirection.rtl,
-        child: AlertDialog(
-          backgroundColor: const Color(0xFF2D1B69),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          title: Row(
-            children: [
-              Icon(Icons.verified_user, color: Colors.green.shade400, size: 32),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'شبكة آمنة',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontFamily: 'IBMPlexSansArabic',
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          content: Text(
-            'أنت متصل بشبكة "${status.ssid}"\n\n الشبكة آمنة ومحمية',
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'IBMPlexSansArabic',
-              fontSize: 14,
-              height: 1.6,
-            ),
-            textAlign: TextAlign.right,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.white.withOpacity(0.1),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
-              ),
-              child: const Text(
-                'حسناً',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'IBMPlexSansArabic',
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+class DashboardContentView extends StatelessWidget {
+  final DashboardData data;
+  final String? lastLoginTime;
+  final VoidCallback onRefreshBreaches;
+
+  const DashboardContentView({
+    Key? key, 
+    required this.data, 
+    this.lastLoginTime,
+    required this.onRefreshBreaches,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final height = size.height;
-    final width = size.width;
-
-    return Directionality(
-      textDirection: TextDirection.rtl,
-      child: Scaffold(
-        bottomNavigationBar: BottomNavBar(currentIndex: 0),
-        backgroundColor: AppColors.background,
-        body: SafeArea(
-          child: Stack(
-            children: [
-              const HeaderWidget(
-                title: '',
-                showBackground: true,
-                alignTitleRight: false,
-              ),
-
-              Padding(
-                padding: EdgeInsets.only(
-                  top: height * 0.12,
-                  left: width * 0.06,
-                  right: width * 0.06,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Align(
-                      alignment: Alignment.topLeft,
-                      child: _buildBellButton(),
-                    ),
-
-            const SizedBox(height: 6),
-            Expanded (
-            child: _buildUserDashboard(size, width)),
-
-            
-          ],
-        ),
-      ),
-    ],
-  ),
-),
-    ));
-  }
-
-Widget _buildUserDashboard(Size size, double width) {
-  return Directionality(
-    textDirection: TextDirection.rtl,
-    child: SingleChildScrollView(
+    final width = MediaQuery.of(context).size.width;
+    return SingleChildScrollView(
+      physics: const BouncingScrollPhysics(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildTitle('مرحبًا بك', width * 0.085, context),
+          Text('مرحبًا بك', style: AppTextStyles.h1.copyWith(fontSize: width * 0.085)),
           const SizedBox(height: 10),
-          _buildTipHeader(context),
-          const SizedBox(height: 8),
-          _buildTipText(context),
-          const SizedBox(height: 12),
-          _buildTitle('لوحة المعلومات', width * 0.05, context),
-          const SizedBox(height: 8),
-          _buildPasswordLine(),
-          const SizedBox(height: 8),
-          _buildContentScanningStats(),
-          const SizedBox(height: 8),
-          _buildBreachStats(),
-          const SizedBox(height: 16),
-
-        ],
-      ),
-    ),
-  );
-}
-
-Future<Map<String, dynamic>> getPassExp() async {
-  Map<String, dynamic> result = await _apiService.getPasswordExpDate();
-  return result;
-}
-
-Widget _buildPasswordLine() {
-  return FutureBuilder<Map<String, dynamic>>(
-    future: getPassExp(),
-    builder: (context, snapshot) {
-      final width = MediaQuery.of(context).size.width;
-
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      if (snapshot.hasError || snapshot.data?['success'] == false) {
-        return const SizedBox();
-      }
-
-      final data = snapshot.data!;
-      final daysTillExp = data['daysTillExp'] as int;
-      final expDate = DateTime.parse(data['expDate']);
-      final formattedDate =
-          '${expDate.day.toString().padLeft(2, '0')}/${expDate.month.toString().padLeft(2, '0')}/${expDate.year}';
-
-      final Color expColor = daysTillExp <= 14
-          ? const Color(0xFFC62828)
-          : daysTillExp <= 30
-              ? const Color(0xFFE65100)
-              : const Color(0xFF2E7D32);
-
-      final IconData expIcon = daysTillExp <= 14
-          ? Icons.warning
-          : daysTillExp <= 30
-              ? Icons.info
-              : Icons.check_circle;
-
-      return Container(
-        padding: EdgeInsets.all(width * 0.04),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(width * 0.04),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: width * 0.01,
-              height: width * 0.12,
-              decoration: BoxDecoration(
-                color: expColor,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            SizedBox(width: width * 0.03),
-            Icon(expIcon, color: expColor, size: width * 0.055),
-            SizedBox(width: width * 0.03),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'صلاحية كلمة المرور',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontSize: width * 0.035,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  SizedBox(height: width * 0.01),
-                  Text(
-                    'تنتهي خلال $daysTillExp يوم — $formattedDate',
-                    style: AppTextStyles.bodyMedium.copyWith(
-                      fontSize: width * 0.033,
-                      color: expColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-
-Widget _buildContentScanningStats() {
-  return FutureBuilder<Map<String, dynamic>>(
-    future: _apiContentScanning.getAllStats(),
-    builder: (context, snapshot) {
-      final width = MediaQuery.of(context).size.width;
-
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      if (snapshot.hasError || snapshot.data == null) {
-        return const SizedBox();
-      }
-
-      final data = snapshot.data!;
-      final linkStats  = data['linkStats']  as Map<String, dynamic>? ?? {};
-      final fileStats  = data['fileStats']  as Map<String, dynamic>? ?? {};
-      final imageStats = data['imageStats'] as Map<String, dynamic>? ?? {};
-
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _buildTitle('إحصائيات الفحص', width * 0.05, context),
-          const SizedBox(height: 8),
           Row(
             children: [
-              Expanded(child: _buildStatCard('الروابط', linkStats, Icons.link, width)),
-              SizedBox(width: width * 0.03),
-              Expanded(child: _buildStatCard('الملفات', fileStats, Icons.folder, width)),
-              SizedBox(width: width * 0.03),
-              Expanded(child: _buildStatCard(
-  'الصور', 
-  imageStats, 
-  Icons.image, 
-  width,
-  safeLabel: 'غير حساسة',
-  vulnerableLabel: 'حساسة',
-)),
-
+              Icon(Icons.lightbulb_outline, color: const Color(0xFFFFD54F), size: width * 0.055),
+              const SizedBox(width: 8),
+              Text('نصيحة اليوم', style: AppTextStyles.h3.copyWith(fontSize: width * 0.05)),
             ],
           ),
+          const SizedBox(height: 8),
+          SecurityTipCard(tipText: data.todayTip),
+          const SizedBox(height: 12),
+          Text('لوحة المعلومات', style: AppTextStyles.h1.copyWith(fontSize: width * 0.05)),
+          const SizedBox(height: 8),
+          if (data.passwordExp != null) PasswordExpirationCard(data: data.passwordExp!),
+          const SizedBox(height: 8),
+          if (data.contentScanningStats != null) ContentScanningSection(stats: data.contentScanningStats!),
+          const SizedBox(height: 8),
+          DataBreachSection(onRefresh: onRefreshBreaches),
+          const SizedBox(height: 16),
         ],
-      );
-    },
-  );
-}
-
-Widget _buildStatCard(String title, Map<String, dynamic> stats, IconData icon, double width, {String safeLabel = 'آمن', String vulnerableLabel = 'خطر'}) {
-  final total      = stats['total']      ?? 0;
-  final safe       = stats['safe']       ?? 0;
-  final vulnerable = stats['vulnerable'] ?? 0;
-
-  return Container(
-    padding: EdgeInsets.all(width * 0.035),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(width * 0.04),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.05),
-          blurRadius: 15,
-          offset: const Offset(0, 3),
-        ),
-      ],
-    ),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, color: AppColors.secondary, size: width * 0.055),
-        SizedBox(height: width * 0.02),
-        Text(title,
-          style: AppTextStyles.bodyMedium.copyWith(
-            fontSize: width * 0.035,
-            fontWeight: FontWeight.bold,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        SizedBox(height: width * 0.02),
-        _buildStatRow('الكل', total, Colors.grey, Icons.circle_outlined, width),
-        _buildStatRow(safeLabel, safe, const Color(0xFF2E7D32), Icons.check_circle, width),
-        _buildStatRow(vulnerableLabel, vulnerable, const Color(0xFFC62828), Icons.warning, width),
-
-      ],
-    ),
-  );
-}
-
-Widget _buildStatRow(String label, int value, Color color, IconData icon, double width) {
-  return Padding(
-    padding: EdgeInsets.only(bottom: width * 0.01),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: color, size: width * 0.03),
-            SizedBox(width: width * 0.01),
-            Text(label,
-              style: TextStyle(
-                fontSize: width * 0.03,
-                color: AppColors.textPrimary.withOpacity(0.7),
-                fontFamily: 'IBMPlexSansArabic',
-              ),
-            ),
-          ],
-        ),
-        Text('$value',
-          style: TextStyle(
-            fontSize: width * 0.03,
-            color: color,
-            fontWeight: FontWeight.bold,
-            fontFamily: 'IBMPlexSansArabic',
-          ),
-        ),
-      ],
-    ),
-  );
-}
-Widget _buildBreachStats() {
-  final width = MediaQuery.of(context).size.width;
-
-  return FutureBuilder<List<Map<String, dynamic>>>(
-    future: NotificationService().getAllBreaches(),
-    builder: (context, snapshot) {
-      if (snapshot.connectionState == ConnectionState.waiting) {
-        return const Center(child: CircularProgressIndicator());
-      }
-
-      final breaches = snapshot.data ?? [];
-
-      return FutureBuilder<Set<String>>(
-        future: NotificationService().getFixedBreaches(),
-        builder: (context, fixedSnapshot) {
-          final fixedBreaches = fixedSnapshot.data ?? {};
-          final activeBreaches = breaches
-              .where((b) => !fixedBreaches.contains(b['name']))
-              .toList();
-          final latestBreach = activeBreaches.isNotEmpty ? activeBreaches.first : null;
-
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTitle('تسريبات البيانات', width * 0.05, context),
-              const SizedBox(height: 8),
-
-              // كرت العدد
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(width * 0.04),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(width * 0.04),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
-                      blurRadius: 15,
-                      offset: const Offset(0, 3),
-                    ),
-                  ],
-                ),
-                child: activeBreaches.isEmpty
-                    ? Row(
-                        children: [
-                          Icon(Icons.check_circle,
-                              color: const Color(0xFF2E7D32),
-                              size: width * 0.055),
-                          SizedBox(width: width * 0.03),
-                          Text(
-                            'لا توجد تسريبات نشطة',
-                            style: AppTextStyles.bodyMedium.copyWith(
-                              fontSize: width * 0.035,
-                              color: const Color(0xFF2E7D32),
-                            ),
-                          ),
-                        ],
-                      )
-                    : Row(
-                        children: [
-                          Icon(Icons.warning,
-                              color: const Color(0xFFC62828),
-                              size: width * 0.055),
-                          SizedBox(width: width * 0.03),
-                          Expanded(
-                            child: Text(
-                              'عدد التسريبات المرتبطة ببريدك: ${activeBreaches.length}',
-                              style: AppTextStyles.bodyMedium.copyWith(
-                                fontSize: width * 0.035,
-                                color: AppColors.textPrimary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-              ),
-
-              // أحدث تسريب
-              if (latestBreach != null) ...[
-                const SizedBox(height: 8),
-                _buildTitle('أحدث التسريبات', width * 0.045, context),
-                const SizedBox(height: 8),
-                _buildBreachCard(latestBreach, fixedBreaches, width),
-              ],
-
-              // زر عرض الكل
-              if (activeBreaches.length > 1) ...[
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () => _showAllBreaches(breaches, fixedBreaches, width),
-                  child: Center(
-                    child: Text(
-                      '+ عرض ${activeBreaches.length - 1} تسريب آخر',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: width * 0.035,
-                        color: AppColors.accent,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
-          );
-        },
-      );
-    },
-  );
-}
-Widget _buildBreachCard(
-    Map<String, dynamic> breach, Set<String> fixedBreaches, double width) {
-  final isFixed = fixedBreaches.contains(breach['name']);
-  final dataClasses = (breach['dataClasses'] as List).cast<String>();
-  final hasPassword = breach['hasPassword'] as bool;
-
-  return StatefulBuilder(
-    builder: (context, setState) {
-      return Container(
-        padding: EdgeInsets.all(width * 0.04),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(width * 0.04),
-          border: Border.all(
-            color: isFixed
-                ? const Color(0xFF2E7D32).withOpacity(0.3)
-                : AppColors.primary.withOpacity(0.15),
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 15,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // العنوان والتاريخ
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Row(
-                  children: [
-                    Container(
-                      padding: EdgeInsets.all(width * 0.02),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(width * 0.02),
-                      ),
-                      child: Icon(Icons.language,
-                          color: AppColors.primary, size: width * 0.045),
-                    ),
-                    SizedBox(width: width * 0.02),
-                    Text(
-                      breach['title'] as String,
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: width * 0.04,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ],
-                ),
-                Text(
-                  breach['breachDate'] as String,
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: width * 0.028,
-                    color: AppColors.textHint,
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: width * 0.025),
-
-            // البيانات المسربة
-            Text(
-              'تسريب بيانات يشمل: ${dataClasses.take(3).join('، ')}${dataClasses.length > 3 ? '...' : ''}',
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontSize: width * 0.033,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            SizedBox(height: width * 0.03),
-
-            // الإجراء المطلوب
-            if (hasPassword && !isFixed)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(width * 0.03),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFFFEBEE),
-                  borderRadius: BorderRadius.circular(width * 0.03),
-                  border: Border.all(
-                    color: const Color(0xFFC62828).withOpacity(0.2),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(Icons.warning,
-                            color: const Color(0xFFC62828),
-                            size: width * 0.04),
-                        SizedBox(width: width * 0.02),
-                        Text(
-                          'الإجراء المطلوب',
-                          style: AppTextStyles.bodyMedium.copyWith(
-                            fontSize: width * 0.033,
-                            fontWeight: FontWeight.bold,
-                            color: const Color(0xFFC62828),
-                          ),
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: width * 0.015),
-                    Text(
-                      'غيّر كلمة مرور ${breach['title']} فوراً، وفعّل المصادقة الثنائية، وتحقق من الجلسات النشطة.',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: width * 0.032,
-                        color: const Color(0xFFC62828),
-                        height: 1.5,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            if (isFixed)
-              Container(
-                width: double.infinity,
-                padding: EdgeInsets.all(width * 0.03),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(width * 0.03),
-                ),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle,
-                        color: const Color(0xFF2E7D32), size: width * 0.04),
-                    SizedBox(width: width * 0.02),
-                    Text(
-                      'تم الإصلاح',
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        fontSize: width * 0.033,
-                        color: const Color(0xFF2E7D32),
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-            SizedBox(height: width * 0.03),
-
-            // أزرار
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                // زر تم الإصلاح
-                GestureDetector(
-                  onTap: () async {
-                    if (isFixed) {
-                      await NotificationService()
-                          .unmarkBreachAsFixed(breach['name'] as String);
-                    } else {
-                      await NotificationService()
-                          .markBreachAsFixed(breach['name'] as String);
-                    }
-                    setState(() {});
-                    if (mounted) this.setState(() {});
-                  },
-                  child: Container(
-                    padding: EdgeInsets.symmetric(
-                      horizontal: width * 0.04,
-                      vertical: width * 0.022,
-                    ),
-                    decoration: BoxDecoration(
-                      color: isFixed
-                          ? const Color(0xFF2E7D32)
-                          : AppColors.primary,
-                      borderRadius: BorderRadius.circular(width * 0.025),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isFixed ? Icons.check_circle : Icons.shield,
-                          color: Colors.white,
-                          size: width * 0.04,
-                        ),
-                        SizedBox(width: width * 0.015),
-                        Text(
-                          isFixed ? 'تم الإصلاح ✓' : 'علّم كمُصلح',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: width * 0.032,
-                            fontFamily: 'IBMPlexSansArabic',
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-
-                // زر زيارة الموقع
-                if (breach['domain'] != null &&
-                    (breach['domain'] as String).isNotEmpty)
-                  GestureDetector(
-                    onTap: () async {
-                      final url = 'https://${breach['domain']}';
-                      if (await canLaunchUrl(Uri.parse(url))) {
-                        await launchUrl(Uri.parse(url),
-                            mode: LaunchMode.externalApplication);
-                      }
-                    },
-                    child: Row(
-                      children: [
-                        Icon(Icons.open_in_new,
-                            color: AppColors.accent, size: width * 0.04),
-                        SizedBox(width: width * 0.01),
-                        Text(
-                          'زيارة الموقع',
-                          style: TextStyle(
-                            color: AppColors.accent,
-                            fontSize: width * 0.032,
-                            fontFamily: 'IBMPlexSansArabic',
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      );
-    },
-  );
-}
-
-void _showAllBreaches(List<Map<String, dynamic>> breaches,
-    Set<String> fixedBreaches, double width) {
-  showModalBottomSheet(
-    context: context,
-    backgroundColor: Colors.transparent,
-    isScrollControlled: true,
-    builder: (context) => DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.95,
-      minChildSize: 0.4,
-      builder: (_, controller) => Container(
-        decoration: const BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'جميع التسريبات',
-              style: AppTextStyles.h3.copyWith(color: AppColors.textPrimary),
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: ListView.separated(
-                controller: controller,
-                padding: EdgeInsets.symmetric(horizontal: width * 0.05),
-                itemCount: breaches.length,
-                separatorBuilder: (_, __) => const SizedBox(height: 8),
-                itemBuilder: (_, i) =>
-                    _buildBreachCard(breaches[i], fixedBreaches, width),
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
-}
-
-
-
-  Widget _buildTitle(String text, double size, BuildContext context) {
-    return Text(
-      text,
-      textAlign: TextAlign.right,
-      style: AppTextStyles.h1.copyWith(
-        fontSize: size,
       ),
     );
   }
+}
 
-  Widget _buildInfoCard(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-    final width = size.width;
+class SecurityTipCard extends StatelessWidget {
+  final String tipText;
+  const SecurityTipCard({Key? key, required this.tipText}) : super(key: key);
 
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
     return Container(
-      padding: EdgeInsets.all(width * 0.055),
-      constraints: BoxConstraints(
-        minHeight: size.height * 0.05,
+      padding: EdgeInsets.all(width * 0.04),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(width * 0.04),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 3))],
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.info_outline,
-            color: const Color(0xFFFFB74D),
-            size: width * 0.06,
-          ),
-          SizedBox(width: width * 0.035),
-          Expanded(
-            child: Text(
-              _lastLoginTime ?? '',
-              textAlign: TextAlign.right,
-              style: AppTextStyles.bodyLarge.copyWith(
-                fontSize: width * 0.039,
-                color: AppColors.textPrimary.withOpacity(0.75),
-              ),
-            ),
-          ),
+          Container(width: width * 0.01, height: width * 0.088, decoration: BoxDecoration(color: const Color(0xFFFFD54F), borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 12),
+          Expanded(child: Text(tipText, style: AppTextStyles.bodyMedium.copyWith(fontSize: width * 0.0375, color: AppColors.textPrimary.withOpacity(0.75)))),
         ],
       ),
     );
   }
+}
 
-  Widget _buildTipHeader(BuildContext context) {
+class PasswordExpirationCard extends StatelessWidget {
+  final Map<String, dynamic> data;
+  const PasswordExpirationCard({Key? key, required this.data}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
+    final daysTillExp = data['daysTillExp'] as int? ?? 0;
+    final expDateStr = data['expDate'] as String?;
+    final expDate = expDateStr != null ? DateTime.parse(expDateStr) : DateTime.now();
+    final formattedDate = '${expDate.day.toString().padLeft(2, '0')}/${expDate.month.toString().padLeft(2, '0')}/${expDate.year}';
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          Icons.lightbulb_outline,
-          color: const Color(0xFFFFD54F),
-          size: width * 0.055,
-        ),
-        SizedBox(width: width * 0.02),
-        Text(
-          'نصيحة اليوم',
-          style: AppTextStyles.h3.copyWith(fontSize: width * 0.05),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTipText(BuildContext context) {
-    final width = MediaQuery.of(context).size.width;
+    final Color expColor = daysTillExp <= 14 ? const Color(0xFFC62828) : daysTillExp <= 30 ? const Color(0xFFE65100) : const Color(0xFF2E7D32);
+    final IconData expIcon = daysTillExp <= 14 ? Icons.warning : daysTillExp <= 30 ? Icons.info : Icons.check_circle;
 
     return Container(
       padding: EdgeInsets.all(width * 0.04),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(width * 0.04),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 15,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 3))],
       ),
       child: Row(
         children: [
-          Container(
-            width: width * 0.01,
-            height: width * 0.088,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFD54F),
-              borderRadius: BorderRadius.circular(2),
-            ),
-          ),
-          SizedBox(width: width * 0.03),
+          Container(width: width * 0.01, height: width * 0.12, decoration: BoxDecoration(color: expColor, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 12),
+          Icon(expIcon, color: expColor, size: width * 0.055),
+          const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              _isLoadingTodayTip ? 'جاري تحميل نصيحة اليوم...' : _todayTip,
-              textAlign: TextAlign.right,
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontSize: width * 0.0375,
-                color: AppColors.textPrimary.withOpacity(0.75),
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('صلاحية كلمة المرور', style: AppTextStyles.bodyMedium.copyWith(fontSize: width * 0.035, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+                const SizedBox(height: 4),
+                Text('تنتهي خلال $daysTillExp يوم — $formattedDate', style: AppTextStyles.bodyMedium.copyWith(fontSize: width * 0.033, color: expColor)),
+              ],
             ),
           ),
         ],
@@ -1729,50 +619,263 @@ void _showAllBreaches(List<Map<String, dynamic>> breaches,
   }
 }
 
-class _Bell extends StatelessWidget {
-  const _Bell();
+class ContentScanningSection extends StatelessWidget {
+  final Map<String, dynamic> stats;
+  const ContentScanningSection({Key? key, required this.stats}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
+    final width = MediaQuery.of(context).size.width;
+    final linkStats = stats['linkStats'] as Map<String, dynamic>? ?? {};
+    final fileStats = stats['fileStats'] as Map<String, dynamic>? ?? {};
+    final imageStats = stats['imageStats'] as Map<String, dynamic>? ?? {};
 
-    return Transform.translate(
-      offset: const Offset(0, -20),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Container(
-            padding: EdgeInsets.all(w * 0.022),
-            decoration: BoxDecoration(
-              color: AppColors.secondary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(w * 0.03),
-              border: Border.all(color: AppColors.secondary.withOpacity(0.2)),
-            ),
-            child: Icon(
-              Icons.notifications,
-              color: AppColors.textPrimary,
-              size: w * 0.066,
-            ),
-          ),
-          const Positioned(top: -5, right: -3, child: _RedDot()),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('إحصائيات الفحص', style: AppTextStyles.h3.copyWith(fontSize: width * 0.05)),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(child: StatCard(title: 'الروابط', stats: linkStats, icon: Icons.link)),
+            SizedBox(width: width * 0.03),
+            Expanded(child: StatCard(title: 'الملفات', stats: fileStats, icon: Icons.folder)),
+            SizedBox(width: width * 0.03),
+            Expanded(child: StatCard(title: 'الصور', stats: imageStats, icon: Icons.image, safeLabel: 'غير حساسة', vulnerableLabel: 'حساسة')),
+          ],
+        ),
+      ],
     );
   }
 }
 
-class _RedDot extends StatelessWidget {
-  const _RedDot();
+class StatCard extends StatelessWidget {
+  final String title;
+  final Map<String, dynamic> stats;
+  final IconData icon;
+  final String safeLabel;
+  final String vulnerableLabel;
+
+  const StatCard({
+    Key? key,
+    required this.title,
+    required this.stats,
+    required this.icon,
+    this.safeLabel = 'آمن',
+    this.vulnerableLabel = 'خطر',
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.of(context).size.width;
+    final width = MediaQuery.of(context).size.width;
+    final total = stats['total'] ?? 0;
+    final safe = stats['safe'] ?? 0;
+    final vulnerable = stats['vulnerable'] ?? 0;
+
     return Container(
-      width: w * 0.038,
-      height: w * 0.038,
-      decoration: const BoxDecoration(
-        color: Color(0xFFE53935),
-        shape: BoxShape.circle,
+      padding: EdgeInsets.all(width * 0.035),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(width * 0.04),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: AppColors.secondary, size: width * 0.055),
+          SizedBox(height: width * 0.02),
+          Text(title, style: AppTextStyles.bodyMedium.copyWith(fontSize: width * 0.035, fontWeight: FontWeight.bold, color: AppColors.textPrimary)),
+          SizedBox(height: width * 0.02),
+          StatRow(label: 'الكل', value: total, color: Colors.grey, icon: Icons.circle_outlined),
+          StatRow(label: safeLabel, value: safe, color: const Color(0xFF2E7D32), icon: Icons.check_circle),
+          StatRow(label: vulnerableLabel, value: vulnerable, color: const Color(0xFFC62828), icon: Icons.warning),
+        ],
+      ),
+    );
+  }
+}
+
+class StatRow extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+  final IconData icon;
+
+  const StatRow({
+    Key? key,
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.icon,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return Padding(
+      padding: EdgeInsets.only(bottom: width * 0.01),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: color, size: width * 0.03),
+              const SizedBox(width: 4),
+              Text(label, style: TextStyle(fontSize: width * 0.03, color: AppColors.textPrimary.withOpacity(0.7), fontFamily: 'IBMPlexSansArabic')),
+            ],
+          ),
+          Text('$value', style: TextStyle(fontSize: width * 0.03, color: color, fontWeight: FontWeight.bold, fontFamily: 'IBMPlexSansArabic')),
+        ],
+      ),
+    );
+  }
+}
+
+class DataBreachSection extends StatelessWidget {
+  final VoidCallback onRefresh;
+  const DataBreachSection({Key? key, required this.onRefresh}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: NotificationService().getAllBreaches(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final breaches = snapshot.data ?? [];
+
+        return FutureBuilder<Set<String>>(
+          future: NotificationService().getFixedBreaches(),
+          builder: (context, fixedSnapshot) {
+            final fixedBreaches = fixedSnapshot.data ?? {};
+            final activeBreaches = breaches.where((b) => !fixedBreaches.contains(b['name'])).toList();
+            final latestBreach = activeBreaches.isNotEmpty ? activeBreaches.first : null;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('تسريبات البيانات', style: AppTextStyles.h3.copyWith(fontSize: width * 0.05)),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: EdgeInsets.all(width * 0.04),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(width * 0.04),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 3))],
+                  ),
+                  child: activeBreaches.isEmpty
+                      ? Row(
+                          children: [
+                            const Icon(Icons.check_circle, color: Color(0xFF2E7D32), size: 22),
+                            const SizedBox(width: 10),
+                            Text('لا توجد تسريبات نشطة', style: AppTextStyles.bodyMedium.copyWith(color: const Color(0xFF2E7D32))),
+                          ],
+                        )
+                      : Row(
+                          children: [
+                            const Icon(Icons.warning, color: Color(0xFFC62828), size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(child: Text('عدد التسريبات المرتبطة ببريدك: ${activeBreaches.length}', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold))),
+                          ],
+                        ),
+                ),
+                if (latestBreach != null) ...[
+                  const SizedBox(height: 8),
+                  Text('أحدث التسريبات', style: AppTextStyles.h3.copyWith(fontSize: width * 0.045)),
+                  const SizedBox(height: 8),
+                  BreachCard(breach: latestBreach, fixedBreaches: fixedBreaches, onUpdate: onRefresh),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+}
+
+class BreachCard extends StatelessWidget {
+  final Map<String, dynamic> breach;
+  final Set<String> fixedBreaches;
+  final VoidCallback onUpdate;
+
+  const BreachCard({
+    Key? key,
+    required this.breach,
+    required this.fixedBreaches,
+    required this.onUpdate,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final isFixed = fixedBreaches.contains(breach['name']);
+    final dataClasses = List<String>.from(breach['dataClasses'] ?? []);
+    final hasPassword = breach['hasPassword'] as bool? ?? false;
+
+    return Container(
+      padding: EdgeInsets.all(width * 0.04),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(width * 0.04),
+        border: Border.all(color: isFixed ? const Color(0xFF2E7D32).withOpacity(0.3) : AppColors.primary.withOpacity(0.15)),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 3))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.language, color: AppColors.primary, size: width * 0.05),
+                  const SizedBox(width: 8),
+                  Text(breach['title'] as String? ?? 'تسريب غير معروف', style: AppTextStyles.bodyMedium.copyWith(fontWeight: FontWeight.bold)),
+                ],
+              ),
+              Text(breach['breachDate'] as String? ?? '', style: AppTextStyles.bodyMedium.copyWith(fontSize: width * 0.03, color: AppColors.textHint)),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('يشمل: ${dataClasses.take(3).join('، ')}', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary)),
+          const SizedBox(height: 10),
+          if (hasPassword && !isFixed)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: const Color(0xFFFFEBEE), borderRadius: BorderRadius.circular(8)),
+              child: const Text('⚠️ يرجى تغيير كلمة المرور فوراً وتفعيل التحقق الثنائي.', style: TextStyle(color: Color(0xFFC62828), fontSize: 12)),
+            ),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () async {
+                  final name = breach['name'] as String;
+                  isFixed ? await NotificationService().unmarkBreachAsFixed(name) : await NotificationService().markBreachAsFixed(name);
+                  onUpdate();
+                },
+                icon: Icon(isFixed ? Icons.check_circle : Icons.shield, size: 16),
+                label: Text(isFixed ? 'تم الإصلاح ✓' : 'علم كمصلح'),
+                style: ElevatedButton.styleFrom(backgroundColor: isFixed ? const Color(0xFF2E7D32) : AppColors.primary, foregroundColor: Colors.white),
+              ),
+              if (breach['domain'] != null && (breach['domain'] as String).isNotEmpty)
+                TextButton.icon(
+                  onPressed: () async {
+                    final uri = Uri.parse('https://${breach['domain']}');
+                    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  },
+                  icon: const Icon(Icons.open_in_new, size: 16),
+                  label: const Text('زيارة الموقع'),
+                ),
+            ],
+          ),
+        ],
       ),
     );
   }

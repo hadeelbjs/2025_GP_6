@@ -68,6 +68,7 @@ Waseed is a comprehensive, user-friendly cybersecurity platform specifically des
 - Install and open Android Studio
 - Launch an Android device emulator
 
+
 #### 2. Run the application
 
 1. **Navigate to the mobile folder**
@@ -91,6 +92,27 @@ Waseed is a comprehensive, user-friendly cybersecurity platform specifically des
    ```bash
    flutter run
    ```
+
+### Modal AI Infrastructure setup
+
+
+#### 1. Navigate to the image-model folder
+
+ ```cd image-model
+   ```
+
+#### 2. Install all required dependincies
+
+ ```pip install easyocr opencv-python pyzbar transformers torch ultralytics fastapi python-multipart uvicorn pyngrok modal
+   ```
+
+
+#### 3. Deploy the modal
+
+ ```modal deploy main.py
+   ```
+
+
 
 
 
